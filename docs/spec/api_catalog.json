@@ -1,0 +1,1680 @@
+{
+  "title": "Website Content Collector MVP API inventory",
+  "version": "1.0",
+  "notice": "Endpoint design inventory, not an executable OpenAPI schema. Use guide authorization and lifecycle rules in every controller.",
+  "basePath": "/api/v1",
+  "defaultPrivateHeaders": {
+    "Cache-Control": "no-store"
+  },
+  "mutations": {
+    "csrf": "X-XSRF-TOKEN for cookie-based authentication",
+    "idempotency": "Idempotency-Key where required",
+    "concurrency": "Explicit expectedVersion in body"
+  },
+  "sharedPayloads": {
+    "Page": {
+      "page": "integer>=0",
+      "size": "1..100",
+      "totalElements": "integer>=0"
+    },
+    "Project": {
+      "id": "uuid",
+      "workspaceId": "uuid",
+      "projectType": [
+        "WEBSITE",
+        "WEB_APP",
+        "MOBILE_APP"
+      ],
+      "state": [
+        "DRAFT",
+        "ACTIVE",
+        "PAUSED",
+        "COMPLETED",
+        "ARCHIVED",
+        "DELETION_PENDING"
+      ],
+      "version": "integer",
+      "structureVersion": "integer"
+    },
+    "Answer": {
+      "itemId": "uuid",
+      "value": "typed JSON by field",
+      "version": "integer",
+      "savedAt": "instant"
+    },
+    "Progress": {
+      "requiredTotal": "integer",
+      "submittedRequired": "integer",
+      "approvedRequired": "integer",
+      "clientActionRequired": "integer",
+      "optionalApproved": "integer"
+    },
+    "ReminderRule": {
+      "id": "uuid",
+      "channel": [
+        "EMAIL",
+        "SMS"
+      ],
+      "daysRelativeToDueDate": "integer -30..90",
+      "localTime": "HH:mm",
+      "weekdaysOnly": "boolean"
+    },
+    "ClientInteractionEvent": {
+      "clientEventId": "uuid",
+      "type": [
+        "project_opened",
+        "item_started"
+      ],
+      "itemId": "uuid optional",
+      "occurredAt": "untrusted client instant optional"
+    },
+    "Problem": {
+      "type": "URI",
+      "title": "string",
+      "status": "HTTP integer",
+      "code": "stable string",
+      "detail": "safe string",
+      "traceId": "string",
+      "errors": "fieldPath and message[]"
+    }
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {
+        "email": "email",
+        "displayName": "string",
+        "password": "string"
+      },
+      "response": {
+        "message": "generic verification instruction"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": false,
+      "checks": "Rate limit; CSRF on cookie-bearing flow; purpose-bound tokens"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/verify-email",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {
+        "token": "opaque single-use token"
+      },
+      "response": {
+        "verified": true
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Rate limit; CSRF on cookie-bearing flow; purpose-bound tokens"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {
+        "email": "email",
+        "password": "string"
+      },
+      "response": {
+        "accessToken": "short-lived JWT",
+        "expiresIn": 300,
+        "user": "UserSummary"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Rate limit; CSRF on cookie-bearing flow; purpose-bound tokens"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {},
+      "response": {
+        "accessToken": "short-lived JWT",
+        "expiresIn": 300
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Rate limit; CSRF on cookie-bearing flow; purpose-bound tokens"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/forgot-password",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {
+        "email": "email"
+      },
+      "response": {
+        "message": "generic response"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": false,
+      "checks": "Rate limit; CSRF on cookie-bearing flow; purpose-bound tokens"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/reset-password",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {
+        "token": "opaque token",
+        "password": "string"
+      },
+      "response": {
+        "message": "password reset"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Rate limit; CSRF on cookie-bearing flow; purpose-bound tokens"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/csrf",
+      "actor": "PUBLIC",
+      "request": {},
+      "response": {
+        "token": "CSRF token"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "actor": "AGENCY_USER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Revoke sessions; clear refresh cookie"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout-all",
+      "actor": "AGENCY_USER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Revoke sessions; clear refresh cookie"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "actor": "AGENCY_USER",
+      "request": {},
+      "response": {
+        "user": "UserSummary",
+        "memberships": "MembershipSummary[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/sessions",
+      "actor": "AGENCY_USER",
+      "request": {},
+      "response": {
+        "data": "SessionSummary[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/me/sessions/{sessionId}",
+      "actor": "AGENCY_USER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Only own session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces",
+      "actor": "AGENCY_USER",
+      "request": {},
+      "response": {
+        "data": "MembershipSummary[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces",
+      "actor": "AGENCY_USER",
+      "request": {
+        "name": "string",
+        "timezone": "IANA timezone"
+      },
+      "response": {
+        "workspace": "Workspace"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": "One owned workspace per user; create owner and trial atomically"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}",
+      "actor": "AGENCY_USER",
+      "request": {},
+      "response": {
+        "workspace": "Workspace",
+        "entitlements": "Entitlements"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Live membership"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/workspaces/{workspaceId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "name": "string?",
+        "timezone": "IANA timezone?",
+        "expectedVersion": "integer"
+      },
+      "response": {
+        "workspace": "Workspace"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/members",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "data": "Member[]",
+        "pendingInvites": "InviteSummary[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/members",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "email": "email"
+      },
+      "response": {
+        "invitation": "InviteSummary"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "Reserve seat atomically; verified recipient on acceptance"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/team-invitations/accept",
+      "actor": "AGENCY_USER",
+      "request": {
+        "token": "opaque token"
+      },
+      "response": {
+        "membership": "MembershipSummary"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Verified account email must match; consume invitation atomically"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/workspaces/{workspaceId}/members/{memberId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "state": "ACTIVE|DISABLED"
+      },
+      "response": {
+        "member": "Member"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Cannot disable sole owner; quota on activation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspaceId}/members/{memberId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Disable without erasing attribution; cannot remove owner"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspaceId}/member-invitations/{invitationId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Revoke pending invite and release reserved seat"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/ownership-transfer",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "targetMemberId": "uuid",
+        "currentPassword": "string"
+      },
+      "response": {
+        "workspace": "Workspace"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Reauthenticate; active target; atomic one-owner invariant"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/clients",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "data": "Client[]",
+        "page": "Page"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Members see clients only through assigned projects"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/clients",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "businessName": "string",
+        "contactName": "string?",
+        "email": "email?"
+      },
+      "response": {
+        "client": "Client"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/workspaces/{workspaceId}/clients/{clientId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "businessName": "string?",
+        "expectedVersion": "integer"
+      },
+      "response": {
+        "client": "Client"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/templates",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "data": "TemplateSummary[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Query projectType and industry; built-ins or own workspace"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/template-versions/{versionId}",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "definition": "TemplateDefinition"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Built-in or own workspace only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/templates",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "definition": "TemplateDefinition"
+      },
+      "response": {
+        "template": "TemplateSummary"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspaces/{workspaceId}/templates/{templateId}/draft",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "definition": "TemplateDefinition",
+        "expectedVersion": "integer"
+      },
+      "response": {
+        "template": "TemplateSummary"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Own non-builtin template; validate structure"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/templates/{templateId}/versions",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer"
+      },
+      "response": {
+        "version": "TemplateVersion"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Append immutable version"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "data": "ProjectSummary[]",
+        "page": "Page"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Filter visibility, type, state, deadline and bounded search"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "clientId": "uuid",
+        "title": "string",
+        "projectType": "WEBSITE|WEB_APP|MOBILE_APP",
+        "dueDate": "date",
+        "timezone": "IANA timezone",
+        "templateVersionId": "uuid?"
+      },
+      "response": {
+        "project": "Project"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Validate catalog ownership; copy snapshot and initialize answers"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "project": "Project",
+        "progress": "Progress",
+        "structure": "Section[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "title": "string?",
+        "dueDate": "date?",
+        "timezone": "IANA timezone?",
+        "expectedVersion": "integer"
+      },
+      "response": {
+        "project": "Project"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Reschedule pending occurrences on due-date/timezone change"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/publish",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "ACTIVE"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/pause",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "PAUSED"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/resume",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "ACTIVE"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/complete",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "COMPLETED"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/reopen",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "ACTIVE"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/archive",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "ARCHIVED"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/restore",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "PAUSED"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/delete-request",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "expectedVersion": "integer",
+        "reason": "string when reopening/deleting"
+      },
+      "response": {
+        "projectState": "DELETION_PENDING"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Validate lifecycle; completion requires approved visible required items; cancel relevant jobs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/client-preview",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "preview": "ClientChecklist"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Read-only; excludes actual client tokens and internal comments"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/progress",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "progress": "Progress"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/sections",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "key": "string",
+        "title": "string",
+        "expectedStructureVersion": "integer"
+      },
+      "response": {
+        "section": "Section"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/sections/{sectionId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "title": "string?",
+        "enabled": "boolean?",
+        "expectedStructureVersion": "integer"
+      },
+      "response": {
+        "section": "Section"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/sections/{sectionId}/items",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "definition": "ItemDefinition",
+        "expectedStructureVersion": "integer"
+      },
+      "response": {
+        "item": "Item"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/items/{itemId}/schema",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "definition": "ItemDefinition",
+        "expectedStructureVersion": "integer",
+        "reopenAffected": "boolean"
+      },
+      "response": {
+        "item": "Item"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Reopen affected submitted work; validate visibility dependencies"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/structure/reorder",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "sectionIds": "uuid[]",
+        "itemOrderBySection": "object",
+        "expectedStructureVersion": "integer"
+      },
+      "response": {
+        "structureVersion": "integer"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Exact valid ID set; transaction with deferred order constraints"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/assignments",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "data": "Assignment[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/assignments/{memberId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "canReview": "boolean",
+        "canExport": "boolean"
+      },
+      "response": {
+        "assignment": "Assignment"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Live same-workspace member"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/assignments/{memberId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Live same-workspace assignment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/contacts",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "data": "ProjectContact[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/contacts",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "clientId": "uuid",
+        "name": "string",
+        "email": "email",
+        "accessExpiresAt": "instant"
+      },
+      "response": {
+        "contact": "ProjectContact"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": "Same workspace business and project; maximum grant duration"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/contacts/{contactId}/invite",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "invitation": "InviteSummary"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "Live grant; encrypt token only in delivery payload"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/contacts/{contactId}/access",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Revoke grant, all sessions and queued actions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client-access/exchange",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {
+        "token": "fragment token"
+      },
+      "response": {
+        "projectId": "uuid",
+        "expiresAt": "instant"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Atomic one-use exchange; set HttpOnly cookie"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client-access/request-link",
+      "actor": "PUBLIC_WITH_CSRF",
+      "request": {
+        "email": "email",
+        "projectId": "uuid"
+      },
+      "response": {
+        "message": "generic response"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": false,
+      "checks": "Rate limit and live grant; do not disclose existence"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client-access/logout",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Clear project session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/client/projects/{projectId}/checklist",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {
+        "project": "ClientProject",
+        "sections": "ClientSection[]",
+        "progress": "Progress"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Only active grant and visible items; redact internal information"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/client/projects/{projectId}/items/{itemId}",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {
+        "item": "ClientItem",
+        "answer": "Answer",
+        "clientComments": "Comment[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/client/projects/{projectId}/items/{itemId}/answer",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "value": "AnswerValue",
+        "expectedVersion": "integer",
+        "expectedStructureVersion": "integer",
+        "saveOperationId": "uuid"
+      },
+      "response": {
+        "answer": "Answer",
+        "itemState": "ItemState"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Editable state; live schema and session; conditional version update"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/items/{itemId}/submit",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "expectedAnswerVersion": "integer",
+        "expectedStructureVersion": "integer"
+      },
+      "response": {
+        "revisionId": "uuid",
+        "revisionNo": "integer",
+        "itemVersion": "integer",
+        "state": "SUBMITTED"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Validate visible schema and READY assets; immutable snapshot"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/items/{itemId}/withdraw",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "expectedItemVersion": "integer"
+      },
+      "response": {
+        "state": "DRAFT",
+        "itemVersion": "integer"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Only current SUBMITTED state"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/client/projects/{projectId}/items/{itemId}/comments",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {
+        "data": "ClientVisibleComment[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Visibility fixed to CLIENT"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/items/{itemId}/comments",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "body": "string"
+      },
+      "response": {
+        "comment": "ClientVisibleComment"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": "Visibility forced CLIENT; item belongs to project"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/uploads",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "itemId": "uuid",
+        "originalName": "string",
+        "contentType": "string",
+        "bytes": "positive integer",
+        "keepOriginal": "boolean"
+      },
+      "response": {
+        "assetId": "uuid",
+        "uploadId": "uuid",
+        "putUrl": "signed URL",
+        "requiredHeaders": "object",
+        "expiresAt": "instant"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Reserve declared bytes plus bounded derivative budget; same item scope"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/uploads/{uploadId}/finalize",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {
+        "assetId": "uuid",
+        "state": "PROCESSING"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "HEAD actual staging object; queue scanner and canonical copy"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/client/projects/{projectId}/uploads/{uploadId}",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Cancel unsubmitted staging upload and release reservation exactly once"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/client/projects/{projectId}/assets/{assetId}",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {
+        "asset": "AssetSummary"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/client/projects/{projectId}/assets/{assetId}",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Only unreferenced draft asset; retained revisions prevent physical deletion"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/assets/{assetId}/download",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "variant": "ORIGINAL|WORKING|THUMBNAIL"
+      },
+      "response": {
+        "url": "60-second signed URL"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Live file and grant authorization"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/assets/{assetId}/download",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {
+        "variant": "ORIGINAL|WORKING|THUMBNAIL"
+      },
+      "response": {
+        "url": "60-second signed URL"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Same tenant, project and file"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/items/{itemId}/ai-drafts",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "facts": "string[]",
+        "tone": "string",
+        "targetWords": "integer",
+        "baseAnswerVersion": "integer",
+        "consent": true
+      },
+      "response": {
+        "jobId": "uuid",
+        "state": "QUEUED"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "Enabled LONG_TEXT item; reserve credits and cost budget"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/client/projects/{projectId}/ai-drafts/{jobId}",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {
+        "job": "AiDraftJob"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Same creating project contact and active grant"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/ai-drafts/{jobId}/accept",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "expectedAnswerVersion": "integer"
+      },
+      "response": {
+        "answer": "Answer"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Same current item version, editable state, successful suggestion; saves draft only"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/review-queue",
+      "actor": "OWNER_OR_ASSIGNED_REVIEWER",
+      "request": {},
+      "response": {
+        "data": "SubmissionSummary[]",
+        "page": "Page"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/items/{itemId}/revisions",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "data": "RevisionSummary[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/items/{itemId}/revisions/{revisionId}",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "revision": "SubmissionRevision"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/items/{itemId}/review-decisions",
+      "actor": "OWNER_OR_ASSIGNED_REVIEWER",
+      "request": {
+        "revisionId": "uuid",
+        "expectedItemVersion": "integer",
+        "decision": "APPROVE|REQUEST_CHANGES",
+        "reason": "string?"
+      },
+      "response": {
+        "item": "Item",
+        "decision": "ReviewDecision"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Lock current submitted revision; reason mandatory for change request"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/items/{itemId}/reopen",
+      "actor": "OWNER_OR_ASSIGNED_REVIEWER",
+      "request": {
+        "expectedItemVersion": "integer",
+        "reason": "string"
+      },
+      "response": {
+        "item": "Item"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": true,
+      "checks": "Reopen exact approved version; audit"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/items/{itemId}/comments",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "data": "Comment[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/items/{itemId}/comments",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {
+        "body": "string",
+        "visibility": "CLIENT|INTERNAL"
+      },
+      "response": {
+        "comment": "Comment"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/activity",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "data": "SafeAuditEvent[]",
+        "page": "Page"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/reminder-policy",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "policy": "ReminderPolicy"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/reminder-policy",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "rules": "ReminderRule[]",
+        "timezone": "IANA timezone",
+        "paused": "boolean",
+        "expectedVersion": "integer"
+      },
+      "response": {
+        "policy": "ReminderPolicy"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Bound cadence; cancel obsolete pending jobs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/reminders/preview",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "contactId": "uuid",
+        "channel": "EMAIL|SMS"
+      },
+      "response": {
+        "preview": "ReminderPreview"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "No delivery"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/reminders/send",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "contactId": "uuid",
+        "channel": "EMAIL|SMS"
+      },
+      "response": {
+        "jobId": "uuid"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "Same eligibility, daily cap, consent and budget as scheduled reminders"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/deliveries",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "data": "DeliverySummary[]",
+        "page": "Page"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/client/projects/{projectId}/notification-preferences",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {
+        "emailEnabled": "boolean",
+        "smsStatus": "string",
+        "timezone": "IANA timezone or null"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/client/projects/{projectId}/notification-preferences",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "emailEnabled": "boolean",
+        "timezone": "IANA timezone"
+      },
+      "response": {
+        "preferences": "NotificationPreferences"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Recipient confirms timezone; recompute future eligible sends"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/sms/verification",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "phoneE164": "string",
+        "consentTextVersion": "string",
+        "consent": true
+      },
+      "response": {
+        "verificationId": "string"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "Explicit recipient consent, approved provider and anti-abuse cap"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/sms/verification/confirm",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "verificationId": "string",
+        "code": "string"
+      },
+      "response": {
+        "smsStatus": "VERIFIED_OPTED_IN"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Verify phone control; retain consent evidence"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/client/projects/{projectId}/sms/consent",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Withdraw and cancel pending SMS"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/client/projects/{projectId}/events",
+      "actor": "PROJECT_CLIENT_SESSION",
+      "request": {
+        "events": "ClientInteractionEvent[1..20]"
+      },
+      "response": {
+        "accepted": "integer"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": false,
+      "checks": "Allowlisted types and metadata; no text or tokens"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/analytics",
+      "actor": "OWNER_OR_ASSIGNED_MEMBER",
+      "request": {},
+      "response": {
+        "metrics": "ProjectAnalytics"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Threshold and observation-window rules"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/analytics/templates",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "data": "TemplateMetric[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Separate template versions and item keys"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/exports",
+      "actor": "OWNER_OR_ASSIGNED_EXPORTER",
+      "request": {},
+      "response": {
+        "data": "ExportSummary[]"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/exports",
+      "actor": "OWNER_OR_ASSIGNED_EXPORTER",
+      "request": {
+        "format": "APPROVED_ZIP|APPROVED_JSON|APPROVED_MARKDOWN",
+        "expectedProjectVersion": "integer",
+        "includeOriginals": "boolean",
+        "acknowledgePartial": "boolean"
+      },
+      "response": {
+        "jobId": "uuid",
+        "state": "QUEUED"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "Create immutable revision manifest in transaction"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/exports/{exportId}",
+      "actor": "OWNER_OR_ASSIGNED_EXPORTER",
+      "request": {},
+      "response": {
+        "export": "ExportSummary"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/exports/{exportId}/download",
+      "actor": "OWNER_OR_ASSIGNED_EXPORTER",
+      "request": {},
+      "response": {
+        "url": "short-lived download URL"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Live permission; READY and unexpired; warn if snapshot old"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/status-shares",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "alias": "string",
+        "expiresAt": "instant",
+        "allowedOrigins": "https-origin[]"
+      },
+      "response": {
+        "shareId": "uuid",
+        "fragmentToken": "shown once",
+        "url": "status URL"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Counts only; maximum 30-day expiry"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspaceId}/projects/{projectId}/status-shares/{shareId}",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {},
+      "successStatus": 204,
+      "idempotencyRequired": false,
+      "checks": "Revoke every read token for share"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/status-shares/exchange",
+      "actor": "PUBLIC",
+      "request": {
+        "shareId": "uuid",
+        "token": "fragment token"
+      },
+      "response": {
+        "readToken": "5-minute audience-restricted status JWT"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Hashed capability and expiry; rate limit"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/status-shares/{shareId}/counts",
+      "actor": "STATUS_READ_TOKEN",
+      "request": {},
+      "response": {
+        "alias": "string",
+        "approved": "integer",
+        "submitted": "integer",
+        "requiredTotal": "integer",
+        "updatedAt": "instant"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Audience and share ID, live revocation; no other metadata"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/subscription",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "subscription": "Subscription",
+        "entitlements": "Entitlements"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspaces/{workspaceId}/usage",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "usage": "UsageSummary"
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/billing/checkout",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "planKey": "SOLO|AGENCY"
+      },
+      "response": {
+        "url": "hosted checkout URL"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Server-side price IDs and customer mapping"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/billing/portal",
+      "actor": "WORKSPACE_OWNER",
+      "request": {},
+      "response": {
+        "url": "provider portal URL"
+      },
+      "successStatus": 201,
+      "idempotencyRequired": true,
+      "checks": "Server-side customer and allowed return origin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/workspaces/{workspaceId}/deletion-request",
+      "actor": "WORKSPACE_OWNER",
+      "request": {
+        "currentPassword": "string",
+        "confirmation": "workspace name"
+      },
+      "response": {
+        "deleteAfter": "instant"
+      },
+      "successStatus": 202,
+      "idempotencyRequired": true,
+      "checks": "Reauthenticate; revoke sessions and queue recoverable deletion"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/webhooks/stripe",
+      "actor": "VERIFIED_PROVIDER",
+      "request": {
+        "rawBody": "provider-defined"
+      },
+      "response": {
+        "accepted": true
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Verify raw signature, configured canonical URL and dedupe event key"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/webhooks/email",
+      "actor": "VERIFIED_PROVIDER",
+      "request": {
+        "rawBody": "provider-defined"
+      },
+      "response": {
+        "accepted": true
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Verify raw signature, configured canonical URL and dedupe event key"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/webhooks/twilio/status",
+      "actor": "VERIFIED_PROVIDER",
+      "request": {
+        "rawBody": "provider-defined"
+      },
+      "response": {
+        "accepted": true
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Verify raw signature, configured canonical URL and dedupe event key"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/webhooks/twilio/inbound",
+      "actor": "VERIFIED_PROVIDER",
+      "request": {
+        "rawBody": "provider-defined"
+      },
+      "response": {
+        "accepted": true
+      },
+      "successStatus": 200,
+      "idempotencyRequired": false,
+      "checks": "Verify raw signature, configured canonical URL and dedupe event key"
+    }
+  ]
+}

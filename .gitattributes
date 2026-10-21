@@ -1,0 +1,4 @@
+# Preserve the supplied specification pack byte for byte in Git checkouts.
+docs/spec/** -text
+*.pdf binary
+*.png binary

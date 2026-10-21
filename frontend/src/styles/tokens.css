@@ -1,0 +1,10 @@
+:root {
+  color-scheme: light;
+  --collector-navy: #0a1a2f;
+  --collector-blue: #2563eb;
+  --collector-secondary: #1683f3;
+  --collector-cyan: #06b6d4;
+  --collector-background: #f8fafc;
+  --accent: var(--collector-blue);
+  --accent-foreground: #fff;
+}
