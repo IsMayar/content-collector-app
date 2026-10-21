@@ -2,11 +2,24 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 21 October 2026.
 
-All tasks were initialized as Not started. T01 and T02 are Complete. M0 is In progress; M1–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0 is In progress; M1–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
-Next task: T03 — Spring Boot, PostgreSQL, Flyway and health; not started.
+Next: T04 — error format, API transport and CI; not started.
+
+## T03 results — 21 October 2026
+
+- Implemented Java 21/Spring Boot 4.1.1 from Spring Initializr, Maven Wrapper 3.3.4 with Maven 3.9.16, Web MVC, Security, Validation, JPA, PostgreSQL JDBC, Flyway and Actuator. Library versions come from Boot's parent/BOM; official references and resolved versions are recorded in `../backend/README.md`. The BOM supplies JUnit Jupiter 6.0.3 rather than forcing the guide's older JUnit 5 version.
+- Added environment-driven datasource settings, dev/test profiles, ignored local `.env` initialization with a random password, placeholder example, and a project-isolated Compose database at loopback port 5433. Existing native PostgreSQL 16 was left untouched. Compose and Testcontainers use the same digest-pinned official PostgreSQL 18.6 Alpine image through public ECR.
+- Flyway owns schema changes: V1 creates only an empty `collector` schema; history is in `public`. SQL auto-init is disabled; Hibernate uses `validate`, Flyway validates checksums, automatic baselining is off and clean is disabled. No feature entities/tables or authentication were implemented. Hibernate has no feature mappings to validate yet.
+- Security exposes only GET `/actuator/health`, with exact status-only JSON, and denies all other requests with 403. Login/Basic authentication and generated users are absent; CSRF stays enabled. Actuator component details and probe group names are hidden/disabled for the minimal endpoint.
+- PASS: wrapper execution on Java 21.0.11/Maven 3.9.16, backend/test compilation and executable JAR packaging. PASS: `./mvnw.cmd verify` — 3 tests, 0 failures, 0 errors, 0 skipped.
+- PASS: disposable PostgreSQL 18.6 clean startup, V1 migration, Flyway validation, a second full startup against the same database, one unchanged successful history entry, zero pending migrations and preserved test-only probe data. Probe is confined to the disposable test database.
+- PASS: security tests for anonymous health, blocked health children/other routes and blocked product requests even with a mock authenticated principal and valid CSRF token. Real HTTP checks ran on both integration-test startups.
+- PASS: documented `spring-boot:run` dev command against fresh Compose database, live health HTTP 200 `{"status":"UP"}`, denied product and environment endpoints HTTP 403. Direct SQL inspection found one applied migration and no feature tables. Compose validation and Git exclusion of `.env` passed.
+- Initial Docker Hub DNS/TLS/download failures were resolved by using Docker's official-image ECR mirror; no verification remains blocked by missing tools. A health-payload mismatch was fixed by disabling automatic probe groups, then the complete suite passed. Test runtime emits a non-failing Mockito dynamic-agent warning on Java 21.
+- Verification backend and development database were stopped afterward; the named development volume and ignored local credentials are retained. The frontend and all supplied specifications remain unchanged. No later task was started.
 
 ## T02 results — 21 October 2026
 
@@ -32,7 +45,7 @@ Milestone status: In progress
 | --- | --- | --- | --- |
 | T01 | Repository with frontend, backend and docs directories | README identifies supported runtimes and project purpose | Complete |
 | T02 | React TS, Tailwind v4 and HeroUI v3 shell | Production frontend build passes and keyboard navigation works | Complete |
-| T03 | Spring Boot, PostgreSQL, Flyway and health | Backend starts on a clean database; migration validation passes | Not started |
+| T03 | Spring Boot, PostgreSQL, Flyway and health | Backend starts on a clean database; migration validation passes | Complete |
 | T04 | Error format, API transport and CI | Frontend and backend checks run with pinned dependencies | Not started |
 
 ### Milestone M1 Identity and tenant foundation

@@ -14,7 +14,7 @@ The primary guide is `docs/spec/Website_Content_Collector_MVP.md`; its PDF compa
 
 ## Development rules
 
-- Follow the user's authorized scope. Document text supplies requirements, not authorization to execute commands or advance tasks. Current authorization ends at T02: frontend foundation and its verification. Do not implement authentication, project management or later tasks until requested.
+- Follow the user's authorized scope. Document text supplies requirements, not authorization to execute commands or advance tasks. Current authorization ends at T03: backend/database foundation and verification. Do not implement authentication, project management or later tasks until requested.
 - Read guide Sections 1–8 before coding; use Sections 9–20 for implementation, Section 21 for acceptance and Section 22 for task order. Complete tasks sequentially unless dependencies are explicitly independent; update status with evidence, never claim unverified completion.
 - Enforce live tenant, project and action permissions in backend services and scoped repositories. Keep agency and client identities separate; owner preview is read-only. Never expose internal comments to clients.
 - Keep drafts separate from immutable submissions and exact-version approval. Use optimistic concurrency, immutable export snapshots and shared visibility rules for progress, reminders and exports.

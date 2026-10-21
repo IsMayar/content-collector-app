@@ -1,0 +1,21 @@
+name: website-content-collector-dev
+services:
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_DB: collector_dev
+      POSTGRES_USER: ${DATABASE_USERNAME:?Set DATABASE_USERNAME in backend/.env}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in backend/.env}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      # PostgreSQL 18 uses version-specific PGDATA below this directory.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d collector_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: "no"
+volumes:
+  postgres-data:
