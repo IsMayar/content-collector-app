@@ -5,10 +5,13 @@ From PowerShell:
 ```powershell
 Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
 npm ci
+if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed; do not start Vite yet.' }
 npm run dev
 ```
 
 Open http://127.0.0.1:5173. The development server uses a fixed port and fails clearly if it is occupied. No backend is needed for this placeholder shell.
+
+For later starts with dependencies already installed, run only `npm run dev`. Before running `npm ci` again, stop this project's development and preview servers with Ctrl+C in their terminals. On Windows, a running Vite process can lock native CSS dependencies and cause `EPERM` during reinstallation. After stopping the server, rerun `npm ci`; a failed installation can leave Vite unavailable until installation succeeds.
 
 ```powershell
 npm run typecheck

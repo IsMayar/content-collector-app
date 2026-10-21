@@ -32,10 +32,13 @@ Start the frontend from PowerShell:
 ```powershell
 Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
 npm ci
+if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed; do not start Vite yet.' }
 npm run dev
 ```
 
 Open http://127.0.0.1:5173. You should see the Welcome placeholder with responsive navigation and an About page. Run `npm run typecheck` and `npm run build` in the same directory to verify it. See [frontend setup notes](frontend/README.md) for architecture, official setup references and production preview instructions.
+
+After the first install, use `npm run dev` for normal starts. Stop this project's dev/preview servers with Ctrl+C before reinstalling with `npm ci`, so Windows can replace native dependencies.
 
 Next is T03: Spring Boot, PostgreSQL, Flyway and health. Backend ports, environment examples and migration instructions will be documented when that task is implemented.
 

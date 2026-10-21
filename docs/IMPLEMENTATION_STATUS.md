@@ -19,6 +19,7 @@ Next task: T03 — Spring Boot, PostgreSQL, Flyway and health; not started.
 - PASS: direct `/about` reload and unknown-route recovery. Browser console inspection returned no application warnings or errors. Desktop evidence: [T02-desktop.png](T02-desktop.png).
 - Limits: browser checks used desktop-browser viewport emulation; no physical mobile device or screen-reader testing was performed. No backend integration checks apply to this task.
 - Git was initialized because the project had no repository. T02 and the resolved lockfile are included in the initial project commit; generated dependencies/build output are ignored. Original specification files remain unchanged.
+- Windows startup recovery: stopped the verification preview process after it locked a native Lightning CSS dependency during a user `npm ci`. Restored all 152 packages using the existing lockfile; `npm run build` (including strict TypeScript) passed again, with zero npm vulnerabilities. Verified `npm run dev` starts on port 5173, then stopped that test server to release native file locks. README instructions now explain normal starts and stop on failed installation.
 
 
 Complete tasks in order unless their dependency is explicitly independent. Each task should end with a working, reviewable change. Keep production provider credentials disabled until its integration stage. Suggested task numbers below are a build sequence, not a fixed calendar estimate.
