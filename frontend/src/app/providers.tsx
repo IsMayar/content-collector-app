@@ -6,5 +6,12 @@ import { MockIndicator, Notifications } from '@/components/Feedback'
 
 // HeroUI v3 components do not require the v2 HeroUIProvider.
 export function AppProviders() {
-  return <Provider store={store}><Notifications><MockIndicator /><RouterProvider router={router} /></Notifications></Provider>
+  return (
+    <Provider store={store}>
+      <Notifications>
+        <MockIndicator />
+        <RouterProvider router={router} />
+      </Notifications>
+    </Provider>
+  )
 }

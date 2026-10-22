@@ -16,23 +16,42 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen">
-      <a className="skip-link" href="#main-content">Skip to content</a>
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
       <header className="site-header">
         <div className="header-inner">
-          <NavLink to="/" className="brand" aria-label="Website Content Collector home">
-            <span className="brand-mark" aria-hidden="true">W</span>
+          <NavLink
+            to="/"
+            className="brand"
+            aria-label="Website Content Collector home"
+          >
+            <span className="brand-mark" aria-hidden="true">
+              W
+            </span>
             <span>Website Content Collector</span>
           </NavLink>
           <nav aria-label="Main navigation" className="flex flex-wrap gap-2">
-            <NavLink to="/" end className="nav-link">Welcome</NavLink>
-            <NavLink to="/about" className="nav-link">About</NavLink>
+            <NavLink to="/" end className="nav-link">
+              Welcome
+            </NavLink>
+            <NavLink to="/about" className="nav-link">
+              About
+            </NavLink>
           </nav>
         </div>
       </header>
-      <main id="main-content" ref={main} tabIndex={-1} className="page-container">
+      <main
+        id="main-content"
+        ref={main}
+        tabIndex={-1}
+        className="page-container"
+      >
         <Outlet />
       </main>
-      <footer className="page-container footer">AYAANTRIX Technologies · Website Content Collector</footer>
+      <footer className="page-container footer">
+        AYAANTRIX Technologies · Website Content Collector
+      </footer>
     </div>
   )
 }
