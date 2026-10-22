@@ -136,6 +136,7 @@ registerProductResolver((request, path, _search, body) => {
     }
     if (action === 'versions' && method === 'POST') {
       requireRule(t.draft, 409, 'NO_DRAFT', 'Save a draft first.')
+      ;(t.publishedVersions ||= {})[t.versionId] = clone(t.definition)
       t.definition = clone(t.draft)
       t.title = t.definition.title
       t.version++
@@ -418,8 +419,8 @@ registerProductResolver((request, path, _search, body) => {
         'Include each section exactly once.',
       )
       const orders = body.itemOrderBySection as Record<string, string[]>
-      r.structure = ids.map((id, index) => {
-        const s = r.structure.find((s) => s.id === id)!
+      const reordered = ids.map((id, index) => {
+        const s = clone(r.structure.find((s) => s.id === id)!)
         const order = orders[s.id]
         requireRule(
           order?.length === s.items.length &&
@@ -435,7 +436,7 @@ registerProductResolver((request, path, _search, body) => {
         }))
         return { ...s, sortOrder: index }
       })
-      for (const s of r.structure)
+      for (const s of reordered)
         for (const i of s.items)
           if (i.visibleWhen)
             requireRule(
@@ -446,6 +447,7 @@ registerProductResolver((request, path, _search, body) => {
               'INVALID_ORDER',
               'Keep a visibility controller before dependent items.',
             )
+      r.structure = reordered
     } else return null
     r.project.structureVersion++
     touch(r, 'Project structure updated')
@@ -583,7 +585,18 @@ registerProductResolver((request, path, _search, body) => {
           c.state === 'ACTIVE' &&
           Date.parse(c.accessExpiresAt) > Date.now(),
       ) &&
-      body.channel !== 'SMS'
+      (body.channel === 'SMS'
+        ? productDb.preferences[String(body.contactId)]?.smsStatus ===
+          'VERIFIED_OPTED_IN'
+        : r.contacts.some(
+            (c) => c.id === body.contactId && c.emailRemindersEnabled,
+          )) &&
+      !(r.deliveries || []).some(
+        (d) =>
+          d.channel === body.channel &&
+          Date.parse(d.dueAt) > Date.now() - 864e5 &&
+          d.state !== 'SUPPRESSED',
+      )
     const preview: ReminderPreview = {
       channel: body.channel === 'SMS' ? 'SMS' : 'EMAIL',
       subject: 'A few project details are waiting',
@@ -597,20 +610,22 @@ registerProductResolver((request, path, _search, body) => {
     if (aid === 'preview') return response(preview)
     if (aid === 'send') {
       requireRule(eligible, 409, 'SUPPRESSED', 'This reminder is not eligible.')
+      const delivery = {
+        id: uid(),
+        channel: body.channel === 'SMS' ? ('SMS' as const) : ('EMAIL' as const),
+        dueAt: now(),
+        state: 'QUEUED' as const,
+        failureCode: null,
+      }
+      ;(r.deliveries ||= []).unshift(delivery)
       return response(
         {
-          delivery: {
-            id: uid(),
-            channel: 'EMAIL',
-            dueAt: now(),
-            state: 'QUEUED',
-            failureCode: null,
-          },
+          delivery,
         },
         202,
       )
     }
-    if (aid === 'deliveries') return response({ data: [] })
+    if (aid === 'deliveries') return response({ data: r.deliveries || [] })
   }
   return null
 })

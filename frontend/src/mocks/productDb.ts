@@ -18,8 +18,8 @@ export const uid = () => crypto.randomUUID()
 export const templates: TemplateRecord[] = (
   catalog.templates as unknown as TemplateDefinition[]
 ).map((definition, index) => ({
-  id: `builtin-${index}`,
-  versionId: `builtin-${index}-v1`,
+  id: `44444444-4444-4444-8444-${String(index + 1).padStart(12, '0')}`,
+  versionId: `55555555-5555-4555-8555-${String(index + 1).padStart(12, '0')}`,
   title: definition.title,
   projectType: definition.projectType,
   industry: definition.industry,
@@ -37,6 +37,11 @@ export const productDb = {
   },
   scenario: 'normal',
   usedInvitations: new Set<string>(),
+  preferences: {} as Record<
+    string,
+    import('@/api/contracts').NotificationPreferences
+  >,
+  revokedSessions: new Set<string>(),
 }
 export function snapshotStructure(definition: TemplateDefinition): Section[] {
   return definition.sections.map((section, sortOrder) => {
@@ -78,9 +83,14 @@ export function createProject(
   const workspace = productDb.workspaces[workspaceId]
   const template =
     [...templates, ...workspace.templates].find(
-      (t) => t.versionId === values.templateVersionId,
+      (t) =>
+        t.versionId === values.templateVersionId ||
+        t.publishedVersions?.[values.templateVersionId || ''],
     ) || templates.find((t) => t.projectType === values.projectType)!
-  const structure = snapshotStructure(template.definition)
+  const structure = snapshotStructure(
+    template.publishedVersions?.[values.templateVersionId || ''] ||
+      template.definition,
+  )
   const project: Project = {
     id,
     workspaceId,
@@ -164,6 +174,8 @@ export function resetProductDb() {
   productDb.client = null
   productDb.scenario = 'normal'
   productDb.usedInvitations = new Set()
+  productDb.preferences = {}
+  productDb.revokedSessions = new Set()
   const accounts = accountFixtures()
   for (const [id, name, plan] of [
     [agencyId, 'Northstar Studio', 'AGENCY'],
@@ -172,7 +184,7 @@ export function resetProductDb() {
     const members = Object.values(accounts)
       .filter((a) => a.memberships.some((m) => m.workspaceId === id))
       .map((a) => ({
-        id: a.user.id,
+        id: a.memberships.find((m) => m.workspaceId === id)!.memberId,
         user: a.user,
         role: a.memberships.find((m) => m.workspaceId === id)!.role,
         state: 'ACTIVE' as const,
@@ -243,13 +255,15 @@ export function resetProductDb() {
       projectType: 'WEBSITE',
       dueDate: '2026-11-15',
       timezone: 'America/New_York',
-      templateVersionId: 'builtin-2-v1',
+      templateVersionId: templates[2].versionId,
     },
     demoProjectId,
   )
   first.project.state = 'ACTIVE'
   first.assignments.push({
-    memberId: accounts['member@studio.example'].user.id,
+    memberId: accounts['member@studio.example'].memberships.find(
+      (m) => m.workspaceId === agencyId,
+    )!.memberId,
     canReview: true,
     canExport: false,
   })

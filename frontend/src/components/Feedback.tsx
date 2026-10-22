@@ -66,6 +66,11 @@ export function Notice({
 const NotificationContext = createContext<(message: string) => void>(() => {})
 export function Notifications({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState('')
+  useEffect(() => {
+    if (!message) return
+    const timer = setTimeout(() => setMessage(''), 6000)
+    return () => clearTimeout(timer)
+  }, [message])
   return (
     <NotificationContext.Provider value={setMessage}>
       {children}

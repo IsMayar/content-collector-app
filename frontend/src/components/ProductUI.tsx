@@ -1,4 +1,10 @@
-import { cloneElement, useId, useState, type ReactElement, type ReactNode } from 'react'
+import {
+  cloneElement,
+  useId,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { Link, useParams } from 'react-router'
 import { useAppSelector } from '@/app/hooks'
 import { workspaceApi, portalApi } from '@/api/productApi'
@@ -167,11 +173,14 @@ export function Field({
   children: ReactNode
   hint?: string
 }) {
-  const id=useId()
+  const id = useId()
   return (
     <div className="product-field">
       <label htmlFor={id}>{label}</label>
-      {cloneElement(children as ReactElement<{id:string;'aria-describedby'?:string}>,{id,'aria-describedby':hint?`${id}-hint`:undefined})}
+      {cloneElement(
+        children as ReactElement<{ id: string; 'aria-describedby'?: string }>,
+        { id, 'aria-describedby': hint ? `${id}-hint` : undefined },
+      )}
       {hint && <small id={`${id}-hint`}>{hint}</small>}
     </div>
   )

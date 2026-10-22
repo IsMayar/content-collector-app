@@ -4,9 +4,22 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'public/mockServiceWorker.js'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'public/mockServiceWorker.js',
+      'test-results/**',
+      'playwright-report/**',
+      'pwa-test-results/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ['public/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },

@@ -110,7 +110,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
     const { user, router } = mount('/sign-in?returnTo=https://evil.test')
     await signIn(user)
     await screen.findByRole('heading', { name: 'Welcome, Alex' })
-    expect(router.state.location.pathname).toBe('/app')
+    expect(router.state.location.pathname).toBe(`/app/w/${agencyId}/overview`)
   })
   it('clears both API caches and local session after confirmed logout', async () => {
     const { user, store } = mount()

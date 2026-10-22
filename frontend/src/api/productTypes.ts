@@ -40,6 +40,7 @@ export interface TemplateCardData {
 export interface TemplateRecord extends TemplateCardData {
   definition: TemplateDefinition
   draft?: TemplateDefinition
+  publishedVersions?: Record<string, TemplateDefinition>
 }
 export interface ProjectRecord {
   project: Project
@@ -71,6 +72,7 @@ export interface ProjectRecord {
       fail?: boolean
     }
   >
+  deliveries?: import('./contracts').DeliverySummary[]
 }
 export interface WorkspaceRecord extends WorkspaceDetail {
   members: Member[]

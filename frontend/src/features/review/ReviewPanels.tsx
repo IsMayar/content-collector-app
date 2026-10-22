@@ -29,7 +29,10 @@ export function ReviewPanel({ root }: { root: string }) {
     root,
   )
   const all = detail.data?.structure.flatMap((s) => s.items) || []
-  const item = all.find((i) => i.id === selected) || q.data?.data[0]?.item || all.find(i=>i.currentRevisionId)
+  const item =
+    all.find((i) => i.id === selected) ||
+    q.data?.data[0]?.item ||
+    all.find((i) => i.currentRevisionId)
   return (
     <>
       <Panel title="Ready for a thoughtful review">
@@ -435,7 +438,18 @@ export function ExportPanel({
                         `${root}/exports/${j.id}/download`,
                         {},
                       )
-                    if (result) {try{await downloadFile(result.url,`approved-${j.id}.${j.format==='APPROVED_ZIP'?'zip':j.format==='APPROVED_JSON'?'json':'md'}`)}catch(e){setMessage(e instanceof Error?e.message:'Download failed.')}}
+                      if (result) {
+                        try {
+                          await downloadFile(
+                            result.url,
+                            `approved-${j.id}.${j.format === 'APPROVED_ZIP' ? 'zip' : j.format === 'APPROVED_JSON' ? 'json' : 'md'}`,
+                          )
+                        } catch (e) {
+                          setMessage(
+                            e instanceof Error ? e.message : 'Download failed.',
+                          )
+                        }
+                      }
                     }}
                   >
                     Download

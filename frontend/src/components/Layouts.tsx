@@ -4,6 +4,8 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { ConfirmDialog, Notice, useNotify } from './Feedback'
 import { logoutSession, selectWorkspace } from '@/features/auth/session'
 import { errorMessage } from '@/lib/apiError'
+import { useData } from '@/api/productApi'
+import type { WorkspaceDetail } from '@/api/productTypes'
 import {
   FolderKanban,
   LayoutDashboard,
@@ -118,16 +120,14 @@ export function AgencyLayout() {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const home = membership ? `/app/w/${membership.workspaceId}/overview` : '/app'
+  const workspace = useData<WorkspaceDetail>(
+    membership ? `workspaces/${membership.workspaceId}` : '',
+  )
   const navigation = (
     <>
       <NavLink end to={home}>
         <LayoutDashboard size={18} /> <span>Workspace home</span>
       </NavLink>
-      {membership?.role === 'OWNER' && (
-        <NavLink to={`/app/w/${membership.workspaceId}/access-foundation`}>
-          ⌘ <span>Owner access</span>
-        </NavLink>
-      )}
       {membership && (
         <>
           <span className="nav-section-label">COLLECT & CREATE</span>
@@ -214,7 +214,9 @@ export function AgencyLayout() {
               )}
               {state.memberships.map((m) => (
                 <option key={m.memberId} value={m.workspaceId}>
-                  {m.workspaceName}
+                  {m.workspaceId === workspace.data?.workspace.id
+                    ? workspace.data.workspace.name
+                    : m.workspaceName}
                 </option>
               ))}
             </select>
@@ -244,6 +246,12 @@ export function AgencyLayout() {
         </details>
         <main id="main-content" tabIndex={-1} className="agency-content">
           {error && <Notice error>{error}</Notice>}
+          {workspace.data && !workspace.data.entitlements.canWrite && (
+            <Notice>
+              This workspace is read-only. Reading and permitted exports remain
+              available. Contact the owner to restore editing.
+            </Notice>
+          )}
           <Outlet />
         </main>
         <footer className="agency-footer">

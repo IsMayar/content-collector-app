@@ -24,6 +24,7 @@ import {
 import { ConfirmDialog, Notice } from '@/components/Feedback'
 import { formatBytes, percent } from '@/lib/domain'
 import { apiBaseUrl } from '@/api/baseQuery'
+import { DigestPreview } from './ReportingExtras'
 
 export function TeamPage() {
   const { id, owner } = useWorkspace()
@@ -250,6 +251,7 @@ export function SettingsPage() {
               </button>
             </form>
           )}
+          <DigestPreview workspaceId={id} />
         </QueryState>
       </Panel>
       <Panel title="Account sessions">
@@ -343,8 +345,14 @@ export function SettingsPage() {
   )
 }
 export function BillingPage() {
-  const navigate=useNavigate()
-  function hosted(url:string){const target=new URL(url,window.location.origin);if(!['http:','https:'].includes(target.protocol))return;if(target.origin===window.location.origin)navigate(target.pathname+target.search);else window.location.assign(target.href)}
+  const navigate = useNavigate()
+  function hosted(url: string) {
+    const target = new URL(url, window.location.origin)
+    if (!['http:', 'https:'].includes(target.protocol)) return
+    if (target.origin === window.location.origin)
+      navigate(target.pathname + target.search)
+    else window.location.assign(target.href)
+  }
   const { id, owner } = useWorkspace()
   const [params] = useSearchParams()
   const q = useData<Subscription>(`workspaces/${id}/subscription`, {
@@ -509,6 +517,8 @@ export function AnalyticsPanel({ root }: { root: string }) {
                   <th scope="col">Completed windows</th>
                   <th scope="col">Without submission</th>
                   <th scope="col">Rate</th>
+                  <th scope="col">Open windows</th>
+                  <th scope="col">Median first submission</th>
                 </tr>
               </thead>
               <tbody>
@@ -522,6 +532,15 @@ export function AnalyticsPanel({ root }: { root: string }) {
                       {m.insufficientData
                         ? 'Insufficient data'
                         : `${Math.round((m.rate || 0) * 100)}%`}
+                    </td>
+                    <td>
+                      {m.eligibleStarts - m.completedObservationWindows} still
+                      observing
+                    </td>
+                    <td>
+                      {m.medianFirstSubmissionSeconds === null
+                        ? 'Insufficient data'
+                        : `${Math.round(m.medianFirstSubmissionSeconds / 60)} min (${m.completedSubmissions} submissions)`}
                     </td>
                   </tr>
                 ))}

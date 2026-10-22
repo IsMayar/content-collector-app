@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { TemplateEditor } from './TemplateEditor'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 import {
   FolderKanban,
@@ -232,7 +233,7 @@ export function ProjectsPage() {
   )
   function filter(key: string, value: string) {
     const next = new URLSearchParams(search)
-    if(value) next.set(key, value)
+    if (value) next.set(key, value)
     else next.delete(key)
     if (key !== 'page') next.delete('page')
     setSearch(next)
@@ -536,6 +537,7 @@ export function TemplatesPage() {
   const [type, setType] = useState('')
   const [industry, setIndustry] = useState('')
   const [preview, setPreview] = useState('')
+  const [editing, setEditing] = useState('')
   const detail = useData<{ definition: TemplateDefinition }>(
     preview ? `workspaces/${id}/template-versions/${preview}` : '',
   )
@@ -640,6 +642,14 @@ export function TemplatesPage() {
                           </ul>
                         </div>
                       ))}
+                      {owner && !t.isBuiltin && (
+                        <button
+                          className="secondary-button"
+                          onClick={() => setEditing(t.id)}
+                        >
+                          Edit workspace template
+                        </button>
+                      )}
                       {owner && (
                         <button
                           className="secondary-button"
@@ -668,6 +678,13 @@ export function TemplatesPage() {
             ))}
         </div>
       </QueryState>
+      {editing && detail.data && (
+        <TemplateEditor
+          root={`workspaces/${id}/templates/${editing}`}
+          definition={detail.data.definition}
+          onClose={() => setEditing('')}
+        />
+      )}
     </>
   )
 }

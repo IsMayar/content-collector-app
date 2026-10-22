@@ -12,6 +12,7 @@ import type {
   ProjectDetail,
   ReminderPolicy,
   ReminderPreview,
+  RepeaterColumn,
   Section,
   TemplateDefinition,
 } from '@/api/productTypes'
@@ -34,6 +35,7 @@ import {
   ExportPanel,
 } from '@/features/review/ReviewPanels'
 import { AnalyticsPanel } from '@/features/settings/SettingsPages'
+import { DeliveryHistory } from '@/features/settings/ReportingExtras'
 
 export function ProjectPage() {
   const { id, base, owner } = useWorkspace()
@@ -283,6 +285,7 @@ function StructureEditor({
   root: string
   editable: boolean
 }) {
+  const latest = useData<ProjectDetail>(root)
   const command = useCommand()
   const notify = useNotify()
   const [editing, setEditing] = useState<{
@@ -332,7 +335,7 @@ function StructureEditor({
       {command.error && (
         <button
           className="secondary-button"
-          onClick={() => window.dispatchEvent(new Event('focus'))}
+          onClick={() => void latest.refetch()}
         >
           Refresh latest structure (keeps editor open)
         </button>
@@ -388,6 +391,40 @@ function StructureEditor({
                 </div>
               )}
             </header>
+            {editable && (
+              <details className="section-rename">
+                <summary>Edit section name</summary>
+                <form
+                  className="inline-form"
+                  onSubmit={async (e) => {
+                    e.preventDefault()
+                    await command.run(
+                      `${root}/sections/${s.id}`,
+                      {
+                        title: new FormData(e.currentTarget).get('title'),
+                        expectedStructureVersion: data.project.structureVersion,
+                      },
+                      'PATCH',
+                    )
+                  }}
+                >
+                  <Field label="Section name">
+                    <input
+                      name="title"
+                      defaultValue={s.title}
+                      required
+                      maxLength={120}
+                    />
+                  </Field>
+                  <button
+                    className="secondary-button"
+                    disabled={command.pending}
+                  >
+                    Save section name
+                  </button>
+                </form>
+              </details>
+            )}
             <ol className="checklist-rows">
               {s.items.map((i, n) => (
                 <li
@@ -519,18 +556,15 @@ function ItemEditor({
   const [type, setType] = useState<ItemDefinition['type']>(
     item?.type || 'SHORT_TEXT',
   )
+  const latest = useData<ProjectDetail>(root)
   const [options, setOptions] = useState(
     item?.validation.options?.map((o) => `${o.key}|${o.label}`).join('\n') ||
       'yes|Yes\nno|No',
   )
-  const [columns, setColumns] = useState(
-    JSON.stringify(
-      item?.validation.columns || [
-        { key: 'name', label: 'Name', type: 'SHORT_TEXT', required: true },
-      ],
-      null,
-      2,
-    ),
+  const [columns, setColumns] = useState<RepeaterColumn[]>(
+    item?.validation.columns || [
+      { key: 'name', label: 'Name', type: 'SHORT_TEXT', required: true },
+    ],
   )
   const command = useCommand()
   const [localError, setLocalError] = useState('')
@@ -551,6 +585,7 @@ function ItemEditor({
         required: v.required === 'on',
         enabled: v.enabled === 'on',
         validation: {
+          ...(item?.type === type ? item.validation : {}),
           ...(['SHORT_TEXT', 'LONG_TEXT'].includes(type)
             ? {
                 maxLength:
@@ -573,7 +608,7 @@ function ItemEditor({
             : {}),
           ...(type === 'REPEATER'
             ? {
-                columns: JSON.parse(columns),
+                columns,
                 maxRows: Math.min(20, Number(v.maxRows) || 20),
               }
             : {}),
@@ -719,13 +754,144 @@ function ItemEditor({
                   defaultValue={item?.validation.maxRows || 20}
                 />
               </Field>
-              <Field label="Columns (JSON; 1–8, one level only)">
-                <textarea
-                  rows={8}
-                  value={columns}
-                  onChange={(e) => setColumns(e.target.value)}
-                />
-              </Field>
+              <fieldset className="stack-form">
+                <legend>Entry fields · up to 8</legend>
+                {columns.map((c, index) => (
+                  <div className="inset stack-form" key={index}>
+                    <div className="form-grid">
+                      <Field label="Entry field label">
+                        <input
+                          required
+                          value={c.label}
+                          onChange={(e) =>
+                            setColumns(
+                              columns.map((v, i) =>
+                                i === index
+                                  ? { ...v, label: e.target.value }
+                                  : v,
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field label="Entry field key">
+                        <input
+                          required
+                          pattern="[a-zA-Z][a-zA-Z0-9_]*"
+                          value={c.key}
+                          onChange={(e) =>
+                            setColumns(
+                              columns.map((v, i) =>
+                                i === index ? { ...v, key: e.target.value } : v,
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
+                      <Field label="Entry field type">
+                        <select
+                          value={c.type}
+                          onChange={(e) =>
+                            setColumns(
+                              columns.map((v, i) =>
+                                i === index
+                                  ? {
+                                      ...v,
+                                      type: e.target
+                                        .value as RepeaterColumn['type'],
+                                    }
+                                  : v,
+                              ),
+                            )
+                          }
+                        >
+                          {[
+                            'SHORT_TEXT',
+                            'LONG_TEXT',
+                            'URL',
+                            'NUMBER',
+                            'SINGLE_SELECT',
+                            'IMAGE',
+                          ].map((t) => (
+                            <option key={t}>{t}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={c.required}
+                          onChange={(e) =>
+                            setColumns(
+                              columns.map((v, i) =>
+                                i === index
+                                  ? { ...v, required: e.target.checked }
+                                  : v,
+                              ),
+                            )
+                          }
+                        />
+                        Required
+                      </label>
+                    </div>
+                    {c.type === 'SINGLE_SELECT' && (
+                      <Field label="Entry options (one per line)">
+                        <textarea
+                          value={
+                            c.options?.map((o) => o.label).join('\n') || ''
+                          }
+                          onChange={(e) =>
+                            setColumns(
+                              columns.map((v, i) =>
+                                i === index
+                                  ? {
+                                      ...v,
+                                      options: e.target.value
+                                        .split('\n')
+                                        .filter(Boolean)
+                                        .map((label, n) => ({
+                                          key: `option_${n + 1}`,
+                                          label,
+                                        })),
+                                    }
+                                  : v,
+                              ),
+                            )
+                          }
+                        />
+                      </Field>
+                    )}
+                    <button
+                      type="button"
+                      className="danger-link"
+                      disabled={columns.length === 1}
+                      onClick={() =>
+                        setColumns(columns.filter((_, i) => i !== index))
+                      }
+                    >
+                      Remove entry field
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={columns.length >= 8}
+                  onClick={() =>
+                    setColumns([
+                      ...columns,
+                      {
+                        key: `field_${columns.length + 1}`,
+                        label: 'New field',
+                        type: 'SHORT_TEXT',
+                        required: false,
+                      },
+                    ])
+                  }
+                >
+                  Add entry field
+                </button>
+              </fieldset>
             </>
           )}
           <Field label="Show when an earlier single select equals">
@@ -770,6 +936,15 @@ function ItemEditor({
             </label>
           )}
           <ErrorNotice error={localError || command.error} />
+          {command.error && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void latest.refetch()}
+            >
+              Refresh latest structure; keep my input
+            </button>
+          )}
           <div className="actions">
             <button className="primary-button" disabled={command.pending}>
               Save item
@@ -1167,6 +1342,7 @@ function RemindersPanel({ root }: { root: string }) {
           provider outcomes must be reconciled before retrying.
         </p>
       </Panel>
+      <DeliveryHistory root={root} />
     </>
   )
 }

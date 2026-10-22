@@ -50,6 +50,8 @@ registerProductResolver((request, path, _search, body) => {
         'export-failure',
         'conflict',
         'expired-client',
+        'grace',
+        'limit-reached',
       ].includes(scenario),
       422,
       'VALIDATION',
@@ -59,6 +61,20 @@ registerProductResolver((request, path, _search, body) => {
     for (const w of Object.values(productDb.workspaces)) {
       w.entitlements.canWrite = scenario !== 'read-only'
       w.workspace.state = scenario === 'read-only' ? 'READ_ONLY' : 'ACTIVE'
+      w.subscription.state =
+        scenario === 'read-only'
+          ? 'READ_ONLY'
+          : scenario === 'grace'
+            ? 'PAST_DUE'
+            : 'TRIALING'
+      w.subscription.graceEndsAt =
+        scenario === 'grace'
+          ? new Date(Date.now() + 7 * 864e5).toISOString()
+          : null
+      w.usage.aiDraftsUsed =
+        scenario === 'limit-reached' ? w.usage.aiDraftAllowance : 0
+      if (scenario === 'limit-reached')
+        w.usage.storageUsedBytes = w.usage.storageLimitBytes
     }
     if (scenario === 'expired-client' && productDb.client)
       productDb.client.expiresAt = 0
@@ -96,7 +112,9 @@ registerProductResolver((request, path, _search, body) => {
             lastSeenAt: now(),
             expiresAt: new Date(Date.now() + 36e5).toISOString(),
           },
-        ],
+        ].filter(
+          (s) => !productDb.revokedSessions.has(`${account.user.id}:${s.id}`),
+        ),
       })
     requireRule(
       resource !== 'current',
@@ -104,6 +122,7 @@ registerProductResolver((request, path, _search, body) => {
       'CURRENT_SESSION',
       'Use Sign out for your current session.',
     )
+    productDb.revokedSessions.add(`${account.user.id}:${resource}`)
     return response({ revoked: true })
   }
   if (domain === 'status-shares') {
@@ -324,6 +343,20 @@ registerProductResolver((request, path, _search, body) => {
   }
   const actor = agencyActor(request, wid, true, method !== 'GET')
   const w = actor.workspace
+  if (resource === 'digest-preview') {
+    const list = Object.values(productDb.projects).filter(
+      (r) => r.project.workspaceId === wid && r.project.state === 'ACTIVE',
+    )
+    const counts = list.map((r) => progressFor(r.structure, r.answers))
+    return response({
+      workspaceName: w.workspace.name,
+      activeProjects: list.length,
+      required: counts.reduce((n, p) => n + p.requiredTotal, 0),
+      submitted: counts.reduce((n, p) => n + p.submittedRequired, 0),
+      approved: counts.reduce((n, p) => n + p.approvedRequired, 0),
+      clientAction: counts.reduce((n, p) => n + p.clientActionRequired, 0),
+    })
+  }
   if (path.length === 2 && method === 'PATCH') {
     checkVersion(w.workspace.version, body.expectedVersion)
     requireRule(

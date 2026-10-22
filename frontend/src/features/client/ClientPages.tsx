@@ -106,6 +106,9 @@ export function ClientAccessPage() {
             <input
               required
               name="projectId"
+              defaultValue={
+                new URLSearchParams(location.search).get('projectId') || ''
+              }
               placeholder="From your agency’s invitation"
             />
           </Field>
@@ -143,6 +146,32 @@ export function ClientProjectPage() {
   const data = q.data
   const items = data?.sections.flatMap((s) => s.items) || []
   const active = items.find((i) => i.id === selected) || items[0]
+  if (q.isError)
+    return (
+      <div className="access-card">
+        <Heading
+          eyebrow="PRIVATE PROJECT ACCESS"
+          title="Let’s reconnect to your project"
+          description="Your session may have expired, access may have changed, or the connection may be unavailable."
+        />
+        <ErrorNotice error={command.error} />
+        <div className="actions">
+          <button className="secondary-button" onClick={() => void q.refetch()}>
+            Try again
+          </button>
+          <Link
+            className="primary-button"
+            to={`/client/access?projectId=${projectId}`}
+          >
+            Request a fresh link
+          </Link>
+        </div>
+        <p>
+          Saved drafts remain with the project. Your agency can help if access
+          has been revoked.
+        </p>
+      </div>
+    )
   return (
     <QueryState query={q}>
       {data && (
@@ -294,10 +323,10 @@ function AnswerEditor({
     saving.current = false
     if (result) {
       setVersion(result.answer.version)
-      latest.current.version=result.answer.version
+      latest.current.version = result.answer.version
       if (JSON.stringify(latest.current.value) === JSON.stringify(snapshot)) {
         setDirty(false)
-        latest.current.dirty=false
+        latest.current.dirty = false
         setSaved('All changes saved')
       } else setSaved('Unsaved changes')
       return true
@@ -845,18 +874,20 @@ function UploadQueue({
   const [keep, setKeep] = useState(true)
   const [error, setError] = useState('')
   const active = useRef(0)
+  const started = useRef(new Set<string>())
+  const cancelled = useRef(new Set<string>())
   const queueRef = useRef(queue)
   queueRef.current = queue
   const selectedRef = useRef(selected)
   selectedRef.current = selected
   const unmounted = useRef(false)
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    unmounted.current = false
+    return () => {
       unmounted.current = true
       for (const t of queueRef.current) t.controller?.abort()
-    },
-    [],
-  )
+    }
+  }, [])
   function patch(id: string, changes: Partial<Transfer>) {
     if (!unmounted.current)
       setQueue((q) => q.map((t) => (t.id === id ? { ...t, ...changes } : t)))
@@ -875,6 +906,7 @@ function UploadQueue({
       })
       if (!reservation)
         throw Error('Reservation failed. Check type, size and workspace quota.')
+      if (cancelled.current.has(t.id)) throw Error('Upload cancelled.')
       patch(t.id, {
         assetId: reservation.assetId,
         uploadId: reservation.uploadId,
@@ -920,7 +952,10 @@ function UploadQueue({
       let state = 'PROCESSING'
       for (
         let attempts = 0;
-        attempts < 40 && state === 'PROCESSING' && !unmounted.current;
+        attempts < 40 &&
+        state === 'PROCESSING' &&
+        !unmounted.current &&
+        !controller.signal.aborted;
         attempts++
       ) {
         await new Promise((r) => setTimeout(r, 600))
@@ -931,6 +966,7 @@ function UploadQueue({
         if (state === 'REJECTED' || state === 'FAILED')
           throw Error(result?.rejectionCode || 'File processing failed.')
       }
+      if (controller.signal.aborted) throw Error('Upload cancelled.')
       if (state !== 'READY')
         throw Error(
           'Processing is taking longer than expected. Retry status later.',
@@ -939,7 +975,7 @@ function UploadQueue({
       onChange([...new Set([...selectedRef.current, reservation.assetId])])
     } catch (e) {
       patch(t.id, {
-        state: 'failed',
+        state: cancelled.current.has(t.id) ? 'cancelled' : 'failed',
         error: e instanceof Error ? e.message : 'Upload failed.',
       })
       if (reservation)
@@ -950,15 +986,16 @@ function UploadQueue({
         )
     } finally {
       active.current--
-      setQueue((q) => [...q])
+      started.current.delete(t.id)
+      if (!unmounted.current) setQueue((q) => [...q])
     }
   }
   const startTransfer = useEffectEvent((t: Transfer) => void transfer(t))
   useEffect(() => {
     for (const t of queue) {
       if (active.current >= 3) break
-      if (t.state === 'queued') {
-        t.state = 'uploading'
+      if (t.state === 'queued' && !started.current.has(t.id)) {
+        started.current.add(t.id)
         startTransfer(t)
       }
     }
@@ -1054,10 +1091,13 @@ function UploadQueue({
             />
             {t.error && <p role="alert">{t.error}</p>}
           </div>
-          {t.state === 'failed' && (
+          {['failed', 'cancelled'].includes(t.state) && (
             <button
               className="secondary-button"
-              onClick={() => patch(t.id, { state: 'queued' })}
+              onClick={() => {
+                cancelled.current.delete(t.id)
+                patch(t.id, { state: 'queued' })
+              }}
             >
               Retry
             </button>
@@ -1066,6 +1106,7 @@ function UploadQueue({
             <button
               className="secondary-button"
               onClick={() => {
+                cancelled.current.add(t.id)
                 t.controller?.abort()
                 patch(t.id, { state: 'cancelled' })
                 if (t.uploadId)
@@ -1115,7 +1156,15 @@ function UploadQueue({
                     `${root}/assets/${a.id}/download`,
                     { variant: 'WORKING' },
                   )
-                  if (result) {try{await downloadFile(result.url,a.originalName)}catch(e){setError(e instanceof Error?e.message:'Download failed.')}}
+                  if (result) {
+                    try {
+                      await downloadFile(result.url, a.originalName)
+                    } catch (e) {
+                      setError(
+                        e instanceof Error ? e.message : 'Download failed.',
+                      )
+                    }
+                  }
                 }}
               >
                 Download

@@ -26,7 +26,14 @@ export function accountFixtures(): Record<string, MockAccount> {
         displayName: 'Alex Morgan',
         verified: true,
       },
-      memberships: [agency, { ...solo, role: 'MEMBER' }],
+      memberships: [
+        agency,
+        {
+          ...solo,
+          memberId: 'b1111111-1111-4111-8111-111111111111',
+          role: 'MEMBER',
+        },
+      ],
       password: demoPassword,
     },
     'solo@studio.example': {
@@ -46,7 +53,13 @@ export function accountFixtures(): Record<string, MockAccount> {
         displayName: 'Jamie Chen',
         verified: true,
       },
-      memberships: [{ ...agency, role: 'MEMBER' }],
+      memberships: [
+        {
+          ...agency,
+          memberId: 'a3333333-3333-4333-8333-333333333333',
+          role: 'MEMBER',
+        },
+      ],
       password: demoPassword,
     },
     'unverified@studio.example': {

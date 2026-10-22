@@ -7,10 +7,7 @@ import {
   ClientLayout,
   PublicLayout,
 } from '@/components/Layouts'
-import {
-  AboutPage,
-  NotFoundPage,
-} from '@/features/foundation/Pages'
+import { AboutPage, NotFoundPage } from '@/features/foundation/Pages'
 import { SessionBoundary, RequireAgency } from '@/features/auth/SessionBoundary'
 import {
   RecoveryPage,

@@ -1,4 +1,4 @@
-# Frontend — FE01
+# Website Content Collector frontend
 
 From PowerShell:
 
@@ -21,6 +21,7 @@ npm run build
 npm run lint
 npm test
 npm run test:browser
+npm run test:pwa
 npm run format:check
 npm run preview
 ```
@@ -35,7 +36,11 @@ Preview serves production output on http://127.0.0.1:4173 with mocks disabled. I
 - `src/api`: shared HTTP/CSRF transport, runtime DTO schemas and separate agency/client RTK Query APIs.
 - `src/features/auth`: session state, bootstrap, all authentication forms and injected endpoints.
 - `src/components`: public/auth/agency/client layouts, navigation, page headers, form controls, state panels, notifications and confirmation dialog.
-- `src/features/foundation`: clearly labeled placeholders; no dashboard/project features.
+- `src/features/projects`: onboarding, dashboards, projects, templates, structure/access/team/reminder editors.
+- `src/features/client`: client access, typed answers, autosave/conflicts, submissions and uploads.
+- `src/features/review`: exact-revision review, comments, activity and approved exports.
+- `src/features/settings`: AI assistance, analytics/shares/digests, billing, identity and sessions.
+- `src/features/public`: landing and proposed pricing pages.
 - `src/mocks`: browser MSW setup, request handlers and deterministic synthetic fixtures.
 - `src/test`: Vitest + Testing Library tests using MSW's Node interceptor.
 - `e2e`: real Edge browser scenarios using the same network mocks.
@@ -43,7 +48,17 @@ Preview serves production output on http://127.0.0.1:4173 with mocks disabled. I
 
 `@/` resolves to `src/` in TypeScript and Vite. Strict TypeScript and React StrictMode remain enabled. React Hook Form owns form values, RTK Query owns server data, and the auth slice keeps access tokens/identity only in memory. There is no persistent token storage. HeroUI v3 needs no v2-style provider. Native semantic fields integrate with React Hook Form; HeroUI supplies primary buttons. Route guards support UX and do not replace backend authorization.
 
-The owner handles backend implementation manually. FE01 is separate from original full-stack milestones. Mock limitations, token scenarios, cookie expectations, error contracts and the proposed verification-resend endpoint are documented in [FRONTEND_BACKEND_HANDOFF.md](../docs/FRONTEND_BACKEND_HANDOFF.md). Reload resets mock sessions and fixture changes.
+The owner handles backend implementation manually. Frontend batches remain separate from original full-stack milestones. See [the authentication handoff](../docs/FRONTEND_BACKEND_HANDOFF.md) and [the product integration handoff](../docs/FRONTEND_PRODUCT_HANDOFF.md) for actual operations, DTOs, scenarios and unresolved backend decisions. Reload resets mock sessions, file bytes and fixture changes. Stay in one SPA tab for the owner → client → review → export demo.
+
+## Product preview
+
+Start at `/` or `/sign-in`. Sign in as the owner, open **Projects**, then **Lamar Dental website**. **Client access → Send / resend invite → Open client access** creates a synthetic invitation. Explicitly open it, fill an item, wait for autosave and submit. Return through the home brand and **Open workspace**; use **Review** to request changes or approve, then **Exports** to download an approved snapshot. ZIP, JSON and Markdown downloads contain synthetic content.
+
+The gallery includes all ten supplied templates. Create Website, Web application and Mobile application projects; each copies an independent structure. Assignments and review/export permissions are separate. Members see assigned projects only. Owner preview never opens a live client session.
+
+The development-only **Demo scenarios** disclosure supports empty/list failure, quota, read-only, grace, limit reached, AI/export failure, conflicts and expired client sessions. Normal restores write entitlement; full reload resets all mock state. File names containing `reject`, `virus` or `password` simulate rejection; `failed` simulates processing failure. Synthetic SMS verification uses `123456`. No actual AI provider, scanner, email, SMS or payment service is called.
+
+The production PWA caches a fixed public allowlist only. Private pages, APIs, tokens, answers and files are never cached. Offline navigation shows a reconnect page; offline editing is not promised. `npm run test:pwa` builds production output and checks the worker/cache boundary using Edge on isolated port 5175. Mock browser testing uses port 5174.
 
 ## Setup references
 

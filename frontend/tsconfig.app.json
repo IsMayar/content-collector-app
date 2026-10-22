@@ -17,5 +17,5 @@
     "paths": { "@/*": ["src/*"] },
     "types": ["vite/client"]
   },
-  "include": ["src", "e2e"]
+  "include": ["src"]
 }

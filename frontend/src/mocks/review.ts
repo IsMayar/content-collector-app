@@ -303,73 +303,77 @@ registerProductResolver((request, path, _search, body) => {
   return null
 })
 productHandlers.unshift(
-  http.get(`${apiRoot}mock-export/:wid/:pid/:id`, async ({ params, request }) => {
-    try {
-      const r = productDb.projects[String(params.pid)]
-      const job = r?.exports[String(params.id)]
-      requireRule(
-        job &&
-          r.project.workspaceId === params.wid &&
-          job.state === 'READY' &&
-          Date.parse(job.expiresAt) > Date.now() &&
-          Number(new URL(request.url).searchParams.get('expires')) > Date.now(),
-        403,
-        'URL_EXPIRED',
-        'Request a fresh export download link.',
-      )
-      const manifest = JSON.parse(job.content) as {
-        title: string
-        partial: boolean
-        items: {
-          label: string
-          revisionId: string
-          value: unknown
-          assets: { id: string; name: string }[]
-        }[]
-      }
-      const markdown =
-        `# ${manifest.title}\n\n${manifest.partial ? 'PARTIAL APPROVED EXPORT' : 'APPROVED EXPORT'}\n\n` +
-        manifest.items
-          .map(
-            (i) =>
-              `## ${i.label}\n\nRevision: ${i.revisionId}\n\n\`\`\`json\n${JSON.stringify(i.value, null, 2)}\n\`\`\`\n`,
-          )
-          .join('\n')
-      let bytes: Uint8Array
-      let extension: string
-      if (job.format === 'APPROVED_ZIP') {
-        const files: Record<string, Uint8Array> = {
-          'manifest.json': strToU8(job.content),
-          'content.md': strToU8(markdown),
+  http.get(
+    `${apiRoot}mock-export/:wid/:pid/:id`,
+    async ({ params, request }) => {
+      try {
+        const r = productDb.projects[String(params.pid)]
+        const job = r?.exports[String(params.id)]
+        requireRule(
+          job &&
+            r.project.workspaceId === params.wid &&
+            job.state === 'READY' &&
+            Date.parse(job.expiresAt) > Date.now() &&
+            Number(new URL(request.url).searchParams.get('expires')) >
+              Date.now(),
+          403,
+          'URL_EXPIRED',
+          'Request a fresh export download link.',
+        )
+        const manifest = JSON.parse(job.content) as {
+          title: string
+          partial: boolean
+          items: {
+            label: string
+            revisionId: string
+            value: unknown
+            assets: { id: string; name: string }[]
+          }[]
         }
-        for (const item of manifest.items)
-          for (const a of item.assets) {
-            const asset = r.assets[a.id]
-            if (asset?.content)
-              files[
-                `assets/${a.id}-${a.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-              ] = new Uint8Array(await asset.content.arrayBuffer())
+        const markdown =
+          `# ${manifest.title}\n\n${manifest.partial ? 'PARTIAL APPROVED EXPORT' : 'APPROVED EXPORT'}\n\n` +
+          manifest.items
+            .map(
+              (i) =>
+                `## ${i.label}\n\nRevision: ${i.revisionId}\n\n\`\`\`json\n${JSON.stringify(i.value, null, 2)}\n\`\`\`\n`,
+            )
+            .join('\n')
+        let bytes: Uint8Array
+        let extension: string
+        if (job.format === 'APPROVED_ZIP') {
+          const files: Record<string, Uint8Array> = {
+            'manifest.json': strToU8(job.content),
+            'content.md': strToU8(markdown),
           }
-        bytes = zipSync(files)
-        extension = 'zip'
-      } else {
-        extension = job.format === 'APPROVED_JSON' ? 'json' : 'md'
-        bytes = strToU8(extension === 'json' ? job.content : markdown)
+          for (const item of manifest.items)
+            for (const a of item.assets) {
+              const asset = r.assets[a.id]
+              if (asset?.content)
+                files[
+                  `assets/${a.id}-${a.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+                ] = new Uint8Array(await asset.content.arrayBuffer())
+            }
+          bytes = zipSync(files)
+          extension = 'zip'
+        } else {
+          extension = job.format === 'APPROVED_JSON' ? 'json' : 'md'
+          bytes = strToU8(extension === 'json' ? job.content : markdown)
+        }
+        return new HttpResponse(bytes.buffer as ArrayBuffer, {
+          headers: {
+            'Content-Type':
+              extension === 'zip'
+                ? 'application/zip'
+                : extension === 'json'
+                  ? 'application/json'
+                  : 'text/markdown',
+            'Content-Disposition': `attachment; filename="approved-${job.id}.${extension}"`,
+            'Cache-Control': 'no-store',
+          },
+        })
+      } catch (e) {
+        return failure(e)
       }
-      return new HttpResponse(bytes.buffer as ArrayBuffer, {
-        headers: {
-          'Content-Type':
-            extension === 'zip'
-              ? 'application/zip'
-              : extension === 'json'
-                ? 'application/json'
-                : 'text/markdown',
-          'Content-Disposition': `attachment; filename="approved-${job.id}.${extension}"`,
-          'Cache-Control': 'no-store',
-        },
-      })
-    } catch (e) {
-      return failure(e)
-    }
-  }),
+    },
+  ),
 )

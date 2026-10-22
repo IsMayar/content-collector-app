@@ -124,7 +124,7 @@ export function agencyProject(
     'Project not available.',
   )
   const assignment = record.assignments.find(
-    (a) => a.memberId === actor.user.user.id,
+    (a) => a.memberId === actor.membership.memberId,
   )
   requireRule(
     actor.membership.role === 'OWNER' || assignment,
@@ -197,7 +197,7 @@ export function projectList(request: Request, workspaceId: string) {
         r.project.workspaceId === workspaceId &&
         r.project.state !== 'DELETION_PENDING' &&
         (actor.membership.role === 'OWNER' ||
-          r.assignments.some((a) => a.memberId === actor.user.user.id)),
+          r.assignments.some((a) => a.memberId === actor.membership.memberId)),
     )
     .map((r) => agencyProject(request, workspaceId, r.project.id).project)
 }
@@ -291,9 +291,15 @@ function foundation(
   if (resource === 'templates' && !resourceId) {
     if (method === 'GET')
       return response({
-        data: [...templates, ...actor.workspace.templates].map(
-          (t) => ({id:t.id,versionId:t.versionId,title:t.title,projectType:t.projectType,industry:t.industry,isBuiltin:t.isBuiltin,version:t.version}),
-        ),
+        data: [...templates, ...actor.workspace.templates].map((t) => ({
+          id: t.id,
+          versionId: t.versionId,
+          title: t.title,
+          projectType: t.projectType,
+          industry: t.industry,
+          isBuiltin: t.isBuiltin,
+          version: t.version,
+        })),
       })
     if (method === 'POST') {
       agencyActor(request, workspaceId, true, true)
@@ -320,10 +326,13 @@ function foundation(
   }
   if (resource === 'template-versions' && method === 'GET') {
     const template = [...templates, ...actor.workspace.templates].find(
-      (t) => t.versionId === resourceId,
+      (t) => t.versionId === resourceId || t.publishedVersions?.[resourceId],
     )
     requireRule(template, 404, 'NOT_FOUND', 'Template not available.')
-    return response({ definition: template.definition })
+    return response({
+      definition:
+        template.publishedVersions?.[resourceId] || template.definition,
+    })
   }
   if (resource === 'projects' && !resourceId) {
     if (method === 'GET') {
@@ -369,6 +378,19 @@ function foundation(
         'VALIDATION',
         'Choose a customer, project type, title and due date.',
       )
+      if (body.templateVersionId) {
+        const template = [...templates, ...actor.workspace.templates].find(
+          (t) =>
+            t.versionId === body.templateVersionId ||
+            t.publishedVersions?.[String(body.templateVersionId)],
+        )
+        requireRule(
+          template && template.projectType === body.projectType,
+          422,
+          'TEMPLATE_TYPE',
+          'Choose an available template for this project type.',
+        )
+      }
       const record = createProject(
         workspaceId,
         body as unknown as Parameters<typeof createProject>[1],
@@ -403,53 +425,43 @@ function foundation(
   return null
 }
 export const productHandlers = [
-  http.all(
-    new RegExp(
-      `${apiRoot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(workspaces|client|client-access|status-shares|me/|demo)(/.*)?(?:\\?.*)?$`,
-    ),
-    async ({ request }) => {
-      try {
-        const target = new URL(request.url)
-        const path = target.pathname
-          .slice(new URL(apiRoot).pathname.length)
-          .split('/')
-          .filter(Boolean)
-        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method))
-          requireRule(
-            request.headers.get('X-XSRF-TOKEN') === mockState.csrf,
-            403,
-            'CSRF_INVALID',
-            'Refresh the page to renew your request protection.',
-          )
-        const body =
-          request.method === 'GET' || request.method === 'DELETE'
-            ? {}
-            : ((await request.json().catch(() => ({}))) as Record<
-                string,
-                unknown
-              >)
-        await delay(100)
-        for (const resolver of [foundation, ...resolvers]) {
-          const result = await resolver(
-            request,
-            path,
-            target.searchParams,
-            body,
-          )
-          if (result) return result
-        }
-        return response(
-          {
-            detail: 'This operation is not available in this mock.',
-            code: 'MOCK_NOT_IMPLEMENTED',
-          },
-          501,
+  http.all(`${apiRoot}*`, async ({ request }) => {
+    try {
+      const target = new URL(request.url)
+      const path = target.pathname
+        .slice(new URL(apiRoot).pathname.length)
+        .split('/')
+        .filter(Boolean)
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method))
+        requireRule(
+          request.headers.get('X-XSRF-TOKEN') === mockState.csrf,
+          403,
+          'CSRF_INVALID',
+          'Refresh the page to renew your request protection.',
         )
-      } catch (error) {
-        return failure(error)
+      const body =
+        request.method === 'GET' || request.method === 'DELETE'
+          ? {}
+          : ((await request.json().catch(() => ({}))) as Record<
+              string,
+              unknown
+            >)
+      await delay(100)
+      for (const resolver of [foundation, ...resolvers]) {
+        const result = await resolver(request, path, target.searchParams, body)
+        if (result) return result
       }
-    },
-  ),
+      return response(
+        {
+          detail: 'This operation is not available in this mock.',
+          code: 'MOCK_NOT_IMPLEMENTED',
+        },
+        501,
+      )
+    } catch (error) {
+      return failure(error)
+    }
+  }),
 ]
 export function itemIn(record: ProjectRecord, id: string) {
   const item = record.structure.flatMap((s) => s.items).find((i) => i.id === id)

@@ -133,7 +133,6 @@ export function checklist(
       })),
   }
 }
-const preferences = new Map<string, NotificationPreferences>()
 const smsCodes = new Map<string, string>()
 registerProductResolver((request, path, _search, body) => {
   const [domain, pid, resource, id, action] = path
@@ -227,7 +226,7 @@ registerProductResolver((request, path, _search, body) => {
     return response(checklist(r, true))
   if (area === 'events') return response({ accepted: true }, 202)
   if (area === 'notification-preferences') {
-    const prefs = preferences.get(contact.id) || {
+    const prefs = productDb.preferences[contact.id] || {
       emailEnabled: true,
       timezone: contact.timezone,
       smsStatus: 'NOT_CONFIGURED',
@@ -243,14 +242,14 @@ registerProductResolver((request, path, _search, body) => {
       )
       prefs.emailEnabled = body.emailEnabled === true
       prefs.timezone = String(body.timezone || 'UTC')
-      preferences.set(contact.id, prefs)
+      productDb.preferences[contact.id] = prefs
       contact.emailRemindersEnabled = prefs.emailEnabled
       contact.timezone = prefs.timezone
     }
     return response(prefs)
   }
   if (area === 'sms') {
-    const prefs = preferences.get(contact.id) || {
+    const prefs = productDb.preferences[contact.id] || {
       emailEnabled: true,
       timezone: 'America/New_York',
       smsStatus: 'NOT_CONFIGURED' as NotificationPreferences['smsStatus'],
@@ -265,7 +264,7 @@ registerProductResolver((request, path, _search, body) => {
       const verificationId = uid()
       smsCodes.set(verificationId, contact.id)
       prefs.smsStatus = 'UNVERIFIED'
-      preferences.set(contact.id, prefs)
+      productDb.preferences[contact.id] = prefs
       return response({ verificationId, demoCode: '123456' }, 201)
     }
     if (itemId === 'confirm') {
@@ -281,7 +280,7 @@ registerProductResolver((request, path, _search, body) => {
     }
     if (itemId === 'consent' && method === 'DELETE')
       prefs.smsStatus = 'OPTED_OUT'
-    preferences.set(contact.id, prefs)
+    productDb.preferences[contact.id] = prefs
     return response(prefs)
   }
   if (area === 'items' && itemId) {

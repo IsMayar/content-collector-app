@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest'
 import { beforeAll, afterAll, afterEach, beforeEach, vi } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { setupServer } from 'msw/node'
 import { handlers, resetMockState } from '@/mocks/handlers'
 
 export const server = setupServer(...handlers)
+configure({ asyncUtilTimeout: 5000 })
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 beforeEach(() => resetMockState())
 afterEach(() => {
