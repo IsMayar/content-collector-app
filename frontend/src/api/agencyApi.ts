@@ -3,6 +3,6 @@ import { createBaseQuery } from '@/api/baseQuery'
 
 export const agencyApi = createApi({
   reducerPath: 'agencyApi',
-  baseQuery: createBaseQuery(),
+  baseQuery: createBaseQuery(true),
   endpoints: () => ({}),
 })

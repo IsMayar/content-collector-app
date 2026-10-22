@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client'
 import { AppProviders } from '@/app/providers'
 import '@/styles/index.css'
 
-createRoot(document.getElementById('root')!).render(
+async function start() {
+  if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCKS === 'true') {
+    const { worker } = await import('@/mocks/browser')
+    await worker.start({ quiet: true, onUnhandledRequest(request, print) { if (new URL(request.url).pathname.startsWith('/api/')) print.error() } })
+  }
+  createRoot(document.getElementById('root')!).render(
   <StrictMode><AppProviders /></StrictMode>,
-)
+  )
+}
+void start().catch(() => { document.getElementById('root')!.textContent = 'The application could not start. Check your connection and refresh.' })

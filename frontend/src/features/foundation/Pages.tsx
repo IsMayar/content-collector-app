@@ -8,13 +8,13 @@ export function WelcomePage() {
       <p className="eyebrow">A clearer start to every project</p>
       <h1 id="welcome-title">Great projects start with the right content.</h1>
       <p className="intro">One place for agencies and their clients to gather the words, requirements and files that bring a project to life.</p>
-      <div className="mt-8"><Button onPress={() => navigate('/about')}>About this application</Button></div>
+      <div className="mt-8"><Button onPress={() => navigate('/sign-in')}>Open your workspace</Button></div>
       <div className="project-types" aria-label="Supported project types">
         <span>Websites</span><span>Web applications</span><span>Mobile applications</span>
       </div>
       <aside className="placeholder-note" aria-label="Application availability">
         <h2>Your workspace is taking shape</h2>
-        <p>This is the application foundation. Client invitations, content collection and review will arrive in later stages.</p>
+        <p>Sign in to explore the workspace foundation. Client invitations, content collection and review will arrive in later stages.</p>
       </aside>
     </section>
   )
