@@ -4,7 +4,7 @@ A responsive, multi-tenant web application for freelancers and small development
 
 ## Project layout
 
-- `frontend/`: React and TypeScript application foundation with routing, Tailwind/HeroUI styling and Redux/RTK Query.
+- `frontend/`: frontend-first feature batches, with responsive layouts, authentication UI, Redux/RTK Query and explicitly enabled MSW development mocks.
 - `backend/`: Java 21/Spring Boot 4.1 foundation, Maven wrapper, Flyway migrations and isolated PostgreSQL Compose setup.
 - `docs/spec/`: all 10 original specification files, preserved unchanged, including the supplied README.
 - `docs/IMPLEMENTATION_STATUS.md`: Section 22 milestones and task status.
@@ -25,7 +25,7 @@ Planned libraries include React 19, strict TypeScript, Vite, Tailwind CSS v4, He
 
 ## Current state
 
-T01–T03 are complete. The frontend foundation runs independently of the backend; authentication and product features are not implemented. Verified tools include Node 24.3.0, npm 11.4.2, Java 21.0.11, wrapper-managed Maven 3.9.16 and Docker Desktop with PostgreSQL 18.6. Frontend dependencies are locked in `frontend/package-lock.json`; backend dependencies are managed by the Spring Boot 4.1.1 BOM.
+The original T01–T03 records are preserved. Development now proceeds frontend-first in FE01–FE07 batches, tracked separately from the original full-stack roadmap. The owner implements the backend manually. FE01 is complete with authentication UI and a mocked session workflow; it does not prove backend authentication or full-stack acceptance. Frontend dependencies are pinned in `frontend/package-lock.json`; the preserved backend foundation uses the Spring Boot 4.1.1 BOM.
 
 Start the frontend from PowerShell:
 
@@ -33,12 +33,12 @@ Start the frontend from PowerShell:
 Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
 npm ci
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed; do not start Vite yet.' }
-npm run dev
+npm run dev:mock
 ```
 
-Open http://127.0.0.1:5173. You should see the Welcome placeholder with responsive navigation and an About page. Run `npm run typecheck` and `npm run build` in the same directory to verify it. See [frontend setup notes](frontend/README.md) for architecture, official setup references and production preview instructions.
+Open http://127.0.0.1:5173/sign-in. Demo accounts `owner@studio.example`, `solo@studio.example` and `member@studio.example` use `ContentDemo!2026`. The development label identifies synthetic data; no email is sent. Authentication forms, workspace selection, role-aware navigation and a labeled workspace placeholder are available. See [frontend setup notes](frontend/README.md) and [the backend handoff](docs/FRONTEND_BACKEND_HANDOFF.md) for scenarios and API contracts.
 
-After the first install, use `npm run dev` for normal starts. Stop this project's dev/preview servers with Ctrl+C before reinstalling with `npm ci`, so Windows can replace native dependencies.
+After the first install, use `npm run dev:mock` for normal frontend-only starts. Use `npm run dev` with mocks disabled to integrate the owner's API. Stop dev/preview servers with Ctrl+C before reinstalling with `npm ci`, so Windows can replace native dependencies. Verification: `npm run typecheck`, `npm run build`, `npm run lint`, `npm test`, and `npm run test:browser` (installed Edge).
 
 ## Backend setup (PowerShell)
 
@@ -68,6 +68,6 @@ Expected HTTP 200 JSON: `{"status":"UP"}`. Only GET on this health path is publi
 
 Flyway owns migrations under `backend/src/main/resources/db/migration`; V1 creates only the empty application schema. Hibernate validates rather than creating/updating tables. Do not execute `docs/spec/schema_reference.sql`; add feature migrations in later tasks. The verification suite uses a disposable PostgreSQL 18 container and checks clean startup, migrations, restart persistence and health/security behavior. See [backend setup notes](backend/README.md) for configuration, migration rules and official references.
 
-Next after T03 is T04: error format, API transport and CI. Product journeys and provider integrations remain unimplemented; use fakes/sandboxes when their tasks begin.
+Next frontend batch: FE02 — workspace onboarding, dashboard, projects and template gallery. The original T04+ statuses remain unchanged; backend progression is handled manually by the owner.
 
 Use provider fakes and sandboxes during development. Keep secrets out of version control and frontend bundles; production provider credentials stay disabled until their integration stage.

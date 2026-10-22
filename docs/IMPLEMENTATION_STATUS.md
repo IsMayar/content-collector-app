@@ -1,6 +1,6 @@
 # Implementation status
 
-Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 21 October 2026.
+Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 22 October 2026.
 
 All tasks were initialized as Not started. T01–T03 are Complete. M0 is In progress; M1–M7 remain Not started.
 
@@ -12,7 +12,7 @@ The owner implements the backend manually. Codex works only on frontend/ and rel
 
 | Batch | Scope | Status |
 | --- | --- | --- |
-| FE01 | Architecture, design system, navigation, and authentication UI | In progress |
+| FE01 | Architecture, design system, navigation, and authentication UI | Complete (frontend only) |
 | FE02 | Workspace onboarding, dashboard, projects, and template gallery | Not started |
 | FE03 | Project structure editor, team, access, and reminder settings | Not started |
 | FE04 | Client portal, typed answers, autosave, and upload experience | Not started |
@@ -20,7 +20,22 @@ The owner implements the backend manually. Codex works only on frontend/ and rel
 | FE06 | AI assistance UI, analytics, billing, and workspace settings | Not started |
 | FE07 | Responsive polish, accessibility, PWA, and frontend regression | Not started |
 
-Current authorization: FE01 only. Next frontend batch: FE02 after FE01 verification and completion.
+FE01 is complete; no FE02 work was started. Next frontend batch: FE02 after a new request.
+
+### FE01 verification — 22 October 2026
+
+- Added public/authentication, agency and client layout foundations; responsive sidebar/mobile navigation, breadcrumbs, page headings, shared field/error controls, loading/empty/error/success panels, notifications and a native confirmation dialog. Design tokens retain the approved palette and define typography, spacing and surfaces.
+- Added sign-in, sign-up, verification/resend, recovery, reset and team-invitation screens with React Hook Form/Zod. Includes pending/disabled states, password visibility, generic account recovery, explicit token submission and invalid/expired/consumed token feedback.
+- Added runtime DTO schemas, configurable RTK Query HTTP transport, CSRF headers, memory-only access tokens, session bootstrap, in-tab/Web Locks refresh coordination, protected agency routes, membership/owner navigation, workspace selection, logout/cache clearing, cross-tab logout and safe internal return destinations. Signed-in destinations are clearly labeled placeholders; dashboard/project features remain FE02.
+- Added explicitly enabled development MSW interception with separate synthetic owner/member/freelancer fixtures and failure scenarios. Real and mock modes use the same application endpoints. Production builds do not enable mocks. No token/browser-storage persistence, real email delivery or JWT/HttpOnly-cookie security is simulated.
+- PASS: strict TypeScript checks and production build; build also passed with VITE_ENABLE_MOCKS=true and the resulting production JavaScript contained none of the fixture credentials/synthetic access values. A non-failing Vite warning reports the approximately 625 kB minified initial JS chunk; code splitting/performance refinement remains FE07.
+- PASS: ESLint 10 with zero warnings; Prettier format check. Compatible direct dependency versions and complete npm lockfile are committed. npm reported zero vulnerabilities after the final dependency installation.
+- PASS: 24 Vitest/Testing Library tests through the real RTK Query request path with MSW. Covers sign-in success/failure, client validation, generic recovery, protected redirects, safe destinations, logout/cache clearing, membership/owner restrictions, workspace switching, token expiry, server-session bootstrap, concurrent refresh, session-expiry cleanup, network errors and password reset.
+- PASS: 12 Playwright scenarios in installed headless Microsoft Edge across desktop 1440×1000, tablet 768×1024 and phone 360×800. Covers keyboard skip link/field focus, visible password control, route focus, responsive overflow, native dialog focus/Escape restoration, sign-in/out, failure/recovery, expired/consumed links, registration, resend/verification, invitation sign-in round trip, member navigation and client layout.
+- Visually inspected desktop sign-in/workspace and phone sign-in screenshots. Browser testing found and fixed a HeroUI `.field-error` style collision, cross-layout focus loss and tablet auth-grid overflow before the complete suite passed. Evidence: [desktop sign-in](verification/FE01/sign-in-desktop.png), [phone sign-in](verification/FE01/sign-in-phone.png), [workspace](verification/FE01/workspace-desktop.png).
+- The in-app browser automation helper could not start; installed Edge/Playwright provided equivalent browser checks. Physical phones, screen readers, Firefox/Safari and real-backend authentication/cookie behavior were not tested. No backend or full-stack acceptance is claimed.
+- [Frontend/backend handoff](FRONTEND_BACKEND_HANDOFF.md) records operations/shapes, cookie expectations, environment switches, mock accounts/limitations and the proposed resend endpoint missing from the original inventory. Mock sessions reset on full reload. The owner must implement/confirm backend contracts before real integration.
+- All backend and supplied specification files remain unchanged. Original T01–T03 completion and T04–T38 statuses below are preserved. Verification servers stop automatically after the browser suite.
 
 ## T03 results — 21 October 2026
 
