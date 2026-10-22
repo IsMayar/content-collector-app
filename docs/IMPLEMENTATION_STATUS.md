@@ -20,7 +20,18 @@ The owner implements the backend manually. Codex works only on frontend/ and rel
 | FE06 | AI assistance UI, analytics, billing, and workspace settings | Not started |
 | FE07 | Responsive polish, accessibility, PWA, and frontend regression | Not started |
 
-FE01 is complete; no FE02 work was started. Next frontend batch: FE02 after a new request.
+FE01 is complete. The owner has authorized FE02–FE07 consecutively. Backend code and the original full-stack roadmap remain preserved.
+
+### Remaining frontend execution plan
+
+1. FE02: add typed domain contracts and independent template snapshots; stateful tenant-scoped MSW data; onboarding, dashboard/list, creation and template preview.
+2. FE03: project workspace and versioned structure editor; team, assignments, client grants and reminders with permission/state checks.
+3. FE04: separate client session/exchange, typed editors, versioned autosave/conflicts, uploads and immutable submission snapshots.
+4. FE05: exact-revision review, comments/activity, completion/reopening and approved export jobs/download fixtures.
+5. FE06: deterministic AI suggestions, defined analytics/shares, usage/billing/settings and public landing/pricing.
+6. FE07: route audit, responsive/accessibility fixes, public-only PWA cache, code splitting, regression tests and final backend handoff.
+
+Material assumptions: mock state is memory-only and resets on full reload; fixtures and real requests use one RTK Query path. Cross-tab concurrency is demonstrated with version conflicts through API tests and deterministic mock scenarios, not by persisting private data in browser storage. Any additional request/response fields or endpoints will be recorded in the handoff. Feature completion is recorded only after its checks run.
 
 ### FE01 verification — 22 October 2026
 

@@ -14,7 +14,7 @@ The primary guide is `docs/spec/Website_Content_Collector_MVP.md`; its PDF compa
 
 ## Development rules
 
-- Develop frontend-first in cohesive FE batches. The owner implements the backend manually; do not edit backend/ for these batches. Current authorization is FE01 only; stop before FE02.
+- Develop frontend-first in cohesive FE batches. The owner implements the backend manually; do not edit backend/ for these batches. Current authorization covers completing FE02–FE07 consecutively, including verification and fixes; do not stop between batches to request another prompt.
 - Preserve the original M0–M7/T01–T38 roadmap and recorded progress. Track FE01–FE07 separately in docs/IMPLEMENTATION_STATUS.md; frontend completion never proves backend or full-stack acceptance.
 - FE01: architecture, design system, navigation, authentication UI. FE02: onboarding, dashboard, projects, templates. FE03: structure, team, access, reminders. FE04: client portal, answers, autosave, uploads. FE05: review, comments, activity, exports. FE06: AI UI, analytics, billing, workspace settings. FE07: responsive/accessibility polish, PWA, regression.
 - Use one HTTP/API path for mocks and real backend integration. Keep MSW handlers/fixtures separate, explicitly opt into mocks in development/tests, use synthetic data, and document contract gaps in docs/FRONTEND_BACKEND_HANDOFF.md. Keep access tokens in memory, never persistent browser storage.
