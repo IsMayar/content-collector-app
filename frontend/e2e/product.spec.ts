@@ -12,8 +12,9 @@ async function nav(page: Page, name: string) {
   const mobile = page.getByRole('navigation', {
     name: 'Mobile workspace navigation',
   })
-  if (await page.getByText('Workspace menu', { exact: true }).isVisible()) {
+  if ((page.viewportSize()?.width || 1440) < 768) {
     const summary = page.getByText('Workspace menu', { exact: true })
+    await expect(summary).toBeVisible()
     if (!(await mobile.isVisible())) await summary.click()
     await mobile.getByRole('link', { name, exact: true }).click()
     await summary.click()

@@ -13,16 +13,32 @@ The owner implements the backend manually. Codex works only on frontend/ and rel
 | Batch | Scope | Status |
 | --- | --- | --- |
 | FE01 | Architecture, design system, navigation, and authentication UI | Complete (frontend only) |
-| FE02 | Workspace onboarding, dashboard, projects, and template gallery | Implemented; frontend verification in progress |
-| FE03 | Project structure editor, team, access, and reminder settings | Implemented; frontend verification in progress |
-| FE04 | Client portal, typed answers, autosave, and upload experience | Implemented; frontend verification in progress |
-| FE05 | Agency review, comments, activity, and exports | Implemented; frontend verification in progress |
-| FE06 | AI assistance UI, analytics, billing, and workspace settings | Implemented; frontend verification in progress |
-| FE07 | Responsive polish, accessibility, PWA, and frontend regression | In progress |
+| FE02 | Workspace onboarding, dashboard, projects, and template gallery | Complete (frontend with HTTP mocks) |
+| FE03 | Project structure editor, team, access, and reminder settings | Complete (frontend with HTTP mocks) |
+| FE04 | Client portal, typed answers, autosave, and upload experience | Complete (frontend with HTTP mocks) |
+| FE05 | Agency review, comments, activity, and exports | Complete (frontend with HTTP mocks) |
+| FE06 | AI assistance UI, analytics, billing, and workspace settings | Complete (frontend with HTTP mocks) |
+| FE07 | Responsive polish, accessibility, PWA, and frontend regression | Complete (frontend verification scope) |
 
-FE01 is complete. The owner has authorized FE02–FE07 consecutively. Backend code and the original full-stack roadmap remain preserved.
+FE01–FE07 frontend implementation is complete within the development HTTP-mock scope. Backend code and the original full-stack roadmap remain preserved. This does not complete the production MVP or its backend/release gates.
 
-### Remaining frontend execution plan
+### FE02–FE07 results — 22 October 2026
+
+- FE02: freelancer/agency onboarding, owner/member dashboards, project creation and details, search/type/state/sort/pagination, lifecycle actions and dual submitted/approved counts. All ten supplied templates are available; project structures and published workspace-template versions are independent snapshots. New workspaces use clean usage/identity state and the selected timezone.
+- FE03: section/item editing, enabled states, pointer and keyboard reordering, all field types, repeater field configuration, earlier-single-select visibility, structure-version conflicts, workspace template drafts/publishing, client contacts/invite/resend/revoke, read-only preview, team seats/invitations/assignments and separate reviewer/export flags. Reminder policies include timezone, pause, preview, eligibility and delivery history; client SMS consent/verification is synthetic.
+- FE04: explicit fragment-token exchange, fresh-link requests, expired/revoked access recovery and an independent project-scoped client session. Typed editors include repeaters and conditional visibility, debounced autosave, local-input-preserving conflict recovery, unsaved-navigation protection, immutable submissions/withdrawal and client-visible comments. Uploads provide file/library/camera inputs, three concurrent transfers, size/type/quota feedback, progress, cancellation/retry, processing/rejection and original retention. Only READY selected files submit.
+- FE05: exact-revision review/history, required change reasons, stale decision rejection, reopen/complete guards, internal/client comment separation, safe activity, approved-only immutable ZIP/JSON/Markdown export jobs, partial acknowledgement, expiry/fresh downloads and older-snapshot notices. Mock ZIPs contain valid manifests/Markdown and transferred synthetic file bytes.
+- FE06: deterministic fact-based suggestions with explicit acceptance/version guards, normal writing during AI failures, usage/allowances, project friction metrics with 7-day windows/minimum samples, counts-only scoped shares/revocation/embed configuration, digest preferences/preview, identity/logo/sessions, proposed plans and mock hosted billing returns, grace/read-only/deletion workflows. Added public landing/pricing pages without invented testimonials.
+- FE07: semantic responsive layouts, explicit field labels/descriptions, visible focus, keyboard reorder/navigation, native confirmation dialogs with Escape/focus restoration, reduced-motion styles, route splitting, recoverable query failures and removal of obsolete foundation navigation. Public/client pages remain available if agency session checking fails. The production manifest has SVG/192/512 icons; the worker caches only five fixed public assets and never private responses/navigation/content.
+- PASS: strict TypeScript and production build; ESLint with zero warnings; Prettier; resolved dependency tree without invalid packages. Final initial main chunk is approximately 461 kB minified / 147 kB gzip, with product routes split. Production JavaScript was scanned and contains no demo credentials/access/invitation fixtures.
+- PASS: 42 Vitest/Testing Library/HTTP tests. Includes original auth regressions, new-workspace isolation, assigned-member/tenant restrictions, independent project-type snapshots, draft/structure conflicts, visibility/validation, explicit client exchange, revocation/paused writes, internal-note privacy, immutable history, request changes/resubmission/stale review, valid approved-only exports, stale AI acceptance and counts-only share revocation.
+- PASS: clean 27-case Edge/Playwright run across desktop 1440×1000, tablet 768×1024 and phone 360×800. Exercises auth/keyboard/focus/dialogs, all three project types, templates/reorder/settings, owner→client→review→ZIP handoff, real browser upload controls/READY processing, explicit AI acceptance, public pages, list failure/recovery, billing grace/mock return and read-only notices. Focused client/auth/handoff checks verified the final independent-session change; a phone helper timing race was fixed and its handoff rerun passed.
+- PASS: production PWA browser test against the built output, verifying registration, install icons, no development label, stale-cache cleanup, exact public cache allowlist and honest offline private-route navigation. Test servers use isolated ports 5174/5175 and stop automatically.
+- Browser testing found and fixed ambiguous wrapped labels, intercepted download navigation, scenario/toast overlap, native dependency/test type boundaries and obsolete route placeholders. Visually inspected desktop landing/dashboard/client and phone collection screenshots. Evidence is under [verification/FE02-FE07](verification/FE02-FE07/).
+- Not performed: real backend/cookie/CORS/object-storage integration, PostgreSQL isolation/concurrency, actual scanning/HEIC decoding, AI/email/SMS/payment providers, physical-device camera/installation, screen-reader audit or Safari/Firefox. Mock behavior is not proof of production security, durable jobs, delivery, billing or analytics collection. No backend/full-stack milestone is advanced.
+- [Product integration handoff](FRONTEND_PRODUCT_HANDOFF.md) records routes, operations/envelopes, concurrency, upload/export jobs, environment switches, reset/scenarios and contract decisions requiring backend agreement. The original 38 task rows, backend and all supplied specification files remain unchanged.
+
+### Executed frontend plan
 
 1. FE02: add typed domain contracts and independent template snapshots; stateful tenant-scoped MSW data; onboarding, dashboard/list, creation and template preview.
 2. FE03: project workspace and versioned structure editor; team, assignments, client grants and reminders with permission/state checks.

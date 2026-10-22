@@ -46,7 +46,7 @@ Preview serves production output on http://127.0.0.1:4173 with mocks disabled. I
 - `e2e`: real Edge browser scenarios using the same network mocks.
 - `src/styles`: Tailwind/HeroUI imports, palette, typography, spacing and surface tokens.
 
-`@/` resolves to `src/` in TypeScript and Vite. Strict TypeScript and React StrictMode remain enabled. React Hook Form owns form values, RTK Query owns server data, and the auth slice keeps access tokens/identity only in memory. There is no persistent token storage. HeroUI v3 needs no v2-style provider. Native semantic fields integrate with React Hook Form; HeroUI supplies primary buttons. Route guards support UX and do not replace backend authorization.
+`@/` resolves to `src/` in TypeScript and Vite. Strict TypeScript and React StrictMode remain enabled. Authentication forms use React Hook Form/Zod; product editors use typed local state, native constraints and shared domain validation. RTK Query owns server data; the auth slice keeps access tokens/identity only in memory. There is no persistent token storage. HeroUI v3 needs no v2-style provider. Native semantic fields integrate with React Hook Form; HeroUI supplies primary buttons. Route guards support UX and do not replace backend authorization.
 
 The owner handles backend implementation manually. Frontend batches remain separate from original full-stack milestones. See [the authentication handoff](../docs/FRONTEND_BACKEND_HANDOFF.md) and [the product integration handoff](../docs/FRONTEND_PRODUCT_HANDOFF.md) for actual operations, DTOs, scenarios and unresolved backend decisions. Reload resets mock sessions, file bytes and fixture changes. Stay in one SPA tab for the owner → client → review → export demo.
 

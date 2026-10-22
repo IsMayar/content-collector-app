@@ -1,5 +1,7 @@
 # FE01 frontend/backend handoff
 
+For FE02–FE07, see [the product integration handoff](FRONTEND_PRODUCT_HANDOFF.md): product routes, actual HTTP operations/DTO envelopes, versioning, uploads/exports, mock scenarios, environment switching and remaining backend responsibilities. Authentication details below remain applicable. Frontend mock checks do not establish backend or production acceptance.
+
 Updated 22 October 2026. The owner implements the backend manually. FE01 delivers frontend architecture and authentication UI; it does **not** validate server authentication, tenant isolation, cryptography, email delivery or full-stack roadmap acceptance. `backend/` and the supplied specifications are unchanged by FE01.
 
 ## One HTTP path
