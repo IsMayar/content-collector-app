@@ -76,7 +76,7 @@ export function Notifications({ children }: { children: ReactNode }) {
       >
         {message && (
           <div className="notification">
-            {message}
+            <span>{message}</span>
             <button
               aria-label="Dismiss notification"
               onClick={() => setMessage('')}
@@ -102,7 +102,7 @@ export function ConfirmDialog({
 }: {
   open: boolean
   title: string
-  description: string
+  description: ReactNode
   confirmLabel: string
   pending?: boolean
   onCancel: () => void
@@ -124,7 +124,7 @@ export function ConfirmDialog({
       }}
     >
       <h2 id="confirmation-title">{title}</h2>
-      <p id="confirmation-description">{description}</p>
+      <div id="confirmation-description">{description}</div>
       <div className="dialog-actions">
         <button
           className="secondary-button"

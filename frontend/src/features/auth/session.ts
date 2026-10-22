@@ -19,6 +19,7 @@ export function clearPrivateCaches(): ThunkAction<
   UnknownAction
 > {
   return (dispatch) => {
+    navigator.serviceWorker?.controller?.postMessage({type:'CLEAR_PRIVATE_CACHES'})
     dispatch(agencyApi.util.resetApiState())
     dispatch(clientApi.util.resetApiState())
   }

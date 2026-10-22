@@ -1,0 +1,1172 @@
+import { useState, type FormEvent } from 'react'
+import { Link, NavLink, useParams, useSearchParams } from 'react-router'
+import { ArrowDown, ArrowUp, GripVertical, Plus, Pencil } from 'lucide-react'
+import { useData } from '@/api/productApi'
+import type {
+  Assignment,
+  ClientChecklist,
+  Item,
+  ItemDefinition,
+  Member,
+  ProjectContact,
+  ProjectDetail,
+  ReminderPolicy,
+  ReminderPreview,
+  Section,
+  TemplateDefinition,
+} from '@/api/productTypes'
+import {
+  Badge,
+  DualProgress,
+  ErrorNotice,
+  Field,
+  Heading,
+  Panel,
+  QueryState,
+  fieldTypes,
+  useCommand,
+  useWorkspace,
+} from '@/components/ProductUI'
+import { ConfirmDialog, Notice, useNotify } from '@/components/Feedback'
+import {
+  ReviewPanel,
+  ActivityPanel,
+  ExportPanel,
+} from '@/features/review/ReviewPanels'
+import { AnalyticsPanel } from '@/features/settings/SettingsPages'
+
+export function ProjectPage() {
+  const { id, base, owner } = useWorkspace()
+  const { projectId } = useParams()
+  const root = `workspaces/${id}/projects/${projectId}`
+  const query = useData<ProjectDetail>(root)
+  const [search] = useSearchParams()
+  const tab = search.get('tab') || 'checklist'
+  const command = useCommand()
+  const notify = useNotify()
+  const [action, setAction] = useState('')
+  const [reason, setReason] = useState('')
+  const data = query.data
+  const p = data?.project
+  async function lifecycle() {
+    if (!p) return
+    if (
+      await command.run(`${root}/${action}`, {
+        expectedVersion: p.version,
+        reason,
+      })
+    ) {
+      notify(`Project ${action} completed.`)
+      setAction('')
+      setReason('')
+    }
+  }
+  return (
+    <QueryState query={query}>
+      {p && data && (
+        <>
+          <Link className="back-link" to={`${base}/projects`}>
+            ← All projects
+          </Link>
+          <Heading
+            eyebrow={`${p.clientBusinessName} / ${p.projectType.replaceAll('_', ' ')}`}
+            title={p.title}
+            description={`Due ${p.dueDate} · ${p.timezone}`}
+          >
+            <Badge>{p.state}</Badge>
+            {owner && (
+              <>
+                <select
+                  aria-label="Project action"
+                  value=""
+                  onChange={(e) => setAction(e.target.value)}
+                >
+                  <option value="">Project actions</option>
+                  {(
+                    {
+                      DRAFT: ['publish', 'archive'],
+                      ACTIVE: ['pause', 'complete', 'archive'],
+                      PAUSED: ['resume', 'complete', 'archive'],
+                      COMPLETED: ['reopen', 'archive'],
+                      ARCHIVED: ['restore', 'delete-request'],
+                      DELETION_PENDING: [],
+                    } as Record<string, string[]>
+                  )[p.state].map((a) => (
+                    <option key={a} value={a}>
+                      {a.replaceAll('-', ' ')}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </Heading>
+          <div className="project-summary">
+            <DualProgress progress={data.progress} />
+            <p>
+              <strong>{data.progress.clientActionRequired}</strong> required
+              items need client action
+              <br />
+              <small>Optional approved: {data.progress.optionalApproved}</small>
+            </p>
+            <span className="subtle">
+              Structure v{p.structureVersion} · Project v{p.version}
+            </span>
+          </div>
+          <nav className="tabs" aria-label="Project sections">
+            {[
+              ['checklist', 'Checklist'],
+              ['preview', 'Client preview'],
+              ...(owner
+                ? [
+                    ['access', 'Client access'],
+                    ['assignments', 'Team'],
+                    ['reminders', 'Reminders'],
+                  ]
+                : []),
+              ...(p.permissions.canReview ? [['review', 'Review']] : []),
+              ['activity', 'Activity'],
+              ...(p.permissions.canExport ? [['exports', 'Exports']] : []),
+              ...(owner
+                ? [
+                    ['analytics', 'Insights'],
+                    ['details', 'Details'],
+                  ]
+                : []),
+            ].map(([key, label]) => (
+              <NavLink
+                key={key}
+                to={`?tab=${key}`}
+                className={tab === key ? 'active' : ''}
+                aria-current={tab === key ? 'page' : undefined}
+              >
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+          <ErrorNotice error={command.error} />
+          {tab === 'checklist' && (
+            <StructureEditor
+              key={p.id}
+              data={data}
+              root={root}
+              editable={
+                p.permissions.canEditStructure &&
+                !['ARCHIVED', 'COMPLETED'].includes(p.state)
+              }
+            />
+          )}
+          {tab === 'preview' && <PreviewPanel root={root} />}
+          {tab === 'access' && owner && <ContactsPanel root={root} />}
+          {tab === 'assignments' && owner && <AssignmentsPanel root={root} />}
+          {tab === 'reminders' && owner && <RemindersPanel root={root} />}
+          {tab === 'review' && p.permissions.canReview && (
+            <ReviewPanel root={root} />
+          )}
+          {tab === 'activity' && <ActivityPanel root={root} />}
+          {tab === 'exports' && p.permissions.canExport && (
+            <ExportPanel root={root} project={p} />
+          )}
+          {tab === 'analytics' && owner && <AnalyticsPanel root={root} />}
+          {tab === 'details' && owner && (
+            <Panel title="Project details">
+              <form
+                className="stack-form"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const values = Object.fromEntries(
+                    new FormData(e.currentTarget),
+                  )
+                  if (
+                    await command.run(
+                      root,
+                      { ...values, expectedVersion: p.version },
+                      'PATCH',
+                    )
+                  )
+                    notify('Project details saved.')
+                }}
+              >
+                <Field label="Project name">
+                  <input name="title" required defaultValue={p.title} />
+                </Field>
+                <Field label="Due date">
+                  <input
+                    name="dueDate"
+                    type="date"
+                    required
+                    defaultValue={p.dueDate}
+                  />
+                </Field>
+                <Field label="Timezone">
+                  <input name="timezone" required defaultValue={p.timezone} />
+                </Field>
+                <button className="primary-button" disabled={command.pending}>
+                  Save details
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={async () => {
+                    const definition: TemplateDefinition = {
+                      schemaVersion: 1,
+                      key: `custom_${Date.now()}`,
+                      title: `${p.title} template`,
+                      projectType: p.projectType,
+                      industry: 'CUSTOM',
+                      sections: data.structure.map((s) => ({
+                        key: s.key,
+                        title: s.title,
+                        items: s.items.map((i) => ({
+                          key: i.key,
+                          label: i.label,
+                          type: i.type,
+                          instructions: i.instructions,
+                          example: i.example,
+                          required: i.required,
+                          validation: i.validation,
+                          visibleWhen: i.visibleWhen,
+                          enabled: i.enabled,
+                          ai: i.ai,
+                        })),
+                      })),
+                    }
+                    if (
+                      await command.run(`workspaces/${id}/templates`, {
+                        definition,
+                      })
+                    )
+                      notify('Independent workspace template saved.')
+                  }}
+                >
+                  Save checklist as workspace template
+                </button>
+              </form>
+            </Panel>
+          )}
+          <ConfirmDialog
+            open={!!action}
+            pending={command.pending}
+            title={`${action.replaceAll('-', ' ')} project?`}
+            description={
+              <>
+                <p>
+                  Changes affect client access and reminders. Existing
+                  submissions and historical approvals are retained.
+                </p>
+                {['reopen', 'delete-request'].includes(action) && (
+                  <Field label="Reason">
+                    <input
+                      required
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                    />
+                  </Field>
+                )}
+                <ErrorNotice error={command.error} />
+              </>
+            }
+            confirmLabel={`Confirm ${action}`}
+            onCancel={() => setAction('')}
+            onConfirm={() => void lifecycle()}
+          />
+        </>
+      )}
+    </QueryState>
+  )
+}
+function StructureEditor({
+  data,
+  root,
+  editable,
+}: {
+  data: ProjectDetail
+  root: string
+  editable: boolean
+}) {
+  const command = useCommand()
+  const notify = useNotify()
+  const [editing, setEditing] = useState<{
+    section: Section
+    item?: Item
+  } | null>(null)
+  const [drag, setDrag] = useState('')
+  const [sectionTitle, setSectionTitle] = useState('')
+  async function reorder(sections: Section[]) {
+    if (
+      await command.run(`${root}/structure/reorder`, {
+        sectionIds: sections.map((s) => s.id),
+        itemOrderBySection: Object.fromEntries(
+          sections.map((s) => [s.id, s.items.map((i) => i.id)]),
+        ),
+        expectedStructureVersion: data.project.structureVersion,
+      })
+    )
+      notify('Order updated.')
+  }
+  function moveSection(index: number, delta: number) {
+    const sections = structuredClone(data.structure)
+    const [s] = sections.splice(index, 1)
+    sections.splice(index + delta, 0, s)
+    void reorder(sections)
+  }
+  function moveItem(s: Section, index: number, delta: number) {
+    const sections = structuredClone(data.structure)
+    const target = sections.find((t) => t.id === s.id)!
+    const [i] = target.items.splice(index, 1)
+    target.items.splice(index + delta, 0, i)
+    void reorder(sections)
+  }
+  return (
+    <>
+      <div className="section-intro">
+        <div>
+          <h2>The collection checklist</h2>
+          <p className="subtle">
+            Clear questions make room for better answers. Drag items or use
+            their move buttons.
+          </p>
+        </div>
+        <span className="subtle">{data.structure.length} sections</span>
+      </div>
+      <ErrorNotice error={command.error} />
+      {command.error && (
+        <button
+          className="secondary-button"
+          onClick={() => window.dispatchEvent(new Event('focus'))}
+        >
+          Refresh latest structure (keeps editor open)
+        </button>
+      )}
+      <div className="stack">
+        {data.structure.map((s, index) => (
+          <Panel key={s.id}>
+            <header className="section-header">
+              <div>
+                <span className="section-number">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h2>{s.title}</h2>
+                {!s.enabled && <Badge>DISABLED</Badge>}
+              </div>
+              {editable && (
+                <div className="actions">
+                  <button
+                    className="icon-button"
+                    aria-label={`Move ${s.title} section up`}
+                    disabled={!index || command.pending}
+                    onClick={() => moveSection(index, -1)}
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label={`Move ${s.title} section down`}
+                    disabled={
+                      index === data.structure.length - 1 || command.pending
+                    }
+                    onClick={() => moveSection(index, 1)}
+                  >
+                    <ArrowDown size={16} />
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={command.pending}
+                    onClick={() =>
+                      void command.run(
+                        `${root}/sections/${s.id}`,
+                        {
+                          enabled: !s.enabled,
+                          expectedStructureVersion:
+                            data.project.structureVersion,
+                        },
+                        'PATCH',
+                      )
+                    }
+                  >
+                    {s.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                </div>
+              )}
+            </header>
+            <ol className="checklist-rows">
+              {s.items.map((i, n) => (
+                <li
+                  key={i.id}
+                  draggable={editable}
+                  onDragStart={() => setDrag(i.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (!editable || !s.items.some((i) => i.id === drag)) return
+                    const sections = structuredClone(data.structure)
+                    const target = sections.find((t) => t.id === s.id)!
+                    const from = target.items.findIndex((i) => i.id === drag)
+                    const [item] = target.items.splice(from, 1)
+                    target.items.splice(n, 0, item)
+                    void reorder(sections)
+                    setDrag('')
+                  }}
+                >
+                  <GripVertical size={17} className="subtle" />
+                  <div className="grow">
+                    <strong>
+                      {i.label}{' '}
+                      {i.required && <span className="required-mark">*</span>}
+                    </strong>
+                    <p>
+                      {i.type.replaceAll('_', ' ')}
+                      {i.visibleWhen ? ' · Conditional' : ''}
+                      {i.enabled === false ? ' · Disabled' : ''}
+                    </p>
+                  </div>
+                  <Badge>{i.state}</Badge>
+                  {editable && (
+                    <div className="actions">
+                      <button
+                        className="icon-button"
+                        disabled={!n || command.pending}
+                        aria-label={`Move ${i.label} up`}
+                        onClick={() => moveItem(s, n, -1)}
+                      >
+                        <ArrowUp size={16} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        disabled={n === s.items.length - 1 || command.pending}
+                        aria-label={`Move ${i.label} down`}
+                        onClick={() => moveItem(s, n, 1)}
+                      >
+                        <ArrowDown size={16} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        aria-label={`Edit ${i.label}`}
+                        onClick={() => setEditing({ section: s, item: i })}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {editable && (
+              <button
+                className="add-item"
+                onClick={() => setEditing({ section: s })}
+              >
+                <Plus size={16} /> Add item
+              </button>
+            )}
+          </Panel>
+        ))}
+      </div>
+      {editable && (
+        <Panel title="Add a section">
+          <form
+            className="inline-form"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              if (
+                await command.run(`${root}/sections`, {
+                  title: sectionTitle,
+                  expectedStructureVersion: data.project.structureVersion,
+                })
+              )
+                setSectionTitle('')
+            }}
+          >
+            <Field label="Section title">
+              <input
+                required
+                value={sectionTitle}
+                onChange={(e) => setSectionTitle(e.target.value)}
+                placeholder="e.g. Brand and identity"
+              />
+            </Field>
+            <button className="secondary-button" disabled={command.pending}>
+              Add section
+            </button>
+          </form>
+        </Panel>
+      )}
+      {editing && (
+        <ItemEditor
+          key={editing.item?.id || editing.section.id}
+          root={root}
+          structureVersion={data.project.structureVersion}
+          section={editing.section}
+          item={editing.item}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </>
+  )
+}
+function ItemEditor({
+  root,
+  structureVersion,
+  section,
+  item,
+  onClose,
+}: {
+  root: string
+  structureVersion: number
+  section: Section
+  item?: Item
+  onClose: () => void
+}) {
+  const [type, setType] = useState<ItemDefinition['type']>(
+    item?.type || 'SHORT_TEXT',
+  )
+  const [options, setOptions] = useState(
+    item?.validation.options?.map((o) => `${o.key}|${o.label}`).join('\n') ||
+      'yes|Yes\nno|No',
+  )
+  const [columns, setColumns] = useState(
+    JSON.stringify(
+      item?.validation.columns || [
+        { key: 'name', label: 'Name', type: 'SHORT_TEXT', required: true },
+      ],
+      null,
+      2,
+    ),
+  )
+  const command = useCommand()
+  const [localError, setLocalError] = useState('')
+  const [controller, setController] = useState(
+    item?.visibleWhen?.dependsOnItemKey || '',
+  )
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLocalError('')
+    const v = Object.fromEntries(new FormData(e.currentTarget))
+    try {
+      const definition: ItemDefinition = {
+        key: String(v.key),
+        label: String(v.label),
+        type,
+        instructions: String(v.instructions || ''),
+        example: String(v.example || ''),
+        required: v.required === 'on',
+        enabled: v.enabled === 'on',
+        validation: {
+          ...(['SHORT_TEXT', 'LONG_TEXT'].includes(type)
+            ? {
+                maxLength:
+                  Number(v.maxLength) || (type === 'SHORT_TEXT' ? 200 : 10000),
+              }
+            : {}),
+          ...(['SINGLE_SELECT', 'MULTI_SELECT'].includes(type)
+            ? {
+                options: options
+                  .split('\n')
+                  .filter(Boolean)
+                  .map((line) => {
+                    const [key, label] = line.split('|')
+                    return { key: key.trim(), label: (label || key).trim() }
+                  }),
+              }
+            : {}),
+          ...(['IMAGE', 'FILE'].includes(type)
+            ? { maxFiles: Number(v.maxFiles) || 10 }
+            : {}),
+          ...(type === 'REPEATER'
+            ? {
+                columns: JSON.parse(columns),
+                maxRows: Math.min(20, Number(v.maxRows) || 20),
+              }
+            : {}),
+        },
+        ...(controller
+          ? {
+              visibleWhen: {
+                dependsOnItemKey: controller,
+                operator: 'EQUALS' as const,
+                optionKey: String(v.optionKey),
+              },
+            }
+          : {}),
+        ...(type === 'LONG_TEXT'
+          ? { ai: { enabled: v.ai === 'on', targetWords: 150 } }
+          : {}),
+      }
+      const result = await command.run(
+        item
+          ? `${root}/items/${item.id}/schema`
+          : `${root}/sections/${section.id}/items`,
+        {
+          definition,
+          expectedStructureVersion: structureVersion,
+          reopenAffected: v.reopen === 'on',
+        },
+        item ? 'PATCH' : 'POST',
+      )
+      if (result) onClose()
+    } catch {
+      setLocalError(
+        'Repeater columns must be valid JSON following the displayed example.',
+      )
+    }
+  }
+  return (
+    <section className="editor-panel" aria-label="Item editor">
+      <Panel title={item ? 'Edit checklist item' : 'New checklist item'}>
+        <p className="subtle">
+          Your edits stay here if another change causes a version conflict.
+        </p>
+        <form className="stack-form" onSubmit={submit}>
+          <div className="form-grid">
+            <Field label="Label">
+              <input required name="label" defaultValue={item?.label} />
+            </Field>
+            <Field label="Stable key">
+              <input
+                required
+                pattern="[a-zA-Z][a-zA-Z0-9_.]*"
+                name="key"
+                defaultValue={item?.key || `item_${Date.now()}`}
+                readOnly={!!item}
+              />
+            </Field>
+            <Field label="Field type">
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as typeof type)}
+              >
+                {fieldTypes.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Example">
+              <input name="example" defaultValue={item?.example} />
+            </Field>
+          </div>
+          <Field label="Instructions">
+            <textarea name="instructions" defaultValue={item?.instructions} />
+          </Field>
+          <div className="actions">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                name="required"
+                defaultChecked={item?.required ?? true}
+              />
+              Required
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                name="enabled"
+                defaultChecked={item?.enabled !== false}
+              />
+              Enabled
+            </label>
+          </div>
+          {['SHORT_TEXT', 'LONG_TEXT'].includes(type) && (
+            <Field label="Maximum characters">
+              <input
+                type="number"
+                name="maxLength"
+                min={1}
+                max={type === 'SHORT_TEXT' ? 200 : 10000}
+                defaultValue={
+                  item?.validation.maxLength ||
+                  (type === 'SHORT_TEXT' ? 200 : 10000)
+                }
+              />
+            </Field>
+          )}
+          {type === 'LONG_TEXT' && (
+            <label className="check-row">
+              <input
+                type="checkbox"
+                name="ai"
+                defaultChecked={item?.ai?.enabled}
+              />
+              Allow optional fact-based writing assistance
+            </label>
+          )}
+          {['SINGLE_SELECT', 'MULTI_SELECT'].includes(type) && (
+            <Field label="Options (one key|Label per line)">
+              <textarea
+                value={options}
+                onChange={(e) => setOptions(e.target.value)}
+                required
+              />
+            </Field>
+          )}
+          {['IMAGE', 'FILE'].includes(type) && (
+            <Field label="Maximum files">
+              <input
+                name="maxFiles"
+                type="number"
+                min={1}
+                max={50}
+                defaultValue={item?.validation.maxFiles || 10}
+              />
+            </Field>
+          )}
+          {type === 'REPEATER' && (
+            <>
+              <Field label="Maximum rows">
+                <input
+                  name="maxRows"
+                  type="number"
+                  min={1}
+                  max={20}
+                  defaultValue={item?.validation.maxRows || 20}
+                />
+              </Field>
+              <Field label="Columns (JSON; 1–8, one level only)">
+                <textarea
+                  rows={8}
+                  value={columns}
+                  onChange={(e) => setColumns(e.target.value)}
+                />
+              </Field>
+            </>
+          )}
+          <Field label="Show when an earlier single select equals">
+            <select
+              value={controller}
+              onChange={(e) => setController(e.target.value)}
+            >
+              <option value="">Always visible</option>
+              {section.items
+                .filter(
+                  (i) =>
+                    i.type === 'SINGLE_SELECT' &&
+                    (!item || i.sortOrder < item.sortOrder),
+                )
+                .map((i) => (
+                  <option value={i.key} key={i.id}>
+                    {i.label}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          {controller && (
+            <Field label="Matching option">
+              <select
+                name="optionKey"
+                defaultValue={item?.visibleWhen?.optionKey}
+              >
+                {section.items
+                  .find((i) => i.key === controller)
+                  ?.validation.options?.map((o) => (
+                    <option value={o.key} key={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+          )}
+          {item && ['SUBMITTED', 'APPROVED'].includes(item.state) && (
+            <label className="check-row">
+              <input required name="reopen" type="checkbox" />
+              Reopen affected item; historical submissions remain immutable
+            </label>
+          )}
+          <ErrorNotice error={localError || command.error} />
+          <div className="actions">
+            <button className="primary-button" disabled={command.pending}>
+              Save item
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Panel>
+    </section>
+  )
+}
+function PreviewPanel({ root }: { root: string }) {
+  const q = useData<ClientChecklist>(`${root}/client-preview`)
+  return (
+    <QueryState query={q}>
+      <Notice>
+        Read-only owner preview. This does not create or impersonate a client
+        session.
+      </Notice>
+      {q.data?.sections.map((s) => (
+        <Panel key={s.id} title={s.title}>
+          {s.items.map((i) => (
+            <div className="preview-item" key={i.id}>
+              <strong>
+                {i.label}
+                {i.required ? ' *' : ''}
+              </strong>
+              <p>{i.instructions}</p>
+              <div className="disabled-preview">
+                {i.example ||
+                  `Client response · ${i.type.replaceAll('_', ' ')}`}
+              </div>
+            </div>
+          ))}
+        </Panel>
+      ))}
+    </QueryState>
+  )
+}
+function ContactsPanel({ root }: { root: string }) {
+  const q = useData<{ data: ProjectContact[] }>(`${root}/contacts`)
+  const command = useCommand()
+  const [link, setLink] = useState('')
+  return (
+    <>
+      <Panel title="Project-scoped client access">
+        <p className="subtle">
+          Each contact receives access only to this project. Revocation takes
+          effect on their next request.
+        </p>
+        <QueryState query={q}>
+          {q.data?.data.map((c) => (
+            <div className="access-row" key={c.id}>
+              <div className="grow">
+                <strong>{c.name}</strong>
+                <p>
+                  {c.email} · Access until{' '}
+                  {new Date(c.accessExpiresAt).toLocaleDateString()}
+                </p>
+              </div>
+              <Badge>{c.state}</Badge>
+              <button
+                className="secondary-button"
+                disabled={command.pending || c.state !== 'ACTIVE'}
+                onClick={async () => {
+                  const result = await command.run<{ demoUrl?: string }>(
+                    `${root}/contacts/${c.id}/invite`,
+                    {},
+                  )
+                  if (result?.demoUrl) setLink(result.demoUrl)
+                }}
+              >
+                Send / resend invite
+              </button>
+              <button
+                className="danger-link"
+                disabled={command.pending || c.state !== 'ACTIVE'}
+                onClick={() =>
+                  void command.run(
+                    `${root}/contacts/${c.id}/access`,
+                    undefined,
+                    'DELETE',
+                  )
+                }
+              >
+                Revoke
+              </button>
+            </div>
+          ))}
+        </QueryState>
+        {link && (
+          <Notice>
+            Development invitation: <Link to={link}>Open client access</Link>.
+            Keep this tab open to retain in-memory demo state.
+          </Notice>
+        )}
+        <ErrorNotice error={command.error} />
+      </Panel>
+      <Panel title="Add a contact">
+        <form
+          className="stack-form"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            const form = e.currentTarget
+            const v = Object.fromEntries(new FormData(form))
+            if (
+              await command.run(`${root}/contacts`, {
+                ...v,
+                accessExpiresAt: new Date(
+                  String(v.accessExpiresAt),
+                ).toISOString(),
+              })
+            )
+              form.reset()
+          }}
+        >
+          <div className="form-grid">
+            <Field label="Contact name">
+              <input required name="name" />
+            </Field>
+            <Field label="Contact email">
+              <input type="email" required name="email" />
+            </Field>
+            <Field label="Access expiry">
+              <input
+                type="date"
+                required
+                name="accessExpiresAt"
+                defaultValue={new Date(Date.now() + 90 * 864e5)
+                  .toISOString()
+                  .slice(0, 10)}
+              />
+            </Field>
+          </div>
+          <button className="primary-button" disabled={command.pending}>
+            Add contact
+          </button>
+        </form>
+      </Panel>
+    </>
+  )
+}
+function AssignmentsPanel({ root }: { root: string }) {
+  const { id } = useWorkspace()
+  const members = useData<{ data: Member[] }>(`workspaces/${id}/members`)
+  const assignments = useData<{ data: Assignment[] }>(`${root}/assignments`)
+  const command = useCommand()
+  return (
+    <Panel title="Project team">
+      <p className="subtle">
+        Members see assigned projects only. Grant review and export separately.
+      </p>
+      <ErrorNotice error={command.error} />
+      {members.data?.data
+        .filter((m) => m.role === 'MEMBER' && m.state === 'ACTIVE')
+        .map((m) => {
+          const a = assignments.data?.data.find((a) => a.memberId === m.id)
+          return (
+            <form
+              className="access-row"
+              key={`${m.id}-${JSON.stringify(a)}`}
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const v = new FormData(e.currentTarget)
+                await command.run(
+                  `${root}/assignments/${m.id}`,
+                  { canReview: v.has('review'), canExport: v.has('export') },
+                  'PUT',
+                )
+              }}
+            >
+              <div className="grow">
+                <strong>{m.user.displayName}</strong>
+                <p>{m.user.email}</p>
+              </div>
+              <label className="check-row">
+                <input
+                  name="review"
+                  type="checkbox"
+                  defaultChecked={a?.canReview}
+                />
+                Review
+              </label>
+              <label className="check-row">
+                <input
+                  name="export"
+                  type="checkbox"
+                  defaultChecked={a?.canExport}
+                />
+                Export
+              </label>
+              <button className="secondary-button" disabled={command.pending}>
+                {a ? 'Save permissions' : 'Assign'}
+              </button>
+              {a && (
+                <button
+                  type="button"
+                  className="danger-link"
+                  onClick={() =>
+                    void command.run(
+                      `${root}/assignments/${m.id}`,
+                      undefined,
+                      'DELETE',
+                    )
+                  }
+                >
+                  Remove
+                </button>
+              )}
+            </form>
+          )
+        })}
+    </Panel>
+  )
+}
+function RemindersPanel({ root }: { root: string }) {
+  const q = useData<ReminderPolicy>(`${root}/reminder-policy`)
+  const contacts = useData<{ data: ProjectContact[] }>(`${root}/contacts`)
+  const command = useCommand()
+  const [preview, setPreview] = useState<ReminderPreview>()
+  const [message, setMessage] = useState('')
+  const [channel, setChannel] = useState('EMAIL')
+  const [contact, setContact] = useState('')
+  return (
+    <>
+      <Panel title="A considerate nudge">
+        <p>
+          Remind only when required client action remains. Items awaiting agency
+          review are excluded.
+        </p>
+        {q.data && (
+          <form
+            className="stack-form"
+            key={q.data.version}
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const v = new FormData(e.currentTarget)
+              const rules = q.data!.rules.map((r, i) => ({
+                ...r,
+                daysRelativeToDueDate: Number(v.get(`days${i}`)),
+                localTime: String(v.get(`time${i}`)),
+                weekdaysOnly: v.has(`weekdays${i}`),
+              }))
+              if (
+                await command.run(
+                  `${root}/reminder-policy`,
+                  {
+                    rules,
+                    timezone: v.get('timezone'),
+                    enabled: v.has('enabled'),
+                    paused: v.has('paused'),
+                    expectedVersion: q.data!.version,
+                  },
+                  'PUT',
+                )
+              )
+                setMessage('Reminder policy saved.')
+            }}
+          >
+            <div className="actions">
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  name="enabled"
+                  defaultChecked={q.data.enabled}
+                />
+                Enabled
+              </label>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  name="paused"
+                  defaultChecked={q.data.paused}
+                />
+                Pause reminders
+              </label>
+            </div>
+            <Field label="Delivery timezone">
+              <input name="timezone" required defaultValue={q.data.timezone} />
+            </Field>
+            {q.data.rules.map((r, i) => (
+              <div className="form-grid" key={r.id}>
+                <Field label="Days relative to due date">
+                  <input
+                    type="number"
+                    name={`days${i}`}
+                    min={-30}
+                    max={30}
+                    defaultValue={r.daysRelativeToDueDate}
+                  />
+                </Field>
+                <Field label="Local delivery time">
+                  <input
+                    type="time"
+                    name={`time${i}`}
+                    defaultValue={r.localTime}
+                  />
+                </Field>
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    name={`weekdays${i}`}
+                    defaultChecked={r.weekdaysOnly}
+                  />
+                  Weekdays only · {r.channel}
+                </label>
+              </div>
+            ))}
+            <button className="primary-button" disabled={command.pending}>
+              Save policy
+            </button>
+          </form>
+        )}
+      </Panel>
+      <Panel title="Preview a reminder">
+        <div className="form-grid">
+          <Field label="Contact">
+            <select
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+            >
+              <option value="">Choose contact</option>
+              {contacts.data?.data
+                .filter((c) => c.state === 'ACTIVE')
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          <Field label="Channel">
+            <select
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+            >
+              <option>EMAIL</option>
+              <option>SMS</option>
+            </select>
+          </Field>
+        </div>
+        <p className="subtle">
+          SMS requires the client’s verified US number and explicit consent.
+          Owners cannot opt clients in.
+        </p>
+        <div className="actions">
+          <button
+            className="secondary-button"
+            disabled={!contact || command.pending}
+            onClick={async () =>
+              setPreview(
+                await command.run<ReminderPreview>(
+                  `${root}/reminders/preview`,
+                  { contactId: contact, channel },
+                ),
+              )
+            }
+          >
+            Preview
+          </button>
+          <button
+            className="secondary-button"
+            disabled={!preview?.eligible || command.pending}
+            onClick={async () => {
+              if (
+                await command.run(`${root}/reminders/send`, {
+                  contactId: contact,
+                  channel,
+                })
+              )
+                setMessage('Synthetic reminder queued. No email or SMS sent.')
+            }}
+          >
+            Send now
+          </button>
+        </div>
+        {preview && (
+          <blockquote>
+            <strong>{preview.subject || 'SMS preview'}</strong>
+            <p>{preview.body}</p>
+            <Badge>{preview.eligible ? 'ELIGIBLE' : 'SUPPRESSED'}</Badge>
+            <p>{preview.reasons.join(' ')}</p>
+          </blockquote>
+        )}
+        <ErrorNotice error={command.error} />
+        {message && <Notice>{message}</Notice>}
+        <p className="subtle">
+          Limits: one delivery per recipient/channel/day, five per week. Unknown
+          provider outcomes must be reconciled before retrying.
+        </p>
+      </Panel>
+    </>
+  )
+}

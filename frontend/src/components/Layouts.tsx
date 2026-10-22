@@ -4,6 +4,15 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { ConfirmDialog, Notice, useNotify } from './Feedback'
 import { logoutSession, selectWorkspace } from '@/features/auth/session'
 import { errorMessage } from '@/lib/apiError'
+import {
+  FolderKanban,
+  LayoutDashboard,
+  Layers,
+  Users,
+  ChartNoAxesCombined,
+  Settings,
+  CreditCard,
+} from 'lucide-react'
 
 export function Brand() {
   return (
@@ -29,6 +38,7 @@ export function PublicLayout() {
         <div className="header-inner">
           <Brand />
           <nav aria-label="Main navigation" className="public-nav">
+            <NavLink to="/pricing">Pricing</NavLink>
             <NavLink to="/about">About</NavLink>
             <Link
               className="secondary-button"
@@ -111,16 +121,47 @@ export function AgencyLayout() {
   const navigation = (
     <>
       <NavLink end to={home}>
-        ◇ <span>Workspace home</span>
+        <LayoutDashboard size={18} /> <span>Workspace home</span>
       </NavLink>
       {membership?.role === 'OWNER' && (
         <NavLink to={`/app/w/${membership.workspaceId}/access-foundation`}>
           ⌘ <span>Owner access</span>
         </NavLink>
       )}
-      <span className="nav-section-label">Coming in the next batch</span>
-      <span className="nav-future">Projects</span>
-      <span className="nav-future">Template gallery</span>
+      {membership && (
+        <>
+          <span className="nav-section-label">COLLECT & CREATE</span>
+          <NavLink to={`/app/w/${membership.workspaceId}/projects`}>
+            <FolderKanban size={18} />
+            <span>Projects</span>
+          </NavLink>
+          <NavLink to={`/app/w/${membership.workspaceId}/templates`}>
+            <Layers size={18} />
+            <span>Template gallery</span>
+          </NavLink>
+          {membership.role === 'OWNER' && (
+            <>
+              <span className="nav-section-label">MANAGE</span>
+              <NavLink to={`/app/w/${membership.workspaceId}/team`}>
+                <Users size={18} />
+                <span>Team</span>
+              </NavLink>
+              <NavLink to={`/app/w/${membership.workspaceId}/insights`}>
+                <ChartNoAxesCombined size={18} />
+                <span>Insights</span>
+              </NavLink>
+              <NavLink to={`/app/w/${membership.workspaceId}/billing`}>
+                <CreditCard size={18} />
+                <span>Billing & usage</span>
+              </NavLink>
+              <NavLink to={`/app/w/${membership.workspaceId}/settings`}>
+                <Settings size={18} />
+                <span>Settings</span>
+              </NavLink>
+            </>
+          )}
+        </>
+      )}
     </>
   )
   async function logout() {

@@ -1,6 +1,12 @@
 import { delay, http, HttpResponse } from 'msw'
 import { accountFixtures, agencyId, type MockAccount } from './fixtures'
 import { apiBaseUrl } from '@/api/baseQuery'
+import { productHandlers } from './productHandlers'
+import { resetProductDb } from './productDb'
+import './collaboration'
+import './collection'
+import './review'
+import './commercial'
 
 export const mockState = {
   accounts: accountFixtures(),
@@ -13,6 +19,7 @@ export const mockState = {
   acceptedInvitation: false,
 }
 export function resetMockState() {
+  resetProductDb()
   Object.assign(mockState, {
     accounts: accountFixtures(),
     activeEmail: null,
@@ -187,5 +194,6 @@ export const handlers = [
       ),
     })
   }),
+  ...productHandlers,
   http.all(url('*'), () => problem(501, 'MOCK_NOT_IMPLEMENTED')),
 ]

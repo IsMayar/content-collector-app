@@ -13,12 +13,12 @@ The owner implements the backend manually. Codex works only on frontend/ and rel
 | Batch | Scope | Status |
 | --- | --- | --- |
 | FE01 | Architecture, design system, navigation, and authentication UI | Complete (frontend only) |
-| FE02 | Workspace onboarding, dashboard, projects, and template gallery | Not started |
-| FE03 | Project structure editor, team, access, and reminder settings | Not started |
-| FE04 | Client portal, typed answers, autosave, and upload experience | Not started |
-| FE05 | Agency review, comments, activity, and exports | Not started |
-| FE06 | AI assistance UI, analytics, billing, and workspace settings | Not started |
-| FE07 | Responsive polish, accessibility, PWA, and frontend regression | Not started |
+| FE02 | Workspace onboarding, dashboard, projects, and template gallery | Implemented; frontend verification in progress |
+| FE03 | Project structure editor, team, access, and reminder settings | Implemented; frontend verification in progress |
+| FE04 | Client portal, typed answers, autosave, and upload experience | Implemented; frontend verification in progress |
+| FE05 | Agency review, comments, activity, and exports | Implemented; frontend verification in progress |
+| FE06 | AI assistance UI, analytics, billing, and workspace settings | Implemented; frontend verification in progress |
+| FE07 | Responsive polish, accessibility, PWA, and frontend regression | In progress |
 
 FE01 is complete. The owner has authorized FE02–FE07 consecutively. Backend code and the original full-stack roadmap remain preserved.
 

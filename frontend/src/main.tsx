@@ -4,6 +4,7 @@ import { AppProviders } from '@/app/providers'
 import '@/styles/index.css'
 
 async function start() {
+  if(import.meta.env.PROD && 'serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js').catch(() => {})
   if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCKS === 'true') {
     const { worker } = await import('@/mocks/browser')
     await worker.start({
