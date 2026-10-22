@@ -43,9 +43,9 @@ export function AboutPage() {
         applications.
       </p>
       <p className="mt-6 max-w-2xl">
-        The planned workflow brings client drafts, files and feedback together,
-        with review before the final handoff. These capabilities are still in
-        development.
+        Bring client drafts, files and feedback together in a clear collection
+        checklist. Review exact submissions, approve the details and prepare a
+        thoughtful final handoff.
       </p>
       <Link className="text-link mt-8 inline-block" to="/">
         Back to welcome

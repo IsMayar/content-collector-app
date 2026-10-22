@@ -241,6 +241,8 @@ function foundation(
       ...base.workspace,
       id,
       name: body.name.trim(),
+      timezone: typeof body.timezone === 'string' ? body.timezone : 'UTC',
+      state: 'ACTIVE',
       version: 1,
     }
     base.members = [
@@ -250,6 +252,23 @@ function foundation(
     base.templates = []
     base.pendingInvites = []
     base.usage.seatsUsed = 1
+    base.usage.seatsReserved = 0
+    base.usage.storageUsedBytes = 0
+    base.usage.storageReservedBytes = 0
+    base.usage.aiDraftsUsed = 0
+    base.usage.smsSegmentsUsed = 0
+    base.logo = ''
+    base.digestEnabled = true
+    base.entitlements.canWrite = true
+    base.subscription = {
+      ...base.subscription,
+      state: 'TRIALING',
+      cancelAtPeriodEnd: false,
+      graceEndsAt: null,
+      readOnlyEndsAt: null,
+      currentPeriodStart: new Date().toISOString(),
+      currentPeriodEnd: new Date(Date.now() + 14 * 864e5).toISOString(),
+    }
     productDb.workspaces[id] = base
     user.memberships.push({
       memberId: user.user.id,

@@ -10,6 +10,13 @@ import { RouteFocus } from '@/components/RouteFocus'
 export function SessionBoundary() {
   const dispatch = useAppDispatch()
   const status = useAppSelector((s) => s.auth.status)
+  const { pathname } = useLocation()
+  const independent =
+    pathname === '/' ||
+    pathname === '/about' ||
+    pathname === '/pricing' ||
+    pathname.startsWith('/client/') ||
+    pathname.startsWith('/status/')
   useEffect(() => {
     void dispatch(bootstrapSession())
   }, [dispatch])
@@ -24,7 +31,7 @@ export function SessionBoundary() {
     }
     return () => channel.close()
   }, [dispatch])
-  if (status === 'loading')
+  if (status === 'loading' && !independent)
     return (
       <StatePanel
         kind="loading"
@@ -32,7 +39,7 @@ export function SessionBoundary() {
         description="Checking your access securely…"
       />
     )
-  if (status === 'error')
+  if (status === 'error' && !independent)
     return (
       <StatePanel
         kind="error"

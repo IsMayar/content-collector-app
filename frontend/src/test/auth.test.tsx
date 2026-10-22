@@ -37,6 +37,23 @@ async function signIn(
 }
 
 describe('safe return destinations', () => {
+  it('keeps client access independent of an unavailable agency session service', async () => {
+    server.use(
+      http.get('http://localhost:5173/api/v1/auth/csrf', () =>
+        HttpResponse.json({ detail: 'Unavailable' }, { status: 503 }),
+      ),
+    )
+    const { store } = mount('/client/access')
+    await waitFor(() => expect(store.getState().auth.status).toBe('error'))
+    expect(
+      await screen.findByRole('heading', {
+        name: 'A little detail. A big difference.',
+      }),
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('heading', { name: 'We couldn’t check your session' }),
+    ).not.toBeInTheDocument()
+  })
   it.each([
     'https://evil.test',
     '//evil.test',

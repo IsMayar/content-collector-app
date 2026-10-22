@@ -216,13 +216,11 @@ test('client upload processing and explicit AI acceptance preserve submission ch
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1XkAAAAASUVORK5CYII=',
     'base64',
   )
-  await page
-    .getByLabel('Choose images from library or files')
-    .setInputFiles({
-      name: 'synthetic-photo.png',
-      mimeType: 'image/png',
-      buffer: png,
-    })
+  await page.getByLabel('Choose images from library or files').setInputFiles({
+    name: 'synthetic-photo.png',
+    mimeType: 'image/png',
+    buffer: png,
+  })
   await expect(page.getByText('READY', { exact: true })).toBeVisible({
     timeout: 15000,
   })

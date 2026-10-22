@@ -53,6 +53,24 @@ async function enterClient() {
   return json('client-access/exchange', 'POST', { token: 'client-demo' }, false)
 }
 describe('tenant-scoped project foundations', () => {
+  it('initializes a new workspace without inheriting another tenant’s usage or logo', async () => {
+    login('unverified@studio.example')
+    mockState.accounts['unverified@studio.example'].user.verified = true
+    const existing = productDb.workspaces[agencyId]
+    existing.logo = 'private-other-logo'
+    existing.usage.storageUsedBytes = 12345
+    const result = await json<{ workspace: { id: string; timezone: string } }>(
+      'workspaces',
+      'POST',
+      { name: 'A fresh studio', planKey: 'AGENCY', timezone: 'UTC' },
+    )
+    expect(result.workspace.timezone).toBe('UTC')
+    const created = productDb.workspaces[result.workspace.id]
+    expect(created.logo).toBe('')
+    expect(created.usage.storageUsedBytes).toBe(0)
+    expect(created.usage.seatsUsed).toBe(1)
+    expect(created.clients).toHaveLength(0)
+  })
   it('lists independent type-specific snapshots for every project type', async () => {
     login()
     const workspace = productDb.workspaces[agencyId]
