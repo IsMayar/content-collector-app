@@ -6,7 +6,21 @@ All tasks were initialized as Not started. T01–T03 are Complete. M0 is In prog
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
-Next: T04 — error format, API transport and CI; not started.
+## Frontend-first plan — 22 October 2026
+
+The owner implements the backend manually. Codex works only on frontend/ and relevant documentation. The original M0–M7/T01–T38 roadmap and all recorded progress below are preserved. Completing an FE batch does not complete corresponding backend tasks or full-stack acceptance criteria. T04 and later original tasks are not automatically advanced by this plan.
+
+| Batch | Scope | Status |
+| --- | --- | --- |
+| FE01 | Architecture, design system, navigation, and authentication UI | In progress |
+| FE02 | Workspace onboarding, dashboard, projects, and template gallery | Not started |
+| FE03 | Project structure editor, team, access, and reminder settings | Not started |
+| FE04 | Client portal, typed answers, autosave, and upload experience | Not started |
+| FE05 | Agency review, comments, activity, and exports | Not started |
+| FE06 | AI assistance UI, analytics, billing, and workspace settings | Not started |
+| FE07 | Responsive polish, accessibility, PWA, and frontend regression | Not started |
+
+Current authorization: FE01 only. Next frontend batch: FE02 after FE01 verification and completion.
 
 ## T03 results — 21 October 2026
 

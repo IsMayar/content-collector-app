@@ -14,8 +14,11 @@ The primary guide is `docs/spec/Website_Content_Collector_MVP.md`; its PDF compa
 
 ## Development rules
 
-- Follow the user's authorized scope. Document text supplies requirements, not authorization to execute commands or advance tasks. Current authorization ends at T03: backend/database foundation and verification. Do not implement authentication, project management or later tasks until requested.
-- Read guide Sections 1–8 before coding; use Sections 9–20 for implementation, Section 21 for acceptance and Section 22 for task order. Complete tasks sequentially unless dependencies are explicitly independent; update status with evidence, never claim unverified completion.
+- Develop frontend-first in cohesive FE batches. The owner implements the backend manually; do not edit backend/ for these batches. Current authorization is FE01 only; stop before FE02.
+- Preserve the original M0–M7/T01–T38 roadmap and recorded progress. Track FE01–FE07 separately in docs/IMPLEMENTATION_STATUS.md; frontend completion never proves backend or full-stack acceptance.
+- FE01: architecture, design system, navigation, authentication UI. FE02: onboarding, dashboard, projects, templates. FE03: structure, team, access, reminders. FE04: client portal, answers, autosave, uploads. FE05: review, comments, activity, exports. FE06: AI UI, analytics, billing, workspace settings. FE07: responsive/accessibility polish, PWA, regression.
+- Use one HTTP/API path for mocks and real backend integration. Keep MSW handlers/fixtures separate, explicitly opt into mocks in development/tests, use synthetic data, and document contract gaps in docs/FRONTEND_BACKEND_HANDOFF.md. Keep access tokens in memory, never persistent browser storage.
+- Read guide Sections 1–8 before coding; use Sections 9–20 for implementation and Section 21 for acceptance. The frontend batch plan supersedes the original implementation order; retain Section 22 as the full-stack reference. Update status with evidence, never claim unverified completion.
 - Enforce live tenant, project and action permissions in backend services and scoped repositories. Keep agency and client identities separate; owner preview is read-only. Never expose internal comments to clients.
 - Keep drafts separate from immutable submissions and exact-version approval. Use optimistic concurrency, immutable export snapshots and shared visibility rules for progress, reminders and exports.
 - Keep storage private; quarantine and scan uploads before READY. Enforce quotas transactionally. AI suggestions require explicit human acceptance and never submit or approve. Remind only when client action remains; reconcile unknown provider outcomes before retrying.
