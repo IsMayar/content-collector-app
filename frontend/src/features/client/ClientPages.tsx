@@ -665,7 +665,36 @@ function AnswerEditor({
         ))}
         {conflict && (
           <div className="conflict-panel">
-            <h3>Let’s keep your work safe</h3>
+            <h3>We found different versions of this content</h3>
+            <div className="draft-comparison">
+              <section>
+                <h4>Your local draft</h4>
+                <pre className="code-wrap">
+                  {JSON.stringify(value, null, 2)}
+                </pre>
+              </section>
+              <section>
+                <h4>Last retrieved server draft</h4>
+                <pre className="code-wrap">
+                  {JSON.stringify(item.answer.value, null, 2)}
+                </pre>
+              </section>
+            </div>
+            <button
+              className="secondary-button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(
+                    JSON.stringify(value, null, 2),
+                  )
+                  setSaved('Draft copied.')
+                } catch {
+                  setSaved('Copy unavailable. Select your local draft above.')
+                }
+              }}
+            >
+              Copy my draft
+            </button>
             <p>
               Your local response is still in this editor. Compare it with the
               latest saved response before retrying.
@@ -686,7 +715,6 @@ function AnswerEditor({
             >
               Load latest version, keep my input
             </button>
-            <pre>{JSON.stringify(item.answer.value, null, 2)}</pre>
           </div>
         )}
         <div className="actions">
@@ -1481,125 +1509,135 @@ function ClientPreferences({ root }: { root: string }) {
   const [verification, setVerification] = useState('')
   const [message, setMessage] = useState('')
   return (
-    <Panel title="Your notification preferences">
-      <ErrorNotice error={command.error} />
-      {message && <Notice>{message}</Notice>}
-      {q.data && (
-        <form
-          className="stack-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const v = new FormData(e.currentTarget)
-            if (
-              await command.run(
-                `${root}/notification-preferences`,
-                {
-                  emailEnabled: v.has('emailEnabled'),
-                  timezone: v.get('timezone'),
-                },
-                'PUT',
+    <div className="sms-preferences">
+      <Panel title="Stay updated by text">
+        <ErrorNotice error={command.error} />
+        {message && <Notice>{message}</Notice>}
+        {q.data && (
+          <form
+            className="stack-form"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const v = new FormData(e.currentTarget)
+              if (
+                await command.run(
+                  `${root}/notification-preferences`,
+                  {
+                    emailEnabled: v.has('emailEnabled'),
+                    timezone: v.get('timezone'),
+                  },
+                  'PUT',
+                )
               )
-            )
-              setMessage('Preferences saved.')
+                setMessage('Preferences saved.')
+            }}
+          >
+            <label className="check-row">
+              <input
+                name="emailEnabled"
+                type="checkbox"
+                defaultChecked={q.data.emailEnabled}
+              />
+              Email reminders
+            </label>
+            <Field label="Your timezone">
+              <input
+                name="timezone"
+                defaultValue={q.data.timezone || 'America/New_York'}
+                required
+              />
+            </Field>
+            <button className="secondary-button">Save preferences</button>
+          </form>
+        )}
+        <div className="sms-enrolment">
+          <section>
+            <h3>Optional US SMS reminders</h3>
+            <p>
+              Consent is optional. Message and data rates may apply. Reply STOP
+              to opt out. No real messages are sent in this demo.
+            </p>
+            <Badge>{q.data?.smsStatus || 'NOT_CONFIGURED'}</Badge>
+            <form
+              className="stack-form"
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const v = new FormData(e.currentTarget)
+                const result = await command.run<{ verificationId: string }>(
+                  `${root}/sms/verification`,
+                  {
+                    phoneE164: v.get('phone'),
+                    consent: v.has('consent'),
+                    consentTextVersion: '2026-10-22',
+                  },
+                )
+                if (result) {
+                  setVerification(result.verificationId)
+                  setMessage('Synthetic verification code: 123456')
+                }
+              }}
+            >
+              <Field label="US mobile number">
+                <input
+                  type="tel"
+                  name="phone"
+                  pattern="\+1[0-9]{10}"
+                  placeholder="+15555550123"
+                  required
+                />
+              </Field>
+              <label className="check-row">
+                <input required name="consent" type="checkbox" />I agree to
+                project reminder texts at this number.
+              </label>
+              <button className="secondary-button" disabled={command.pending}>
+                Send verification code
+              </button>
+            </form>
+          </section>
+          <section className="sms-verification">
+            <h3>Verify your number</h3>
+            <p>Confirm control of your phone before reminders are enabled.</p>
+            {verification && (
+              <form
+                className="inline-form"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  const code = new FormData(e.currentTarget).get('code')
+                  if (
+                    await command.run(`${root}/sms/confirm`, {
+                      verificationId: verification,
+                      code,
+                    })
+                  ) {
+                    setMessage('SMS consent verified in the demo.')
+                    setVerification('')
+                  }
+                }}
+              >
+                <Field label="Verification code">
+                  <input
+                    name="code"
+                    inputMode="numeric"
+                    required
+                    pattern="[0-9]{6}"
+                  />
+                </Field>
+                <button className="secondary-button">Verify</button>
+              </form>
+            )}
+          </section>
+        </div>
+        <button
+          className="danger-link"
+          onClick={async () => {
+            if (await command.run(`${root}/sms/consent`, undefined, 'DELETE'))
+              setMessage('SMS reminders stopped.')
           }}
         >
-          <label className="check-row">
-            <input
-              name="emailEnabled"
-              type="checkbox"
-              defaultChecked={q.data.emailEnabled}
-            />
-            Email reminders
-          </label>
-          <Field label="Your timezone">
-            <input
-              name="timezone"
-              defaultValue={q.data.timezone || 'America/New_York'}
-              required
-            />
-          </Field>
-          <button className="secondary-button">Save preferences</button>
-        </form>
-      )}
-      <h3>Optional US SMS reminders</h3>
-      <p>
-        Consent is optional. Message and data rates may apply. Reply STOP to opt
-        out. No real messages are sent in this demo.
-      </p>
-      <Badge>{q.data?.smsStatus || 'NOT_CONFIGURED'}</Badge>
-      <form
-        className="stack-form"
-        onSubmit={async (e) => {
-          e.preventDefault()
-          const v = new FormData(e.currentTarget)
-          const result = await command.run<{ verificationId: string }>(
-            `${root}/sms/verification`,
-            {
-              phoneE164: v.get('phone'),
-              consent: v.has('consent'),
-              consentTextVersion: '2026-10-22',
-            },
-          )
-          if (result) {
-            setVerification(result.verificationId)
-            setMessage('Synthetic verification code: 123456')
-          }
-        }}
-      >
-        <Field label="US mobile number">
-          <input
-            type="tel"
-            name="phone"
-            pattern="\+1[0-9]{10}"
-            placeholder="+15555550123"
-            required
-          />
-        </Field>
-        <label className="check-row">
-          <input required name="consent" type="checkbox" />I agree to project
-          reminder texts at this number.
-        </label>
-        <button className="secondary-button" disabled={command.pending}>
-          Send verification code
+          Opt out of SMS
         </button>
-      </form>
-      {verification && (
-        <form
-          className="inline-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const code = new FormData(e.currentTarget).get('code')
-            if (
-              await command.run(`${root}/sms/confirm`, {
-                verificationId: verification,
-                code,
-              })
-            ) {
-              setMessage('SMS consent verified in the demo.')
-              setVerification('')
-            }
-          }}
-        >
-          <Field label="Verification code">
-            <input
-              name="code"
-              inputMode="numeric"
-              required
-              pattern="[0-9]{6}"
-            />
-          </Field>
-          <button className="secondary-button">Verify</button>
-        </form>
-      )}
-      <button
-        className="danger-link"
-        onClick={async () => {
-          if (await command.run(`${root}/sms/consent`, undefined, 'DELETE'))
-            setMessage('SMS reminders stopped.')
-        }}
-      >
-        Opt out of SMS
-      </button>
-    </Panel>
+      </Panel>
+    </div>
   )
 }

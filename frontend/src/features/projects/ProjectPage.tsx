@@ -17,9 +17,6 @@ import type {
   ItemDefinition,
   Member,
   ProjectDetail,
-  ProjectContact,
-  ReminderPolicy,
-  ReminderPreview,
   RepeaterColumn,
   Section,
   TemplateDefinition,
@@ -45,7 +42,7 @@ import {
 import { AnalyticsPanel } from '@/features/settings/SettingsPages'
 import { FilesPanel, CompletionPanel } from './FilesPanel'
 import { ContactsPanel } from './AccessPanels'
-import { DeliveryHistory } from '@/features/settings/ReportingExtras'
+import { RemindersPanel } from '@/features/settings/RemindersPanel'
 
 export function ProjectPage() {
   const { id, base, owner } = useWorkspace()
@@ -209,7 +206,7 @@ export function ProjectPage() {
           {tab === 'exports' && p.permissions.canExport && (
             <ExportPanel root={root} project={p} />
           )}
-          {tab === 'analytics' && owner && <AnalyticsPanel root={root} />}
+          {tab === 'analytics' && <AnalyticsPanel root={root} />}
           {tab === 'details' && owner && (
             <Panel title="Project details">
               <form
@@ -1277,185 +1274,5 @@ function AssignmentsPanel({ root }: { root: string }) {
           )
         })}
     </Panel>
-  )
-}
-function RemindersPanel({ root }: { root: string }) {
-  const q = useData<ReminderPolicy>(`${root}/reminder-policy`)
-  const contacts = useData<{ data: ProjectContact[] }>(`${root}/contacts`)
-  const command = useCommand()
-  const [preview, setPreview] = useState<ReminderPreview>()
-  const [message, setMessage] = useState('')
-  const [channel, setChannel] = useState('EMAIL')
-  const [contact, setContact] = useState('')
-  return (
-    <>
-      <Panel title="A considerate nudge">
-        <p>
-          Remind only when required client action remains. Items awaiting agency
-          review are excluded.
-        </p>
-        {q.data && (
-          <form
-            className="stack-form"
-            key={q.data.version}
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const v = new FormData(e.currentTarget)
-              const rules = q.data!.rules.map((r, i) => ({
-                ...r,
-                daysRelativeToDueDate: Number(v.get(`days${i}`)),
-                localTime: String(v.get(`time${i}`)),
-                weekdaysOnly: v.has(`weekdays${i}`),
-              }))
-              if (
-                await command.run(
-                  `${root}/reminder-policy`,
-                  {
-                    rules,
-                    timezone: v.get('timezone'),
-                    enabled: v.has('enabled'),
-                    paused: v.has('paused'),
-                    expectedVersion: q.data!.version,
-                  },
-                  'PUT',
-                )
-              )
-                setMessage('Reminder policy saved.')
-            }}
-          >
-            <div className="actions">
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  name="enabled"
-                  defaultChecked={q.data.enabled}
-                />
-                Enabled
-              </label>
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  name="paused"
-                  defaultChecked={q.data.paused}
-                />
-                Pause reminders
-              </label>
-            </div>
-            <Field label="Delivery timezone">
-              <input name="timezone" required defaultValue={q.data.timezone} />
-            </Field>
-            {q.data.rules.map((r, i) => (
-              <div className="form-grid" key={r.id}>
-                <Field label="Days relative to due date">
-                  <input
-                    type="number"
-                    name={`days${i}`}
-                    min={-30}
-                    max={30}
-                    defaultValue={r.daysRelativeToDueDate}
-                  />
-                </Field>
-                <Field label="Local delivery time">
-                  <input
-                    type="time"
-                    name={`time${i}`}
-                    defaultValue={r.localTime}
-                  />
-                </Field>
-                <label className="check-row">
-                  <input
-                    type="checkbox"
-                    name={`weekdays${i}`}
-                    defaultChecked={r.weekdaysOnly}
-                  />
-                  Weekdays only · {r.channel}
-                </label>
-              </div>
-            ))}
-            <button className="primary-button" disabled={command.pending}>
-              Save policy
-            </button>
-          </form>
-        )}
-      </Panel>
-      <Panel title="Preview a reminder">
-        <div className="form-grid">
-          <Field label="Contact">
-            <select
-              value={contact}
-              onChange={(e) => setContact(e.target.value)}
-            >
-              <option value="">Choose contact</option>
-              {contacts.data?.data
-                .filter((c) => c.state === 'ACTIVE')
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </Field>
-          <Field label="Channel">
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value)}
-            >
-              <option>EMAIL</option>
-              <option>SMS</option>
-            </select>
-          </Field>
-        </div>
-        <p className="subtle">
-          SMS requires the client’s verified US number and explicit consent.
-          Owners cannot opt clients in.
-        </p>
-        <div className="actions">
-          <button
-            className="secondary-button"
-            disabled={!contact || command.pending}
-            onClick={async () =>
-              setPreview(
-                await command.run<ReminderPreview>(
-                  `${root}/reminders/preview`,
-                  { contactId: contact, channel },
-                ),
-              )
-            }
-          >
-            Preview
-          </button>
-          <button
-            className="secondary-button"
-            disabled={!preview?.eligible || command.pending}
-            onClick={async () => {
-              if (
-                await command.run(`${root}/reminders/send`, {
-                  contactId: contact,
-                  channel,
-                })
-              )
-                setMessage('Synthetic reminder queued. No email or SMS sent.')
-            }}
-          >
-            Send now
-          </button>
-        </div>
-        {preview && (
-          <blockquote>
-            <strong>{preview.subject || 'SMS preview'}</strong>
-            <p>{preview.body}</p>
-            <Badge>{preview.eligible ? 'ELIGIBLE' : 'SUPPRESSED'}</Badge>
-            <p>{preview.reasons.join(' ')}</p>
-          </blockquote>
-        )}
-        <ErrorNotice error={command.error} />
-        {message && <Notice>{message}</Notice>}
-        <p className="subtle">
-          Limits: one delivery per recipient/channel/day, five per week. Unknown
-          provider outcomes must be reconciled before retrying.
-        </p>
-      </Panel>
-      <DeliveryHistory root={root} />
-    </>
   )
 }

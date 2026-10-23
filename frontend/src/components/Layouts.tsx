@@ -228,6 +228,14 @@ export function AgencyLayout() {
             <Layers size={18} />
             <span>Templates</span>
           </NavLink>
+          {membership.role !== 'OWNER' && (
+            <NavLink
+              to={`/app/w/${membership.workspaceId}/settings?view=account`}
+            >
+              <Settings size={18} />
+              <span>My account</span>
+            </NavLink>
+          )}
           {membership.role === 'OWNER' && (
             <>
               <span className="nav-section-label">MANAGE</span>

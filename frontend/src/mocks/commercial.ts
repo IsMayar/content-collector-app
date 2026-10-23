@@ -83,6 +83,54 @@ registerProductResolver((request, path, _search, body) => {
         for (const a of Object.values(r.answers)) a.version++
     return response({ scenario })
   }
+  if (domain === 'me' && ['profile', 'password'].includes(wid)) {
+    const account = mockState.activeEmail
+      ? mockState.accounts[mockState.activeEmail]
+      : undefined
+    requireRule(
+      account &&
+        request.headers.get('Authorization') === `Bearer ${mockState.token}`,
+      401,
+      'SESSION_EXPIRED',
+      'Sign in again.',
+    )
+    if (wid === 'profile' && method === 'PATCH') {
+      requireRule(
+        typeof body.displayName === 'string' &&
+          body.displayName.trim().length > 0 &&
+          body.displayName.length <= 100,
+        422,
+        'VALIDATION',
+        'Enter your name.',
+      )
+      account.user.displayName = body.displayName.trim()
+      for (const w of Object.values(productDb.workspaces))
+        for (const m of w.members)
+          if (m.user.id === account.user.id)
+            m.user.displayName = account.user.displayName
+      return response({ user: account.user })
+    }
+    if (wid === 'password' && method === 'POST') {
+      requireRule(
+        account.password === body.currentPassword,
+        403,
+        'REAUTH_REQUIRED',
+        'Your current password is incorrect.',
+      )
+      requireRule(
+        typeof body.newPassword === 'string' &&
+          body.newPassword.length >= 12 &&
+          body.newPassword.length <= 128,
+        422,
+        'VALIDATION',
+        'Use 12–128 characters.',
+      )
+      account.password = body.newPassword
+      productDb.revokedSessions.add(`${account.user.id}:other`)
+      return response({ updated: true })
+    }
+    return null
+  }
   if (domain === 'me' && wid === 'sessions') {
     const account =
       mockState.activeEmail && mockState.accounts[mockState.activeEmail]
@@ -278,12 +326,19 @@ registerProductResolver((request, path, _search, body) => {
       request,
       wid,
       pid,
-      'owner',
+      area === 'analytics' ? 'read' : 'owner',
       method !== 'GET',
     )
     if (area === 'analytics')
       return response({
         progress: progressFor(r.structure, r.answers),
+        sections: r.structure
+          .filter((s) => s.enabled)
+          .map((s) => ({
+            id: s.id,
+            title: s.title,
+            progress: progressFor([s], r.answers),
+          })),
         generatedAt: now(),
         friction: r.structure
           .flatMap((s) => s.items)

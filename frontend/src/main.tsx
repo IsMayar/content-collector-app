@@ -28,3 +28,4 @@ void start().catch(() => {
     'The application could not start. Check your connection and refresh.'
 })
 import '@/styles/collection.css'
+import '@/styles/administration.css'

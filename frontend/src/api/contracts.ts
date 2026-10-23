@@ -462,6 +462,7 @@ export interface FrictionMetric {
   completedSubmissions: number
 }
 export interface ProjectAnalytics {
+  sections?: { id: string; title: string; progress: Progress }[]
   progress: Progress
   friction: FrictionMetric[]
   generatedAt: Instant

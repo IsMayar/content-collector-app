@@ -23,11 +23,14 @@ import { ConfirmDialog, Notice } from '@/components/Feedback'
 import { formatBytes, percent } from '@/lib/domain'
 import { apiBaseUrl } from '@/api/baseQuery'
 import { OwnershipPanel } from './OwnershipPanel'
+import { AccountPanel, SettingsNav } from './AccountPanel'
 import { DigestPreview } from './ReportingExtras'
 
 export { TeamPage } from './TeamPage'
 export function SettingsPage() {
-  const { id, owner } = useWorkspace()
+  const { id, owner, base, user } = useWorkspace()
+  const [search, setSearch] = useSearchParams()
+  const tab = search.get('view') || 'workspace'
   const q = useData<WorkspaceDetail & { logo: string; digestEnabled: boolean }>(
     `workspaces/${id}/settings`,
     { skip: !owner },
@@ -35,11 +38,11 @@ export function SettingsPage() {
   const sessions = useData<{ data: SessionSummary[] }>('me/sessions')
   const command = useCommand()
   const [message, setMessage] = useState('')
-  const [logo, setLogo] = useState('')
+  const [logo, setLogo] = useState<string | null>(null)
   const [deletion, setDeletion] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  if (!owner)
+  if (!owner && tab !== 'account')
     return (
       <Empty
         title="Owner access required"
@@ -49,137 +52,219 @@ export function SettingsPage() {
   return (
     <>
       <Heading
-        title="Workspace settings"
+        title={
+          tab === 'digest'
+            ? 'Daily digest'
+            : tab === 'account'
+              ? 'My account'
+              : tab === 'privacy'
+                ? 'Data & privacy'
+                : tab === 'team'
+                  ? 'Workspace ownership'
+                  : 'Workspace settings'
+        }
         description="The details that make this space yours."
       />
-      <OwnershipPanel />
-      <Panel title="Identity and preferences">
-        <QueryState query={q}>
-          {q.data && (
-            <form
-              className="stack-form"
-              key={q.data.workspace.version}
-              onSubmit={async (e) => {
-                e.preventDefault()
-                const v = new FormData(e.currentTarget)
-                if (
-                  await command.run(
-                    `workspaces/${id}`,
-                    {
-                      name: v.get('name'),
-                      timezone: v.get('timezone'),
-                      digestEnabled: v.has('digest'),
-                      logo: logo || q.data!.logo,
-                      expectedVersion: q.data!.workspace.version,
-                    },
-                    'PATCH',
-                  )
-                )
-                  setMessage('Workspace preferences saved.')
-              }}
+      <SettingsNav active={tab} />
+      <div className="settings-layout">
+        <nav
+          hidden={!owner}
+          className="settings-subnav"
+          aria-label="Workspace settings sections"
+        >
+          {[
+            ['workspace', 'General'],
+            ['team', 'Team settings'],
+            ['privacy', 'Danger zone'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className={tab === key ? 'active' : ''}
+              onClick={() => setSearch({ view: key })}
             >
-              <div className="form-grid">
-                <Field label="Workspace name">
-                  <input
-                    name="name"
-                    required
-                    defaultValue={q.data.workspace.name}
-                  />
-                </Field>
-                <Field label="Default timezone">
-                  <input
-                    name="timezone"
-                    required
-                    defaultValue={q.data.workspace.timezone}
-                  />
-                </Field>
-              </div>
-              <Field label="Workspace logo (PNG/JPEG/WebP, 1 MB)">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    if (
-                      file.size > 1e6 ||
-                      !['image/png', 'image/jpeg', 'image/webp'].includes(
-                        file.type,
-                      )
-                    ) {
-                      setMessage('Choose a PNG, JPEG or WebP under 1 MB.')
-                      return
-                    }
-                    const reader = new FileReader()
-                    reader.onload = () => setLogo(String(reader.result))
-                    reader.readAsDataURL(file)
-                  }}
-                />
-              </Field>
-              {(logo || q.data.logo) && (
-                <img
-                  className="workspace-logo"
-                  src={logo || q.data.logo}
-                  alt="Workspace logo preview"
-                />
-              )}
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  name="digest"
-                  defaultChecked={q.data.digestEnabled}
-                />
-                Receive the owner’s weekly progress digest
-              </label>
-              <button className="primary-button" disabled={command.pending}>
-                Save workspace
-              </button>
-            </form>
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="settings-body">
+          {tab === 'account' && <AccountPanel />}
+          {tab === 'digest' && <DigestPreview workspaceId={id} />}
+          {tab === 'team' && (
+            <>
+              <OwnershipPanel />
+              <Link className="secondary-button" to={`${base}/team`}>
+                Manage team settings →
+              </Link>
+            </>
           )}
-          <DigestPreview workspaceId={id} />
-        </QueryState>
-      </Panel>
-      <Panel title="Account sessions">
-        <p className="subtle">
-          Revoke other sessions when a device is no longer yours.
-        </p>
-        {sessions.data?.data.map((s) => (
-          <div className="access-row" key={s.id}>
-            <div className="grow">
-              <strong>{s.label}</strong>
-              <p>Last active {new Date(s.lastSeenAt).toLocaleString()}</p>
-            </div>
-            {s.current ? (
-              <Badge>CURRENT</Badge>
-            ) : (
-              <button
-                className="secondary-button"
-                onClick={async () => {
-                  if (
-                    await command.run(
-                      `me/sessions/${s.id}`,
-                      undefined,
-                      'DELETE',
-                    )
-                  )
-                    setMessage('Other session revoked.')
-                }}
-              >
-                Revoke session
+          {tab === 'workspace' && (
+            <>
+              <div className="workspace-identity">
+                <Panel title="General">
+                  <QueryState query={q}>
+                    {q.data && (
+                      <form
+                        className="stack-form"
+                        key={q.data.workspace.version}
+                        onSubmit={async (e) => {
+                          e.preventDefault()
+                          const v = new FormData(e.currentTarget)
+                          if (
+                            await command.run(
+                              `workspaces/${id}`,
+                              {
+                                name: v.get('name'),
+                                timezone: v.get('timezone'),
+                                digestEnabled: v.has('digest'),
+                                logo: logo ?? q.data!.logo,
+                                expectedVersion: q.data!.workspace.version,
+                              },
+                              'PATCH',
+                            )
+                          )
+                            setMessage('Workspace preferences saved.')
+                        }}
+                      >
+                        <div className="form-grid">
+                          <Field label="Workspace name">
+                            <input
+                              name="name"
+                              required
+                              defaultValue={q.data.workspace.name}
+                            />
+                          </Field>
+                          <Field label="Default timezone">
+                            <input
+                              name="timezone"
+                              required
+                              defaultValue={q.data.workspace.timezone}
+                            />
+                          </Field>
+                        </div>
+                        <Field label="Workspace logo (PNG/JPEG/WebP, 1 MB)">
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              if (
+                                file.size > 1e6 ||
+                                ![
+                                  'image/png',
+                                  'image/jpeg',
+                                  'image/webp',
+                                ].includes(file.type)
+                              ) {
+                                setMessage(
+                                  'Choose a PNG, JPEG or WebP under 1 MB.',
+                                )
+                                return
+                              }
+                              const reader = new FileReader()
+                              reader.onload = () =>
+                                setLogo(String(reader.result))
+                              reader.readAsDataURL(file)
+                            }}
+                          />
+                        </Field>
+                        {(logo ?? q.data.logo) && (
+                          <img
+                            className="workspace-logo"
+                            src={logo ?? q.data.logo}
+                            alt="Workspace logo preview"
+                          />
+                        )}
+                        <button
+                          type="button"
+                          className="danger-link"
+                          onClick={() => setLogo('')}
+                        >
+                          Remove logo
+                        </button>
+                        <label className="check-row">
+                          <input
+                            type="checkbox"
+                            name="digest"
+                            defaultChecked={q.data.digestEnabled}
+                          />
+                          Receive the owner’s daily progress digest
+                        </label>
+                        <button
+                          className="primary-button"
+                          disabled={command.pending}
+                        >
+                          Save workspace
+                        </button>
+                      </form>
+                    )}
+
+                    <div className="workspace-owner">
+                      <span className="profile-avatar" aria-hidden="true">
+                        {user?.displayName.slice(0, 2).toUpperCase()}
+                      </span>
+                      <div>
+                        <strong>{user?.displayName}</strong>
+                        <p>{user?.email}</p>
+                      </div>
+                      <Badge>OWNER</Badge>
+                    </div>
+                    <Link className="reference-info" to={`${base}/team`}>
+                      Manage team settings →
+                    </Link>
+                  </QueryState>
+                </Panel>
+              </div>
+            </>
+          )}
+          {tab === 'account' && (
+            <Panel title="Active sessions">
+              <p className="subtle">
+                Revoke other sessions when a device is no longer yours.
+              </p>
+              {sessions.data?.data.map((s) => (
+                <div className="access-row" key={s.id}>
+                  <div className="grow">
+                    <strong>{s.label}</strong>
+                    <p>Last active {new Date(s.lastSeenAt).toLocaleString()}</p>
+                  </div>
+                  {s.current ? (
+                    <Badge>CURRENT</Badge>
+                  ) : (
+                    <button
+                      className="secondary-button"
+                      onClick={async () => {
+                        if (
+                          await command.run(
+                            `me/sessions/${s.id}`,
+                            undefined,
+                            'DELETE',
+                          )
+                        )
+                          setMessage('Other session revoked.')
+                      }}
+                    >
+                      Revoke session
+                    </button>
+                  )}
+                </div>
+              ))}
+            </Panel>
+          )}
+          {tab === 'privacy' && (
+            <Panel title="Archive or delete workspace">
+              <p>
+                Schedule deletion after a 30-day recovery period. Access becomes
+                read-only immediately. Export approved content before
+                proceeding.
+              </p>
+              <button className="danger-link" onClick={() => setDeletion(true)}>
+                Request workspace deletion
               </button>
-            )}
-          </div>
-        ))}
-      </Panel>
-      <Panel title="Delete workspace">
-        <p>
-          Schedule deletion after a 30-day recovery period. Access becomes
-          read-only immediately. Export approved content before proceeding.
-        </p>
-        <button className="danger-link" onClick={() => setDeletion(true)}>
-          Request workspace deletion
-        </button>
-      </Panel>
+            </Panel>
+          )}
+        </div>
+      </div>
       <ErrorNotice error={command.error} />
       {message && <Notice>{message}</Notice>}
       <ConfirmDialog
@@ -238,10 +323,12 @@ export function BillingPage() {
       navigate(target.pathname + target.search)
     else window.location.assign(target.href)
   }
-  const { id, owner } = useWorkspace()
+  const { id, owner, base } = useWorkspace()
   const [params] = useSearchParams()
+  const view = params.get('view') || 'billing'
   const q = useData<Subscription>(`workspaces/${id}/subscription`, {
     skip: !owner,
+    pollingInterval: view === 'status' ? 10000 : undefined,
   })
   const usage = useData<UsageSummary>(`workspaces/${id}/usage`, {
     skip: !owner,
@@ -257,256 +344,519 @@ export function BillingPage() {
   return (
     <>
       <Heading
-        title="Room to do your best work"
+        title={
+          view === 'usage'
+            ? 'Usage'
+            : view === 'status'
+              ? 'Subscription status'
+              : 'Billing'
+        }
         description="Clear limits. A plan that fits how you work."
       />
+      <SettingsNav active={view} />
+      <Link className="subscription-status-link" to="?view=status">
+        View subscription status →
+      </Link>
+      {view === 'status' && (
+        <Panel title="Subscription status">
+          <div className="subscription-state">
+            <Badge>{q.data?.state || 'LOADING'}</Badge>
+            <p>
+              {q.data?.state === 'PAST_DUE'
+                ? 'Payment needs attention. Update your payment method to keep the workspace active.'
+                : q.data?.state === 'READ_ONLY'
+                  ? 'Your plan is read-only. You can still view and export permitted content.'
+                  : 'Your latest subscription state is shown below. Hosted payment confirmation may take a moment.'}
+            </p>
+            <button
+              className="secondary-button"
+              onClick={() => void q.refetch()}
+            >
+              Refresh status
+            </button>
+          </div>
+        </Panel>
+      )}
       {params.get('hosted') === 'demo' && (
         <Notice>
           Mock hosted billing return. No payment was collected and no
           subscription was changed.
         </Notice>
       )}
-      <Panel title="Your subscription">
-        {q.data && (
-          <>
-            <div className="actions">
-              <h3>{q.data.planKey}</h3>
-              <Badge>{q.data.state}</Badge>
-            </div>
-            <p>
-              Current period ends{' '}
-              {new Date(q.data.currentPeriodEnd).toLocaleDateString()}
-            </p>
-            <p className="subtle">
-              14-day trial. A past-due account has 7 days of grace, followed by
-              30 days of read-only access. Reading and permitted exports remain
-              available.
-            </p>
-          </>
-        )}
-        {usage.data && (
-          <div className="usage-grid">
-            {[
-              [
-                'Storage',
-                usage.data.storageUsedBytes + usage.data.storageReservedBytes,
-                usage.data.storageLimitBytes,
-                `${formatBytes(usage.data.storageUsedBytes)} used + ${formatBytes(usage.data.storageReservedBytes)} reserved`,
-              ],
-              [
-                'AI drafts',
-                usage.data.aiDraftsUsed,
-                usage.data.aiDraftAllowance,
-                `${usage.data.aiDraftsUsed} used`,
-              ],
-              [
-                'SMS segments',
-                usage.data.smsSegmentsUsed,
-                usage.data.smsSegmentAllowance,
-                `${usage.data.smsSegmentsUsed} used`,
-              ],
-              [
-                'Seats',
-                usage.data.seatsUsed + usage.data.seatsReserved,
-                usage.data.seatsLimit,
-                `${usage.data.seatsUsed} active + ${usage.data.seatsReserved} reserved`,
-              ],
-            ].map(([label, count, total, description]) => (
-              <div key={label}>
-                <strong>{label}</strong>
-                <progress
-                  value={Number(count)}
-                  max={Number(total)}
-                  aria-label={`${label} usage`}
-                />
-                <p>
-                  {description} · {percent(Number(count), Number(total))}%
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-        <button
-          className="secondary-button"
-          disabled={command.pending}
-          onClick={async () => {
-            const result = await command.run<{ url: string }>(
-              `workspaces/${id}/billing/portal`,
-              {},
-            )
-            if (result) hosted(result.url)
-          }}
-        >
-          Manage in hosted billing portal
-        </button>
-      </Panel>
-      <div className="pricing-grid">
-        {[
-          ['SOLO', '19', '1 seat', '100 AI drafts', '25 SMS segments'],
-          ['AGENCY', '49', '5 seats', '300 AI drafts', '100 SMS segments'],
-        ].map(([plan, price, seats, ai, sms]) => (
-          <Panel key={plan} title={plan}>
+      {view !== 'usage' && (
+        <div className="billing-summary">
+          <Panel title="Current plan">
+            <h2>{q.data?.planKey === 'SOLO' ? 'Solo' : 'Agency'}</h2>
             <p className="price">
-              ${price}
+              ${q.data?.planKey === 'SOLO' ? '19' : '49'}
               <small>/ month</small>
             </p>
-            <p>Proposed pricing · 50 GB storage</p>
+            <Badge>Proposed pilot pricing</Badge>
+            <p>
+              For{' '}
+              {q.data?.planKey === 'SOLO'
+                ? 'freelancers and solo creators'
+                : 'small agencies and growing teams'}
+              .
+            </p>
             <ul>
-              <li>{seats}</li>
-              <li>{ai} per month</li>
-              <li>{sms} per month</li>
+              <li>{usage.data?.seatsLimit || 0} seats</li>
+              <li>50 GB storage</li>
               <li>Unlimited active projects within resource limits</li>
             </ul>
+            <Link className="secondary-button" to="/pricing">
+              View pricing
+            </Link>
+          </Panel>
+          <Panel title="Plan details">
+            {q.data && (
+              <>
+                <div className="actions">
+                  <h3>{q.data.planKey}</h3>
+                  <Badge>{q.data.state}</Badge>
+                </div>
+                <p>
+                  Current period ends{' '}
+                  {new Date(q.data.currentPeriodEnd).toLocaleDateString()}
+                </p>
+                <p className="subtle">
+                  14-day trial. A past-due account has 7 days of grace, followed
+                  by 30 days of read-only access. Reading and permitted exports
+                  remain available.
+                </p>
+              </>
+            )}
             <button
-              className="primary-button"
+              className="secondary-button"
               disabled={command.pending}
               onClick={async () => {
                 const result = await command.run<{ url: string }>(
-                  `workspaces/${id}/billing/checkout`,
-                  { planKey: plan },
+                  `workspaces/${id}/billing/portal`,
+                  {},
                 )
                 if (result) hosted(result.url)
               }}
             >
-              Choose {plan.toLowerCase()}
+              Manage in hosted billing portal
             </button>
           </Panel>
-        ))}
-      </div>
+        </div>
+      )}
+      {view === 'usage' && (
+        <>
+          <Panel title="Storage and resource usage">
+            {' '}
+            {usage.data && (
+              <div className="usage-grid">
+                {[
+                  [
+                    'Storage',
+                    usage.data.storageUsedBytes +
+                      usage.data.storageReservedBytes,
+                    usage.data.storageLimitBytes,
+                    `${formatBytes(usage.data.storageUsedBytes)} used + ${formatBytes(usage.data.storageReservedBytes)} reserved`,
+                  ],
+                  [
+                    'AI drafts',
+                    usage.data.aiDraftsUsed,
+                    usage.data.aiDraftAllowance,
+                    `${usage.data.aiDraftsUsed} used`,
+                  ],
+                  [
+                    'SMS segments',
+                    usage.data.smsSegmentsUsed,
+                    usage.data.smsSegmentAllowance,
+                    `${usage.data.smsSegmentsUsed} used`,
+                  ],
+                  [
+                    'Seats',
+                    usage.data.seatsUsed + usage.data.seatsReserved,
+                    usage.data.seatsLimit,
+                    `${usage.data.seatsUsed} active + ${usage.data.seatsReserved} reserved`,
+                  ],
+                ].map(([label, count, total, description]) => (
+                  <div key={label}>
+                    <strong>{label}</strong>
+                    <progress
+                      value={Number(count)}
+                      max={Number(total)}
+                      aria-label={`${label} usage`}
+                    />
+                    <p>
+                      {description} · {percent(Number(count), Number(total))}%
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Notice>
+              Limits apply to the current billing period. Existing content
+              remains available when allowances are reached.
+            </Notice>
+          </Panel>
+          <div className="actions">
+            <Link className="secondary-button" to="?view=billing">
+              Go to billing →
+            </Link>
+            <Link className="secondary-button" to={`${base}/team`}>
+              Manage team seats →
+            </Link>
+          </div>
+        </>
+      )}
+      {view !== 'usage' && (
+        <div className="pricing-grid">
+          {[
+            ['SOLO', '19', '1 seat', '100 AI drafts', '25 SMS segments'],
+            ['AGENCY', '49', '5 seats', '300 AI drafts', '100 SMS segments'],
+          ].map(([plan, price, seats, ai, sms]) => (
+            <Panel key={plan} title={plan}>
+              <p className="price">
+                ${price}
+                <small>/ month</small>
+              </p>
+              <p>Proposed pricing · 50 GB storage</p>
+              <ul>
+                <li>{seats}</li>
+                <li>{ai} per month</li>
+                <li>{sms} per month</li>
+                <li>Unlimited active projects within resource limits</li>
+              </ul>
+              <button
+                className="primary-button"
+                disabled={command.pending}
+                onClick={async () => {
+                  const result = await command.run<{ url: string }>(
+                    `workspaces/${id}/billing/checkout`,
+                    { planKey: plan },
+                  )
+                  if (result) hosted(result.url)
+                }}
+              >
+                Choose {plan.toLowerCase()}
+              </button>
+            </Panel>
+          ))}
+        </div>
+      )}
       <ErrorNotice error={command.error} />
     </>
   )
 }
 export function AnalyticsPanel({ root }: { root: string }) {
   const q = useData<ProjectAnalytics>(`${root}/analytics`)
+  const [tab, setTab] = useState('overview'),
+    [filter, setFilter] = useState('')
+  const [copied, setCopied] = useState('')
+  const { owner } = useWorkspace()
   const command = useCommand()
   const [share, setShare] = useState<{ shareId: string; url: string }>()
   return (
-    <>
-      <Panel title="A clearer view of progress">
-        <p>
-          Friction means a start without submission after a completed 7-day
-          observation window. It does not mean abandonment. At least 10 eligible
-          starts and 10 completed windows are required.
-        </p>
-        <QueryState query={q}>
-          <div className="table-scroll">
-            <table>
-              <caption>
-                Item collection friction · synthetic observations in demo mode
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Item</th>
-                  <th scope="col">Eligible starts</th>
-                  <th scope="col">Completed windows</th>
-                  <th scope="col">Without submission</th>
-                  <th scope="col">Rate</th>
-                  <th scope="col">Open windows</th>
-                  <th scope="col">Median first submission</th>
-                </tr>
-              </thead>
-              <tbody>
-                {q.data?.friction.map((m, i) => (
-                  <tr key={`${m.itemKey}-${i}`}>
-                    <th scope="row">{m.itemKey}</th>
-                    <td>{m.eligibleStarts}</td>
-                    <td>{m.completedObservationWindows}</td>
-                    <td>{m.startsWithoutSubmission}</td>
-                    <td>
-                      {m.insufficientData
-                        ? 'Insufficient data'
-                        : `${Math.round((m.rate || 0) * 100)}%`}
-                    </td>
-                    <td>
-                      {m.eligibleStarts - m.completedObservationWindows} still
-                      observing
-                    </td>
-                    <td>
-                      {m.medianFirstSubmissionSeconds === null
-                        ? 'Insufficient data'
-                        : `${Math.round(m.medianFirstSubmissionSeconds / 60)} min (${m.completedSubmissions} submissions)`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </QueryState>
-      </Panel>
-      <Panel title="Share the big picture">
-        <p>
-          Share counts only: no answers, contact details, files, internal notes
-          or workspace identity. Use a public-safe alias.
-        </p>
-        <form
-          className="stack-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const v = new FormData(e.currentTarget)
-            const result = await command.run<{ shareId: string; url: string }>(
-              `${root}/status-shares`,
-              {
-                alias: v.get('alias'),
-                expiresAt: new Date(String(v.get('expires'))).toISOString(),
-                allowedOrigins: String(v.get('origins') || '')
-                  .split('\n')
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              },
-            )
-            if (result) setShare(result)
-          }}
-        >
-          <Field label="Public alias">
-            <input
-              required
-              name="alias"
-              maxLength={80}
-              placeholder="Project Evergreen"
-            />
-          </Field>
-          <Field label="Share expiry">
-            <input
-              required
-              type="date"
-              name="expires"
-              defaultValue={new Date(Date.now() + 7 * 864e5)
-                .toISOString()
-                .slice(0, 10)}
-            />
-          </Field>
-          <Field label="Allowed embed origins (one HTTPS origin per line)">
-            <textarea name="origins" placeholder="https://example.com" />
-          </Field>
-          <button className="secondary-button" disabled={command.pending}>
-            Create counts-only share
-          </button>
-        </form>
-        {share && (
-          <div className="inset">
-            <Link to={share.url}>Open private status link</Link>
-            <pre className="code-wrap">{`<iframe title="Project status" src="${window.location.origin}${share.url}" loading="lazy"></iframe>`}</pre>
+    <QueryState query={q}>
+      <div className="analytics-page">
+        <nav className="reference-tabs" aria-label="Analytics views">
+          {[
+            ['overview', 'Overview'],
+            ['friction', 'Item friction'],
+            ...(owner ? [['share', 'Counts-only status share']] : []),
+          ].map(([key, label]) => (
             <button
-              className="danger-link"
-              onClick={async () => {
-                if (
-                  await command.run(
-                    `${root}/status-shares/${share.shareId}`,
-                    undefined,
-                    'DELETE',
-                  )
-                )
-                  setShare(undefined)
-              }}
+              key={key}
+              className={tab === key ? 'active' : ''}
+              onClick={() => setTab(key)}
             >
-              Revoke share
+              {label}
             </button>
-          </div>
+          ))}
+        </nav>
+        {tab === 'overview' && (
+          <>
+            <div className="report-metrics">
+              {[
+                ['Items submitted', q.data?.progress.submittedRequired || 0],
+                ['Items approved', q.data?.progress.approvedRequired || 0],
+                ['Client action', q.data?.progress.clientActionRequired || 0],
+                ['Required items', q.data?.progress.requiredTotal || 0],
+              ].map(([label, value]) => (
+                <article key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </article>
+              ))}
+            </div>
+            <div className="analytics-overview">
+              <Panel title="Submissions and approvals">
+                <p className="subtle">Visible required content by section</p>
+                <div className="section-chart">
+                  {q.data?.sections?.map((section) => {
+                    const submitted = section.progress.submittedRequired,
+                      approved = section.progress.approvedRequired
+                    return (
+                      <div key={section.id}>
+                        <span>{section.title}</span>
+                        <div>
+                          <meter
+                            aria-label={`${section.title} submitted`}
+                            min={0}
+                            max={section.progress.requiredTotal || 1}
+                            value={submitted}
+                          />
+                          <meter
+                            aria-label={`${section.title} approved`}
+                            min={0}
+                            max={section.progress.requiredTotal || 1}
+                            value={approved}
+                          />
+                        </div>
+                        <small>
+                          {submitted} / {approved}
+                        </small>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="chart-legend">● Submitted · ● Approved</p>
+              </Panel>
+              <Panel title="Items by section">
+                <div className="reference-table-wrap">
+                  <table className="reference-table">
+                    <thead>
+                      <tr>
+                        <th>Section</th>
+                        <th>Submitted</th>
+                        <th>Approved</th>
+                        <th>Client action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {q.data?.sections?.map((s) => (
+                        <tr key={s.id}>
+                          <td>{s.title}</td>
+                          <td>{s.progress.submittedRequired}</td>
+                          <td>{s.progress.approvedRequired}</td>
+                          <td>{s.progress.clientActionRequired}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            </div>
+            <p className="subtle">
+              Generated{' '}
+              {q.data && new Date(q.data.generatedAt).toLocaleString()}. Current
+              snapshot; no period-over-period trend is inferred.
+            </p>
+          </>
         )}
-        <ErrorNotice error={command.error} />
-      </Panel>
-    </>
+        {tab === 'friction' && (
+          <Panel title="Item friction">
+            <p>
+              Friction means a start without submission after a completed 7-day
+              observation window. It does not mean abandonment. At least 10
+              eligible starts and 10 completed windows are required.
+            </p>
+            <label className="board-search">
+              <input
+                aria-label="Search friction items"
+                placeholder="Search content items…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </label>
+            <QueryState query={q}>
+              <div className="table-scroll">
+                <table>
+                  <caption>
+                    Item collection friction · synthetic observations in demo
+                    mode
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Item</th>
+                      <th scope="col">Eligible starts</th>
+                      <th scope="col">Completed windows</th>
+                      <th scope="col">Without submission</th>
+                      <th scope="col">Rate</th>
+                      <th scope="col">Open windows</th>
+                      <th scope="col">Median first submission</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {q.data?.friction
+                      .filter((m) =>
+                        m.itemKey.toLowerCase().includes(filter.toLowerCase()),
+                      )
+                      .map((m, i) => (
+                        <tr key={`${m.itemKey}-${i}`}>
+                          <th scope="row">{m.itemKey}</th>
+                          <td>{m.eligibleStarts}</td>
+                          <td>{m.completedObservationWindows}</td>
+                          <td>{m.startsWithoutSubmission}</td>
+                          <td>
+                            {m.insufficientData
+                              ? 'Insufficient data'
+                              : `${Math.round((m.rate || 0) * 100)}%`}
+                          </td>
+                          <td>
+                            {m.eligibleStarts - m.completedObservationWindows}{' '}
+                            still observing
+                          </td>
+                          <td>
+                            {m.medianFirstSubmissionSeconds === null
+                              ? 'Insufficient data'
+                              : `${Math.round(m.medianFirstSubmissionSeconds / 60)} min (${m.completedSubmissions} submissions)`}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </QueryState>
+          </Panel>
+        )}
+        {tab === 'share' && owner && (
+          <Panel title="Counts-only status share">
+            <div className="share-layout">
+              <div>
+                <p>
+                  Share counts only: no answers, contact details, files,
+                  internal notes or workspace identity. Use a public-safe alias.
+                </p>
+                <form
+                  className="stack-form"
+                  onSubmit={async (e) => {
+                    e.preventDefault()
+                    const v = new FormData(e.currentTarget)
+                    const result = await command.run<{
+                      shareId: string
+                      url: string
+                    }>(`${root}/status-shares`, {
+                      alias: v.get('alias'),
+                      expiresAt: new Date(
+                        String(v.get('expires')),
+                      ).toISOString(),
+                      allowedOrigins: String(v.get('origins') || '')
+                        .split('\n')
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    })
+                    if (result) setShare(result)
+                  }}
+                >
+                  <Field label="Public alias">
+                    <input
+                      required
+                      name="alias"
+                      maxLength={80}
+                      placeholder="Project Evergreen"
+                    />
+                  </Field>
+                  <Field label="Share expiry">
+                    <input
+                      required
+                      type="date"
+                      name="expires"
+                      defaultValue={new Date(Date.now() + 7 * 864e5)
+                        .toISOString()
+                        .slice(0, 10)}
+                    />
+                  </Field>
+                  <Field label="Allowed embed origins (one HTTPS origin per line)">
+                    <textarea
+                      name="origins"
+                      placeholder="https://example.com"
+                    />
+                  </Field>
+                  <button
+                    className="secondary-button"
+                    disabled={command.pending}
+                  >
+                    Create counts-only share
+                  </button>
+                </form>
+                {share && (
+                  <div className="inset">
+                    <Link to={share.url}>Open counts-only status link</Link>
+                    <div className="actions">
+                      <button
+                        className="primary-button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(
+                              `${window.location.origin}${share.url}`,
+                            )
+                            setCopied('Link copied.')
+                          } catch {
+                            setCopied('Copy unavailable. Use the visible link.')
+                          }
+                        }}
+                      >
+                        Copy public link
+                      </button>
+                      <button
+                        className="secondary-button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(
+                              `<iframe title="Project status" src="${window.location.origin}${share.url}" loading="lazy"></iframe>`,
+                            )
+                            setCopied('Embed code copied.')
+                          } catch {
+                            setCopied(
+                              'Copy unavailable. Select the code below.',
+                            )
+                          }
+                        }}
+                      >
+                        Copy embed code
+                      </button>
+                    </div>
+                    <pre className="code-wrap">{`<iframe title="Project status" src="${window.location.origin}${share.url}" loading="lazy"></iframe>`}</pre>
+                    <button
+                      className="danger-link"
+                      onClick={async () => {
+                        if (
+                          await command.run(
+                            `${root}/status-shares/${share.shareId}`,
+                            undefined,
+                            'DELETE',
+                          )
+                        )
+                          setShare(undefined)
+                      }}
+                    >
+                      Revoke share
+                    </button>
+                  </div>
+                )}
+              </div>
+              <section className="counts-preview">
+                <h3>Preview (counts only)</h3>
+                <div className="report-metrics">
+                  {[
+                    ['Total', q.data?.progress.requiredTotal || 0],
+                    ['Submitted', q.data?.progress.submittedRequired || 0],
+                    ['Approved', q.data?.progress.approvedRequired || 0],
+                  ].map(([label, value]) => (
+                    <article key={label}>
+                      <strong>{value}</strong>
+                      <span>{label}</span>
+                    </article>
+                  ))}
+                </div>
+                <Notice>
+                  This share contains counts only. No project name, client
+                  names, questions, answers or files are included.
+                </Notice>
+              </section>
+            </div>
+            {copied && <Notice>{copied}</Notice>}
+            <ErrorNotice error={command.error} />
+          </Panel>
+        )}
+      </div>
+    </QueryState>
   )
 }
 export function InsightsPage() {

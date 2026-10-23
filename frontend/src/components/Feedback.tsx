@@ -4,8 +4,15 @@ import {
   useRef,
   useState,
   useEffect,
+  useId,
   type ReactNode,
 } from 'react'
+import {
+  CircleCheck,
+  TriangleAlert,
+  FolderOpen,
+  LoaderCircle,
+} from 'lucide-react'
 import { Button } from '@heroui/react'
 
 export function MockIndicator() {
@@ -33,14 +40,24 @@ export function StatePanel({
       aria-busy={kind === 'loading'}
     >
       <div className="state-symbol" aria-hidden="true">
-        {kind === 'loading'
-          ? '⋯'
-          : kind === 'success'
-            ? '✓'
-            : kind === 'error'
-              ? '!'
-              : '◇'}
+        {kind === 'loading' ? (
+          <LoaderCircle className="state-spinner" size={42} />
+        ) : kind === 'success' ? (
+          <CircleCheck size={42} />
+        ) : kind === 'error' ? (
+          <TriangleAlert size={42} />
+        ) : (
+          <FolderOpen size={42} />
+        )}
       </div>
+      {kind === 'loading' && (
+        <div className="loading-skeleton" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      )}
       <h2>{title}</h2>
       {description && <p>{description}</p>}
       {action && <div className="mt-6">{action}</div>}
@@ -114,6 +131,8 @@ export function ConfirmDialog({
   onConfirm: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const titleId = useId(),
+    descriptionId = useId()
   useEffect(() => {
     if (open && !dialog.current?.open) dialog.current?.showModal()
     else if (!open) dialog.current?.close()
@@ -121,15 +140,15 @@ export function ConfirmDialog({
   return (
     <dialog
       ref={dialog}
-      aria-labelledby="confirmation-title"
-      aria-describedby="confirmation-description"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
       onCancel={(event) => {
         event.preventDefault()
         if (!pending) onCancel()
       }}
     >
-      <h2 id="confirmation-title">{title}</h2>
-      <div id="confirmation-description">{description}</div>
+      <h2 id={titleId}>{title}</h2>
+      <div id={descriptionId}>{description}</div>
       <div className="dialog-actions">
         <button
           className="secondary-button"

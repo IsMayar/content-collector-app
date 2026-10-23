@@ -653,3 +653,54 @@ describe('reference workflow permissions', () => {
     expect(productDb.workspaces[agencyId].usage.seatsReserved).toBe(seats)
   })
 })
+
+describe('administration reference boards', () => {
+  it('updates only the signed-in profile and requires current password for password changes', async () => {
+    login()
+    const otherName =
+      mockState.accounts['member@studio.example'].user.displayName
+    await json('me/profile', 'PATCH', { displayName: 'Updated Owner' })
+    expect(mockState.accounts['owner@studio.example'].user.displayName).toBe(
+      'Updated Owner',
+    )
+    expect(mockState.accounts['member@studio.example'].user.displayName).toBe(
+      otherName,
+    )
+    expect(
+      (
+        await request('me/password', 'POST', {
+          currentPassword: 'incorrect',
+          newPassword: 'NewSecurePassword!2026',
+        })
+      ).status,
+    ).toBe(403)
+    await json('me/password', 'POST', {
+      currentPassword: 'ContentDemo!2026',
+      newPassword: 'NewSecurePassword!2026',
+    })
+    expect(mockState.accounts['owner@studio.example'].password).toBe(
+      'NewSecurePassword!2026',
+    )
+  })
+  it('allows assigned analytics while keeping share management owner-only and section counts visibility-aware', async () => {
+    login('member@studio.example')
+    const data = await json<{
+      progress: import('@/api/contracts').Progress
+      sections: { progress: import('@/api/contracts').Progress }[]
+    }>(`${projectRoot}/analytics`)
+    expect(
+      data.sections.reduce((sum, s) => sum + s.progress.requiredTotal, 0),
+    ).toBe(data.progress.requiredTotal)
+    expect(
+      data.sections.reduce((sum, s) => sum + s.progress.submittedRequired, 0),
+    ).toBe(data.progress.submittedRequired)
+    expect(
+      (
+        await request(`${projectRoot}/status-shares`, 'POST', {
+          alias: 'Public',
+          expiresAt: new Date(Date.now() + 864e5).toISOString(),
+        })
+      ).status,
+    ).toBe(403)
+  })
+})
