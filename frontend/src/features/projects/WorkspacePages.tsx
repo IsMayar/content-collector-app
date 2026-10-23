@@ -1,16 +1,15 @@
 import { useState, type FormEvent } from 'react'
+import { useNotify } from '@/components/Feedback'
+import { Upload, Users, UserRound } from 'lucide-react'
 import { TemplateEditor } from './TemplateEditor'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 import {
-  FolderKanban,
-  ArrowUpRight,
-  Layers,
-  CheckCheck,
-  Clock3,
-} from 'lucide-react'
+  ProjectTable,
+  TemplateSymbol,
+  TemplatePreview,
+} from '@/components/ReferenceUI'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 import { useData } from '@/api/productApi'
 import type {
-  Client,
   Paged,
   Project,
   TemplateCardData,
@@ -19,14 +18,12 @@ import type {
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { bootstrapSession } from '@/features/auth/session'
 import {
-  DualProgress,
   Empty,
   ErrorNotice,
   Field,
   Heading,
   Panel,
   QueryState,
-  Badge,
   projectTypes,
   useCommand,
   useWorkspace,
@@ -46,30 +43,52 @@ export function WorkspaceEntry() {
   )
 }
 export function OnboardingPage() {
+  const [logo, setLogo] = useState('')
+  const [logoError, setLogoError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const notify = useNotify()
   const command = useCommand()
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (saving) return
+    setSaving(true)
     const values = Object.fromEntries(new FormData(e.currentTarget))
-    const result = await command.run<{ workspace: { id: string } }>(
-      'workspaces',
-      values,
-    )
+    const result = await command.run<{
+      workspace: { id: string; version: number }
+    }>('workspaces', values)
     if (result) {
+      if (
+        logo &&
+        !(await command.run(
+          `workspaces/${result.workspace.id}`,
+          {
+            name: values.name,
+            timezone: values.timezone,
+            logo,
+            expectedVersion: result.workspace.version,
+          },
+          'PATCH',
+        ))
+      )
+        notify(
+          'Workspace created. The logo could not be saved; add it in Settings.',
+        )
       await dispatch(bootstrapSession())
       navigate(`/app/w/${result.workspace.id}/overview`)
     }
+    setSaving(false)
   }
   return (
     <div className="narrow-product">
       <Heading
-        eyebrow="A GOOD PLACE TO START"
-        title="Make space for your next project"
-        description="Set up your workspace. Invite your clients when you’re ready."
+        eyebrow="WELCOME TO CONTENT COLLECTOR"
+        title="Let’s set up your workspace."
+        description="Create your workspace and tell us a bit about how you work so we can tailor your experience."
       />
       <Panel>
-        <form className="stack-form" onSubmit={submit}>
+        <form className="stack-form onboarding-form" onSubmit={submit}>
           <Field label="Workspace name">
             <input
               name="name"
@@ -79,12 +98,85 @@ export function OnboardingPage() {
               placeholder="e.g. Northstar Studio"
             />
           </Field>
-          <Field label="How do you work?">
-            <select name="planKey">
-              <option value="SOLO">Freelancer · Solo</option>
-              <option value="AGENCY">Small team · Agency</option>
-            </select>
-          </Field>
+          <div className="onboarding-logo">
+            <strong>
+              Workspace logo <span>(optional)</span>
+            </strong>
+            <div>
+              {logo ? (
+                <img src={logo} alt="Workspace logo preview" />
+              ) : (
+                <span className="logo-placeholder">A</span>
+              )}
+              <label className="logo-upload">
+                <Upload size={24} />
+                <span>Upload logo</span>
+                <small>PNG, JPG or WebP · Max 1 MB</small>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  aria-label="Upload workspace logo"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    if (
+                      file.size > 1048576 ||
+                      !['image/png', 'image/jpeg', 'image/webp'].includes(
+                        file.type,
+                      )
+                    ) {
+                      setLogoError(
+                        'Choose a PNG, JPEG or WebP image smaller than 1 MB.',
+                      )
+                      return
+                    }
+                    setLogoError('')
+                    const reader = new FileReader()
+                    reader.onload = () => setLogo(String(reader.result))
+                    reader.onerror = () =>
+                      setLogoError(
+                        'Could not read this image. Try another file.',
+                      )
+                    reader.readAsDataURL(file)
+                  }}
+                />
+              </label>
+            </div>
+            {logo && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setLogo('')}
+              >
+                Remove logo
+              </button>
+            )}
+            <ErrorNotice error={logoError} />
+          </div>
+          <fieldset className="work-style">
+            <legend>How do you work?</legend>
+            <label>
+              <input
+                type="radio"
+                name="planKey"
+                value="AGENCY"
+                defaultChecked
+              />
+              <Users size={28} />
+              <span>
+                <strong>Agency</strong>
+                <small>Manage multiple clients and team members</small>
+              </span>
+            </label>
+            <label>
+              <input type="radio" name="planKey" value="SOLO" />
+              <UserRound size={28} />
+              <span>
+                <strong>Freelancer</strong>
+                <small>Work independently with your clients</small>
+              </span>
+            </label>
+          </fieldset>
           <Field label="Workspace timezone">
             <input
               name="timezone"
@@ -93,8 +185,8 @@ export function OnboardingPage() {
             />
           </Field>
           <ErrorNotice error={command.error} />
-          <button className="primary-button" disabled={command.pending}>
-            Create workspace
+          <button className="primary-button" disabled={saving}>
+            {saving ? 'Creating…' : 'Create workspace →'}
           </button>
           <p className="subtle">
             14-day trial. Plans and prices are proposed for this preview.
@@ -104,127 +196,7 @@ export function OnboardingPage() {
     </div>
   )
 }
-export function DashboardPage() {
-  const { id, base, owner, user } = useWorkspace()
-  const query = useData<Paged<Project>>(`workspaces/${id}/projects?size=100`)
-  const projects = query.data?.data || []
-  const active = projects.filter((p) => p.state === 'ACTIVE')
-  const waiting = projects.reduce(
-    (n, p) => n + p.progress.submittedRequired - p.progress.approvedRequired,
-    0,
-  )
-  return (
-    <>
-      <Heading
-        eyebrow="THE BIG PICTURE"
-        title={`Welcome, ${user?.displayName.split(' ')[0] || 'there'}`}
-        description={
-          owner
-            ? 'Your projects, moving forward. Here’s where things stand.'
-            : 'Your assigned projects and the work that needs your attention.'
-        }
-      >
-        {owner && (
-          <Link className="primary-button" to={`${base}/projects/new`}>
-            ＋ New project
-          </Link>
-        )}
-      </Heading>
-      <QueryState query={query}>
-        <div className="metric-grid">
-          {[
-            [FolderKanban, projects.length, 'Total projects'],
-            [Layers, active.length, 'Active projects'],
-            [Clock3, waiting, 'Awaiting review'],
-            [
-              CheckCheck,
-              projects.filter((p) => p.state === 'COMPLETED').length,
-              'Completed',
-            ],
-          ].map(([Icon, value, label]) => {
-            const Symbol = Icon as typeof FolderKanban
-            return (
-              <div className="metric-card" key={String(label)}>
-                <Symbol size={20} />
-                <strong>{String(value)}</strong>
-                <span>{String(label)}</span>
-              </div>
-            )
-          })}
-        </div>
-        <div className="dashboard-grid">
-          <Panel
-            title="Projects in motion"
-            action={
-              <Link to={`${base}/projects`}>
-                View all <ArrowUpRight size={15} />
-              </Link>
-            }
-          >
-            {projects.length ? (
-              <div className="project-list">
-                {projects.slice(0, 4).map((project) => (
-                  <Link
-                    className="project-row"
-                    key={project.id}
-                    to={`${base}/projects/${project.id}`}
-                  >
-                    <div className={`project-icon type-${project.projectType}`}>
-                      {project.projectType === 'WEBSITE'
-                        ? 'W'
-                        : project.projectType === 'WEB_APP'
-                          ? 'A'
-                          : 'M'}
-                    </div>
-                    <div className="grow">
-                      <strong>{project.title}</strong>
-                      <p>
-                        {project.clientBusinessName} · Due {project.dueDate}
-                      </p>
-                      <DualProgress progress={project.progress} />
-                    </div>
-                    <Badge>{project.state}</Badge>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                title="Your next project starts here"
-                description="Choose a template, add a customer and make a clear collection plan."
-                to={owner ? `${base}/projects/new` : undefined}
-                label="Create a project"
-              />
-            )}
-          </Panel>
-          <div className="stack">
-            <section className="accent-panel">
-              <span className="eyebrow">A STRONGER START</span>
-              <h2>
-                Good questions.
-                <br />
-                Great projects.
-              </h2>
-              <p>
-                Start with a thoughtful template for your next website, web app
-                or mobile app.
-              </p>
-              <Link to={`${base}/templates`}>
-                Explore templates <ArrowUpRight size={18} />
-              </Link>
-            </section>
-            <Panel title="A clear path to handoff">
-              <ol className="steps-list">
-                <li>Build your collection checklist</li>
-                <li>Invite your client to collaborate</li>
-                <li>Review, approve and export</li>
-              </ol>
-            </Panel>
-          </div>
-        </div>
-      </QueryState>
-    </>
-  )
-}
+export { DashboardPage } from './WorkspaceOverview'
 export function ProjectsPage() {
   const { id, base, owner } = useWorkspace()
   const [search, setSearch] = useSearchParams()
@@ -242,11 +214,11 @@ export function ProjectsPage() {
     <>
       <Heading
         title="Projects"
-        description="Every brief, every detail, one clear place."
+        description="Manage all projects across your agency workspace."
       >
         {owner && (
           <Link className="primary-button" to={`${base}/projects/new`}>
-            ＋ New project
+            ＋ Create project
           </Link>
         )}
       </Heading>
@@ -294,35 +266,24 @@ export function ProjectsPage() {
           </select>
         </Field>
       </div>
+      <nav className="reference-tabs" aria-label="Project types">
+        {[{ value: '', label: 'All projects' }, ...projectTypes].map((t) => (
+          <button
+            key={t.value}
+            className={
+              (search.get('projectType') || '') === t.value ? 'active' : ''
+            }
+            onClick={() => filter('projectType', t.value)}
+            aria-pressed={(search.get('projectType') || '') === t.value}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
       <QueryState query={query}>
         {query.data?.data.length ? (
           <>
-            <div className="project-grid">
-              {query.data.data.map((p) => (
-                <Link
-                  key={p.id}
-                  className="project-card"
-                  to={`${base}/projects/${p.id}`}
-                >
-                  <div className="card-top">
-                    <span className={`project-icon type-${p.projectType}`}>
-                      <FolderKanban size={22} />
-                    </span>
-                    <Badge>{p.state}</Badge>
-                  </div>
-                  <p className="eyebrow">
-                    {p.projectType.replaceAll('_', ' ')}
-                  </p>
-                  <h2>{p.title}</h2>
-                  <p>{p.clientBusinessName}</p>
-                  <DualProgress progress={p.progress} />
-                  <footer>
-                    <span>Due {p.dueDate}</span>
-                    <ArrowUpRight size={18} />
-                  </footer>
-                </Link>
-              ))}
-            </div>
+            <ProjectTable projects={query.data.data} base={base} />
             <div className="pagination">
               <span>{query.data.page.totalElements} projects</span>
               <button
@@ -362,173 +323,7 @@ export function ProjectsPage() {
     </>
   )
 }
-export function CreateProjectPage() {
-  const { id, base, owner } = useWorkspace()
-  const navigate = useNavigate()
-  const [search] = useSearchParams()
-  const [type, setType] = useState(search.get('type') || 'WEBSITE')
-  const [newClient, setNewClient] = useState(false)
-  const clients = useData<Paged<Client>>(`workspaces/${id}/clients`)
-  const templates = useData<{ data: TemplateCardData[] }>(
-    `workspaces/${id}/templates`,
-  )
-  const command = useCommand()
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const values = Object.fromEntries(new FormData(e.currentTarget))
-    let clientId = values.clientId
-    if (newClient) {
-      const result = await command.run<{ client: Client }>(
-        `workspaces/${id}/clients`,
-        {
-          businessName: values.businessName,
-          contactName: values.contactName,
-          email: values.email,
-        },
-      )
-      if (!result) return
-      clientId = result.client.id
-    }
-    const result = await command.run<{ project: Project }>(
-      `workspaces/${id}/projects`,
-      {
-        clientId,
-        title: values.title,
-        projectType: type,
-        dueDate: values.dueDate,
-        timezone: values.timezone,
-        templateVersionId: values.templateVersionId,
-      },
-    )
-    if (result) navigate(`${base}/projects/${result.project.id}`)
-  }
-  if (!owner)
-    return (
-      <Empty
-        title="Owner access required"
-        description="Your owner can create projects and assign them to you."
-      />
-    )
-  return (
-    <>
-      <Heading
-        title="A fresh start"
-        description="Give your project a home. You can fine-tune the checklist before inviting your client."
-      />
-      <div className="create-grid">
-        <Panel title="Project details">
-          <form className="stack-form" onSubmit={submit}>
-            <Field label="Project name">
-              <input
-                required
-                maxLength={160}
-                name="title"
-                placeholder="e.g. Lamar Dental website"
-              />
-            </Field>
-            <Field label="Project type">
-              <select
-                name="projectType"
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-              >
-                {projectTypes.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Customer">
-              <select
-                required={!newClient}
-                name="clientId"
-                disabled={newClient}
-              >
-                <option value="">Choose a customer</option>
-                {clients.data?.data.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.businessName}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={newClient}
-                onChange={(e) => setNewClient(e.target.checked)}
-              />
-              Add a new customer
-            </label>
-            {newClient && (
-              <div className="inset stack-form">
-                <Field label="Business name">
-                  <input required name="businessName" />
-                </Field>
-                <Field label="Contact name">
-                  <input name="contactName" />
-                </Field>
-                <Field label="Customer email">
-                  <input required type="email" name="email" />
-                </Field>
-              </div>
-            )}
-            <div className="form-grid">
-              <Field label="Due date">
-                <input name="dueDate" type="date" required />
-              </Field>
-              <Field label="Project timezone">
-                <input
-                  name="timezone"
-                  required
-                  defaultValue="America/New_York"
-                />
-              </Field>
-            </div>
-            <Field label="Starting template">
-              <select
-                key={type}
-                name="templateVersionId"
-                defaultValue={search.get('template') || ''}
-              >
-                <option value="">Recommended for this project type</option>
-                {templates.data?.data
-                  .filter((t) => t.projectType === type)
-                  .map((t) => (
-                    <option key={t.id} value={t.versionId}>
-                      {t.title} · v{t.version}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-            <ErrorNotice error={command.error} />
-            <div className="actions">
-              <button disabled={command.pending} className="primary-button">
-                Create project
-              </button>
-              <Link className="secondary-button" to={`${base}/projects`}>
-                Cancel
-              </Link>
-            </div>
-          </form>
-        </Panel>
-        <aside className="accent-panel">
-          <p className="eyebrow">YOUR PROJECT, YOUR WAY</p>
-          <h2>Built on a thoughtful starting point.</h2>
-          <p>
-            Every project gets an independent copy of its template. Changes to
-            this project won’t affect other projects or the original template.
-          </p>
-          <p>
-            Your project starts as a draft. Publish it when the questions feel
-            right.
-          </p>
-        </aside>
-      </div>
-    </>
-  )
-}
+export { CreateProjectPage } from './ProjectWizard'
 export function TemplatesPage() {
   const { id, base, owner } = useWorkspace()
   const query = useData<{ data: TemplateCardData[] }>(
@@ -543,141 +338,175 @@ export function TemplatesPage() {
   )
   const command = useCommand()
   const [message, setMessage] = useState('')
+  const [library, setLibrary] = useState('builtin')
+  const selected = query.data?.data.find((t) => t.versionId === preview)
   return (
     <>
-      <Heading
-        eyebrow="A THOUGHTFUL HEAD START"
-        title="Template gallery"
-        description="Questions that get to the heart of your next project. Make them your own."
-      />
-      <div className="filter-bar">
-        <Field label="Project type">
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="">All types</option>
-            {projectTypes.map((t) => (
-              <option value={t.value} key={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Industry">
-          <select
-            value={industry}
-            onChange={(e) => setIndustry(e.target.value)}
+      {selected ? (
+        <>
+          <button
+            className="back-link"
+            onClick={() => {
+              setPreview('')
+              setEditing('')
+            }}
           >
-            <option value="">All industries</option>
-            {[...new Set(query.data?.data.map((t) => t.industry))].map((i) => (
-              <option key={i}>{i}</option>
+            ← Templates / {selected.industry.replaceAll('_', ' ')}
+          </button>
+          <Heading
+            title={selected.title}
+            description="Collect all the content you need from your client. Explore the sections, questions and examples in this template."
+          >
+            {owner && (
+              <Link
+                className="primary-button"
+                to={`${base}/projects/new?type=${selected.projectType}&template=${selected.versionId}`}
+              >
+                Use this template →
+              </Link>
+            )}
+          </Heading>
+          <QueryState query={detail}>
+            {detail.data && (
+              <TemplatePreview
+                key={preview}
+                definition={detail.data.definition}
+              />
+            )}
+          </QueryState>
+          <div className="actions template-actions">
+            {owner && !selected.isBuiltin && (
+              <button
+                className="secondary-button"
+                onClick={() => setEditing(selected.id)}
+              >
+                Edit workspace template
+              </button>
+            )}
+            {owner && detail.data && (
+              <button
+                className="secondary-button"
+                disabled={command.pending}
+                onClick={async () => {
+                  if (
+                    await command.run(`workspaces/${id}/templates`, {
+                      definition: {
+                        ...detail.data!.definition,
+                        title: `${selected.title} — workspace copy`,
+                      },
+                    })
+                  )
+                    setMessage('Independent workspace template created.')
+                }}
+              >
+                Copy to workspace
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <Heading
+            title="Project templates"
+            description="Save and reuse content structures across projects."
+          />
+          <nav className="reference-tabs" aria-label="Template library">
+            {[
+              ['builtin', 'Built-in templates'],
+              ['workspace', 'My templates'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                className={library === key ? 'active' : ''}
+                aria-pressed={library === key}
+                onClick={() => setLibrary(key)}
+              >
+                {label}
+              </button>
             ))}
-          </select>
-        </Field>
-      </div>
+          </nav>
+          <div className="filter-bar">
+            <Field label="Project type">
+              <select value={type} onChange={(e) => setType(e.target.value)}>
+                <option value="">All types</option>
+                {projectTypes.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Industry">
+              <select
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+              >
+                <option value="">All industries</option>
+                {[...new Set(query.data?.data.map((t) => t.industry))].map(
+                  (i) => (
+                    <option key={i}>{i}</option>
+                  ),
+                )}
+              </select>
+            </Field>
+          </div>
+          <QueryState query={query}>
+            <div className="template-grid">
+              {query.data?.data
+                .filter(
+                  (t) =>
+                    (library === 'builtin' ? t.isBuiltin : !t.isBuiltin) &&
+                    (!type || t.projectType === type) &&
+                    (!industry || t.industry === industry),
+                )
+                .map((t) => (
+                  <article className="template-card" key={t.id}>
+                    <TemplateSymbol industry={t.industry} />
+                    <div className="template-copy">
+                      <p className="eyebrow">
+                        {t.isBuiltin ? 'Built-in' : 'Workspace'} ·{' '}
+                        {t.projectType.replaceAll('_', ' ')}
+                      </p>
+                      <h2>{t.title}</h2>
+                      <p>
+                        {t.industry.replaceAll('_', ' ')} · Version {t.version}
+                      </p>
+                      <div className="actions">
+                        <button
+                          className="secondary-button"
+                          onClick={() => setPreview(t.versionId)}
+                        >
+                          Preview
+                        </button>
+                        {owner && (
+                          <Link
+                            className="text-link"
+                            to={`${base}/projects/new?type=${t.projectType}&template=${t.versionId}`}
+                          >
+                            Use template →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+            </div>
+            {library === 'workspace' &&
+              !query.data?.data.some((t) => !t.isBuiltin) && (
+                <Empty
+                  title="Your templates will appear here"
+                  description="Preview a built-in template and copy it to your workspace to make it your own."
+                />
+              )}
+          </QueryState>
+          <p className="reference-info">
+            ⓘ Templates are saved as a stable snapshot. Changes to a template do
+            not affect existing projects.
+          </p>
+        </>
+      )}
       <ErrorNotice error={command.error} />
       {message && <p role="status">{message}</p>}
-      <QueryState query={query}>
-        <div className="template-grid">
-          {query.data?.data
-            .filter(
-              (t) =>
-                (!type || t.projectType === type) &&
-                (!industry || t.industry === industry),
-            )
-            .map((t, index) => (
-              <article className="template-card" key={t.id}>
-                <div
-                  className={`template-art art-${index % 4}`}
-                  aria-hidden="true"
-                >
-                  <div className="mini-window">
-                    <span />
-                    <span />
-                    <span />
-                    <div />
-                    <div />
-                    <div />
-                  </div>
-                  <Layers size={32} />
-                </div>
-                <div className="template-copy">
-                  <p className="eyebrow">
-                    {t.projectType.replaceAll('_', ' ')} ·{' '}
-                    {t.isBuiltin ? 'CURATED' : 'WORKSPACE'}
-                  </p>
-                  <h2>{t.title}</h2>
-                  <p>
-                    {t.industry.replaceAll('_', ' ')} · Version {t.version}
-                  </p>
-                  <div className="actions">
-                    <button
-                      className="secondary-button"
-                      onClick={() =>
-                        setPreview(preview === t.versionId ? '' : t.versionId)
-                      }
-                    >
-                      Preview
-                    </button>
-                    {owner && (
-                      <Link
-                        className="text-link"
-                        to={`${base}/projects/new?type=${t.projectType}&template=${t.versionId}`}
-                      >
-                        Use template →
-                      </Link>
-                    )}
-                  </div>
-                  {preview === t.versionId && detail.data && (
-                    <div className="template-preview">
-                      <h3>Collection checklist</h3>
-                      {detail.data.definition.sections.map((s) => (
-                        <div key={s.key}>
-                          <strong>{s.title}</strong>
-                          <ul>
-                            {s.items.map((i) => (
-                              <li key={i.key}>
-                                {i.label}
-                                {i.required ? ' *' : ''}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                      {owner && !t.isBuiltin && (
-                        <button
-                          className="secondary-button"
-                          onClick={() => setEditing(t.id)}
-                        >
-                          Edit workspace template
-                        </button>
-                      )}
-                      {owner && (
-                        <button
-                          className="secondary-button"
-                          disabled={command.pending}
-                          onClick={async () => {
-                            if (
-                              await command.run(`workspaces/${id}/templates`, {
-                                definition: {
-                                  ...detail.data!.definition,
-                                  title: `${t.title} — workspace copy`,
-                                },
-                              })
-                            )
-                              setMessage(
-                                'Independent workspace template created.',
-                              )
-                          }}
-                        >
-                          Copy to workspace
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </article>
-            ))}
-        </div>
-      </QueryState>
       {editing && detail.data && (
         <TemplateEditor
           root={`workspaces/${id}/templates/${editing}`}

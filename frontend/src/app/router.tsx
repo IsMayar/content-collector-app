@@ -7,7 +7,7 @@ import {
   ClientLayout,
   PublicLayout,
 } from '@/components/Layouts'
-import { AboutPage, NotFoundPage } from '@/features/foundation/Pages'
+import { NotFoundPage } from '@/features/foundation/Pages'
 import { SessionBoundary, RequireAgency } from '@/features/auth/SessionBoundary'
 import {
   RecoveryPage,
@@ -21,6 +21,7 @@ import {
   AgencyFoundation,
   UnauthorizedPage,
 } from '@/features/foundation/AgencyFoundation'
+import { HelpPage, LegalPage } from '@/features/public/HelpPages'
 const workspacePages = () => import('@/features/projects/WorkspacePages')
 const settingsPages = () => import('@/features/settings/SettingsPages')
 const clientPages = () => import('@/features/client/ClientPages')
@@ -96,7 +97,9 @@ export const routes = [
           { path: '/', element: deferred(<LandingPage />) },
           { path: '/pricing', element: deferred(<PricingPage />) },
           { path: '/status/:shareId', element: deferred(<StatusSharePage />) },
-          { path: '/about', element: <AboutPage /> },
+          { path: '/about', element: <HelpPage /> },
+          { path: '/privacy', element: <LegalPage /> },
+          { path: '/terms', element: <LegalPage terms /> },
           { path: '/unauthorized', element: <UnauthorizedPage /> },
           { path: '*', element: <NotFoundPage /> },
         ],

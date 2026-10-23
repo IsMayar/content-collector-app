@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router'
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useNavigate,
+  useParams,
+  useLocation,
+} from 'react-router'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { ConfirmDialog, Notice, useNotify } from './Feedback'
 import { logoutSession, selectWorkspace } from '@/features/auth/session'
@@ -14,17 +21,22 @@ import {
   ChartNoAxesCombined,
   Settings,
   CreditCard,
+  FileText,
+  LockKeyhole,
+  MailCheck,
+  ShieldCheck,
+  UserPlus,
 } from 'lucide-react'
 
 export function Brand() {
   return (
     <Link to="/" className="brand" aria-label="Website Content Collector home">
       <span className="brand-mark" aria-hidden="true">
-        W
+        C
       </span>
-      <span>
-        Website Content
-        <br className="brand-break" /> Collector
+      <span className="brand-copy">
+        <strong>Content Collector</strong>
+        <small>BY AYAANTRIX</small>
       </span>
     </Link>
   )
@@ -40,10 +52,11 @@ export function PublicLayout() {
         <div className="header-inner">
           <Brand />
           <nav aria-label="Main navigation" className="public-nav">
+            <Link to="/">Product</Link>
+            <NavLink to="/about">How it works</NavLink>
             <NavLink to="/pricing">Pricing</NavLink>
-            <NavLink to="/about">About</NavLink>
             <Link
-              className="secondary-button"
+              className="secondary-button public-sign-in"
               to={authenticated ? '/app' : '/sign-in'}
             >
               {authenticated ? 'Open workspace' : 'Sign in'}
@@ -55,55 +68,131 @@ export function PublicLayout() {
         <Outlet />
       </main>
       <footer className="page-container footer">
-        AYAANTRIX Technologies · Built for a clearer handoff
+        © 2026 Content Collector by AYAANTRIX{' '}
+        <nav aria-label="Legal navigation">
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+          <Link to="/about">Help</Link>
+        </nav>
       </footer>
     </>
   )
 }
 export function AuthLayout() {
+  const { pathname } = useLocation()
+  const stories: Record<
+    string,
+    {
+      Icon: typeof FileText
+      title: string
+      description: string
+      tips: string[]
+    }
+  > = {
+    '/sign-in': {
+      Icon: FileText,
+      title: 'Your content, organized',
+      description:
+        'Secure access for your team, clients and projects, all in one place.',
+      tips: [
+        'Collect content and files',
+        'Keep projects moving',
+        'Built for agencies',
+      ],
+    },
+    '/sign-up': {
+      Icon: Users,
+      title: 'Built for teams',
+      description:
+        'Create your account to set up your workspace, invite your team and start collecting content.',
+      tips: [
+        'Set up your workspace',
+        'Invite team members',
+        'Create your first project',
+      ],
+    },
+    '/verify-email': {
+      Icon: MailCheck,
+      title: 'Confirm your email',
+      description:
+        'Verifying your email helps keep your account secure and gives you access to all features.',
+      tips: [
+        'Click the link in your inbox',
+        'Check your spam folder',
+        'Resend if needed',
+      ],
+    },
+    '/forgot-password': {
+      Icon: LockKeyhole,
+      title: 'Get back to your work',
+      description:
+        'Reset your password to regain access to your projects and content.',
+      tips: [
+        'Enter your work email',
+        'Check your inbox',
+        'Click the reset link',
+      ],
+    },
+    '/reset-password': {
+      Icon: ShieldCheck,
+      title: 'Keep your account secure',
+      description:
+        'Use a strong, unique password to protect your workspace and content.',
+      tips: [
+        'Create a strong password',
+        'Keep it private',
+        'You can change it anytime',
+      ],
+    },
+    '/team-invite': {
+      Icon: UserPlus,
+      title: 'Collaborate with your team',
+      description:
+        'Join your team to access shared projects, templates and content.',
+      tips: [
+        'Work with your team',
+        'Access shared projects',
+        'Keep everything organized',
+      ],
+    },
+  }
+  const story = stories[pathname] || stories['/sign-in']
+  const Icon = story.Icon
   return (
     <div className="auth-layout">
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <aside className="auth-story">
+      <header className="auth-top">
         <Brand />
-        <div className="story-copy">
-          <p className="eyebrow">A better beginning</p>
-          <h2>
-            Less chasing.
-            <br />
-            More creating.
-          </h2>
-          <p>
-            A thoughtful space for the content, conversations and details that
-            make your next project possible.
-          </p>
-          <div className="story-card">
-            <span className="story-step">01</span>
-            <div>
-              <strong>Bring the right details together</strong>
-              <p>From the first idea to the final handoff.</p>
-            </div>
-            <span aria-hidden="true">↗</span>
-          </div>
-        </div>
-        <p className="story-footer">
-          Websites · Web applications · Mobile applications
-        </p>
-      </aside>
-      <div className="auth-main">
-        <header className="auth-top">
-          <Link to="/">← Back to home</Link>
-          <span>Website Content Collector</span>
-        </header>
-        <main id="main-content" tabIndex={-1} className="auth-content">
+        <nav aria-label="Help and navigation">
+          <Link to="/about">Help</Link>
+          <Link to="/">← Back</Link>
+        </nav>
+      </header>
+      <main id="main-content" tabIndex={-1} className="auth-main">
+        <div className="auth-content">
           <Outlet />
-        </main>
-        <footer className="auth-footer">
-          Your agency account. Your clients’ next great project.
-        </footer>
-      </div>
+        </div>
+        <aside className="auth-story" aria-label="About Content Collector">
+          <div className="reference-auth-icon" aria-hidden="true">
+            <Icon size={64} strokeWidth={1.7} />
+            <span>✓</span>
+          </div>
+          <div className="story-copy">
+            <h2>{story.title}</h2>
+            <p>{story.description}</p>
+            <ul className="auth-benefits">
+              {story.tips.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+      </main>
+      <footer className="auth-footer">
+        Your agency account. Your clients’ next great project.
+      </footer>
     </div>
   )
 }
@@ -126,7 +215,7 @@ export function AgencyLayout() {
   const navigation = (
     <>
       <NavLink end to={home}>
-        <LayoutDashboard size={18} /> <span>Workspace home</span>
+        <LayoutDashboard size={18} /> <span>Overview</span>
       </NavLink>
       {membership && (
         <>
@@ -137,7 +226,7 @@ export function AgencyLayout() {
           </NavLink>
           <NavLink to={`/app/w/${membership.workspaceId}/templates`}>
             <Layers size={18} />
-            <span>Template gallery</span>
+            <span>Templates</span>
           </NavLink>
           {membership.role === 'OWNER' && (
             <>
@@ -184,44 +273,39 @@ export function AgencyLayout() {
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <aside className="agency-sidebar">
+      <header className="agency-top">
         <Brand />
-        <div className="sidebar-caption">YOUR WORKSPACE</div>
-        <nav aria-label="Workspace navigation" className="sidebar-nav">
-          {navigation}
-        </nav>
-        <div className="sidebar-foot">
-          A clearer path from
-          <br />
-          first brief to final handoff.
+        <div className="workspace-picker">
+          <label htmlFor="workspace-picker">Workspace</label>
+          <select
+            id="workspace-picker"
+            value={membership?.workspaceId || ''}
+            onChange={(event) => {
+              dispatch(selectWorkspace(event.target.value))
+              navigate(`/app/w/${event.target.value}/overview`)
+              notify('Workspace changed.')
+            }}
+          >
+            {!state.memberships.length && (
+              <option value="">No workspace yet</option>
+            )}
+            {state.memberships.map((m) => (
+              <option key={m.memberId} value={m.workspaceId}>
+                {m.workspaceId === workspace.data?.workspace.id
+                  ? workspace.data.workspace.name
+                  : m.workspaceName}
+              </option>
+            ))}
+          </select>
         </div>
-      </aside>
-      <div className="agency-main">
-        <header className="agency-top">
-          <div className="workspace-picker">
-            <label htmlFor="workspace-picker">Workspace</label>
-            <select
-              id="workspace-picker"
-              value={membership?.workspaceId || ''}
-              onChange={(event) => {
-                dispatch(selectWorkspace(event.target.value))
-                navigate(`/app/w/${event.target.value}/overview`)
-                notify('Workspace changed.')
-              }}
-            >
-              {!state.memberships.length && (
-                <option value="">No workspace yet</option>
-              )}
-              {state.memberships.map((m) => (
-                <option key={m.memberId} value={m.workspaceId}>
-                  {m.workspaceId === workspace.data?.workspace.id
-                    ? workspace.data.workspace.name
-                    : m.workspaceName}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="agency-tools">
+          <Link className="help-link" to="/about">
+            Help
+          </Link>
           <div className="account-menu">
+            <span className="account-avatar" aria-hidden="true">
+              {state.user?.displayName?.slice(0, 1).toUpperCase() || 'A'}
+            </span>
             <div>
               <strong>{state.user?.displayName}</strong>
               <span>
@@ -233,13 +317,20 @@ export function AgencyLayout() {
               </span>
             </div>
             <button
-              className="secondary-button"
+              className="account-signout"
               onClick={() => setConfirm(true)}
             >
               Sign out
             </button>
           </div>
-        </header>
+        </div>
+      </header>
+      <aside className="agency-sidebar">
+        <nav aria-label="Workspace navigation" className="sidebar-nav">
+          {navigation}
+        </nav>
+      </aside>
+      <div className="agency-main">
         <details className="mobile-navigation">
           <summary>Workspace menu</summary>
           <nav aria-label="Mobile workspace navigation">{navigation}</nav>

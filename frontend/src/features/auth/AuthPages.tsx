@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { LockKeyhole } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { authApi } from './authApi'
@@ -93,12 +94,21 @@ export function SignInPage() {
     <AuthCard>
       <AuthHeading
         eyebrow="Welcome back"
-        title="Sign in to your workspace"
-        description="A little less chasing. A lot more making progress."
+        title="Welcome back"
+        description="Sign in to Content Collector to continue."
       />
       <AuthForm
         schema={signInSchema}
         fields={[email, password]}
+        beforeSubmit={
+          <div className="secure-signin">
+            <LockKeyhole size={25} />
+            <div>
+              <strong>Secure sign in</strong>
+              <small>Use a trusted device to access your account.</small>
+            </div>
+          </div>
+        }
         submitLabel="Sign in"
         onSubmit={async (values) => {
           dispatch(clearPrivateCaches())
@@ -136,7 +146,7 @@ export function SignUpPage() {
     <AuthCard>
       <AuthHeading
         eyebrow="Start something good"
-        title="Create your agency account"
+        title="Create your account"
         description="For freelancers and teams bringing client projects to life."
       />
       {complete ? (
@@ -183,7 +193,7 @@ export function RecoveryPage() {
     <AuthCard>
       <AuthHeading
         eyebrow="Let’s get you back in"
-        title="Forgot your password?"
+        title="Reset your password"
         description="Enter your email and we’ll help you take the next step."
       />
       {complete ? (
@@ -271,7 +281,7 @@ export function ResetPasswordPage() {
     <AuthCard>
       <AuthHeading
         eyebrow="A fresh start"
-        title="Set a new password"
+        title="Choose a new password"
         description="Choose a strong password you don’t use elsewhere. Reset links last 30 minutes."
       />
       {complete ? (
@@ -313,7 +323,7 @@ export function TeamInvitePage() {
     <AuthCard>
       <AuthHeading
         eyebrow="Better together"
-        title="Join your team"
+        title="You’re invited to join"
         description="Accept an invitation using the verified account that matches the invited email."
       />
       {complete ? (

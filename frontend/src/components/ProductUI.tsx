@@ -68,7 +68,7 @@ export function Heading({
   return (
     <div className="product-heading">
       <div>
-        <p className="eyebrow">{eyebrow || 'YOUR WORKSPACE'}</p>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
         {description && <p className="subtle">{description}</p>}
       </div>
@@ -213,8 +213,8 @@ export function Empty({
 }
 export const projectTypes = [
   { value: 'WEBSITE', label: 'Website' },
-  { value: 'WEB_APP', label: 'Web application' },
-  { value: 'MOBILE_APP', label: 'Mobile application' },
+  { value: 'WEB_APP', label: 'Web app' },
+  { value: 'MOBILE_APP', label: 'Mobile app' },
 ]
 export const fieldTypes = [
   'SHORT_TEXT',

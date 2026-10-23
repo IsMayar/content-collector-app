@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AppProviders } from '@/app/providers'
 import '@/styles/index.css'
+import '@/styles/refresh.css'
+import '@/styles/reference.css'
 
 async function start() {
   if (import.meta.env.PROD && 'serviceWorker' in navigator)

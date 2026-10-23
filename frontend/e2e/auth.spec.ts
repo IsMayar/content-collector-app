@@ -8,7 +8,7 @@ test('keyboard sign-in, responsive workspace and confirmed logout', async ({
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto('/sign-in')
   await expect(
-    page.getByRole('heading', { name: 'Sign in to your workspace' }),
+    page.getByRole('heading', { name: 'Welcome back' }),
   ).toBeVisible()
   await expect(page.getByLabel('Development environment')).toContainText(
     'Synthetic data',
@@ -35,7 +35,7 @@ test('keyboard sign-in, responsive workspace and confirmed logout', async ({
   await page.getByRole('button', { name: 'Hide password', exact: true }).click()
   await page.getByLabel('Password', { exact: true }).press('Enter')
   await expect(
-    page.getByRole('heading', { name: 'Welcome, Alex' }),
+    page.getByRole('heading', { name: 'Welcome back, Alex' }),
   ).toBeVisible()
   await expect(page.locator('main')).toBeFocused()
   expect(
@@ -65,7 +65,7 @@ test('keyboard sign-in, responsive workspace and confirmed logout', async ({
   await page.getByRole('button', { name: 'Sign out', exact: true }).click()
   await dialog.getByRole('button', { name: 'Sign out', exact: true }).click()
   await expect(
-    page.getByRole('heading', { name: 'Sign in to your workspace' }),
+    page.getByRole('heading', { name: 'Welcome back' }),
   ).toBeVisible()
   expect(
     await page.evaluate(() => ({
@@ -132,7 +132,7 @@ test('invitation survives sign-in and member navigation omits owner controls', a
   )
   await page.getByRole('link', { name: 'Open workspace', exact: true }).click()
   await expect(
-    page.getByRole('heading', { name: 'Welcome, Jamie' }),
+    page.getByRole('heading', { name: 'Good morning, Jamie' }),
   ).toBeVisible()
   await expect(page.getByRole('link', { name: /Owner access/ })).toHaveCount(0)
 })

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff, Mail } from 'lucide-react'
 import type { UseFormRegisterReturn } from 'react-hook-form'
 
 export interface FieldDefinition {
@@ -22,7 +23,10 @@ export function FormField({
   return (
     <div className="form-field">
       <label htmlFor={name}>{label}</label>
-      <div className="input-wrap">
+      <div className={`input-wrap ${type === 'email' ? 'has-input-icon' : ''}`}>
+        {type === 'email' && (
+          <Mail className="input-icon" size={17} aria-hidden="true" />
+        )}
         <input
           {...registration}
           id={name}
@@ -43,7 +47,7 @@ export function FormField({
             aria-pressed={visible}
             onClick={() => setVisible(!visible)}
           >
-            {visible ? 'Hide' : 'Show'}
+            {visible ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         )}
       </div>

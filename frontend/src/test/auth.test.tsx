@@ -75,7 +75,7 @@ describe('safe return destinations', () => {
 describe('authentication through real RTK Query requests intercepted by MSW', () => {
   it('redirects protected routes and preserves a safe destination', async () => {
     const { router } = mount(`/app/w/${agencyId}/overview`)
-    await screen.findByRole('heading', { name: 'Sign in to your workspace' })
+    await screen.findByRole('heading', { name: 'Welcome back' })
     expect(router.state.location.pathname).toBe('/sign-in')
     expect(
       new URLSearchParams(router.state.location.search).get('returnTo'),
@@ -96,7 +96,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
       `/sign-in?returnTo=${encodeURIComponent(`/app/w/${agencyId}/overview`)}`,
     )
     await signIn(user)
-    await screen.findByRole('heading', { name: 'Welcome, Alex' })
+    await screen.findByRole('heading', { name: 'Welcome back, Alex' })
     expect(router.state.location.pathname).toBe(`/app/w/${agencyId}/overview`)
     expect(store.getState().auth.status).toBe('authenticated')
     expect(localStorage.length).toBe(0)
@@ -126,13 +126,13 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
   it('does not follow an external return destination after login', async () => {
     const { user, router } = mount('/sign-in?returnTo=https://evil.test')
     await signIn(user)
-    await screen.findByRole('heading', { name: 'Welcome, Alex' })
+    await screen.findByRole('heading', { name: 'Welcome back, Alex' })
     expect(router.state.location.pathname).toBe(`/app/w/${agencyId}/overview`)
   })
   it('clears both API caches and local session after confirmed logout', async () => {
     const { user, store } = mount()
     await signIn(user)
-    await screen.findByRole('heading', { name: 'Welcome, Alex' })
+    await screen.findByRole('heading', { name: 'Welcome back, Alex' })
     const clientWithProbe = clientApi.injectEndpoints({
       endpoints: (build) => ({
         testProbe: build.query<{ private: boolean }, void>({
@@ -148,7 +148,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
     const dialog = await screen.findByRole('dialog')
     const buttons = dialog.querySelectorAll('button')
     await user.click(buttons[1])
-    await screen.findByRole('heading', { name: 'Sign in to your workspace' })
+    await screen.findByRole('heading', { name: 'Welcome back' })
     expect(store.getState().auth.accessToken).toBeNull()
     expect(store.getState().auth.memberships).toEqual([])
     expect(store.getState().agencyApi.queries).toEqual({})
@@ -157,7 +157,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
   it('hides owner navigation and denies its route for a member', async () => {
     const { user, router } = mount()
     await signIn(user, 'member@studio.example')
-    await screen.findByRole('heading', { name: 'Welcome, Jamie' })
+    await screen.findByRole('heading', { name: 'Good morning, Jamie' })
     expect(
       screen.queryByRole('link', { name: /Owner access/ }),
     ).not.toBeInTheDocument()
@@ -171,7 +171,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
   it('switches workspace and changes owner navigation to member navigation', async () => {
     const { user, store } = mount()
     await signIn(user)
-    await screen.findByRole('heading', { name: 'Welcome, Alex' })
+    await screen.findByRole('heading', { name: 'Welcome back, Alex' })
     await user.selectOptions(screen.getByLabelText('Workspace'), soloId)
     await waitFor(() => expect(store.getState().auth.workspaceId).toBe(soloId))
     expect(
@@ -193,13 +193,13 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
     mockState.activeEmail = 'solo@studio.example'
     mockState.token = 'synthetic-existing-session'
     const { store } = mount('/app')
-    await screen.findByRole('heading', { name: 'Welcome, Sam' })
+    await screen.findByRole('heading', { name: 'Welcome back, Sam' })
     expect(store.getState().auth.workspaceId).toBe(soloId)
   })
   it('shares one refresh across concurrent expired bearer requests', async () => {
     const { user, store } = mount()
     await signIn(user)
-    await screen.findByRole('heading', { name: 'Welcome, Alex' })
+    await screen.findByRole('heading', { name: 'Welcome back, Alex' })
     let refreshCount = 0
     server.use(
       http.post('http://localhost:5173/api/v1/auth/refresh', async () => {
@@ -235,7 +235,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
   it('clears identity and private caches when refresh confirms session expiry', async () => {
     const { user, store } = mount()
     await signIn(user)
-    await screen.findByRole('heading', { name: 'Welcome, Alex' })
+    await screen.findByRole('heading', { name: 'Welcome back, Alex' })
     mockState.activeEmail = null
     await store.dispatch(
       authApi.endpoints.me.initiate(undefined, {

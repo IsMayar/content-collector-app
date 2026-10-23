@@ -6,7 +6,9 @@ async function signIn(page: Page, email = 'owner@studio.example') {
   await page.getByLabel('Email address').fill(email)
   await page.getByLabel('Password', { exact: true }).fill('ContentDemo!2026')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByRole('heading', { name: /Welcome,/ })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: /Welcome back,|Good morning,/ }),
+  ).toBeVisible()
 }
 async function nav(page: Page, name: string) {
   const mobile = page.getByRole('navigation', {
@@ -39,7 +41,7 @@ test('owner → client draft → immutable review → approved export', async ({
   await signIn(page)
   await nav(page, 'Projects')
   await page
-    .getByRole('heading', { name: 'Lamar Dental website', exact: true })
+    .getByRole('link', { name: 'Lamar Dental website', exact: true })
     .click()
   await page.getByRole('link', { name: 'Client access', exact: true }).click()
   await page.getByRole('button', { name: 'Send / resend invite' }).click()
@@ -79,7 +81,7 @@ test('owner → client draft → immutable review → approved export', async ({
   await page.getByRole('link', { name: 'Open workspace', exact: true }).click()
   await nav(page, 'Projects')
   await page
-    .getByRole('heading', { name: 'Lamar Dental website', exact: true })
+    .getByRole('link', { name: 'Lamar Dental website', exact: true })
     .click()
   await page.getByRole('link', { name: 'Review', exact: true }).click()
   await expect(
@@ -120,16 +122,16 @@ test('all project types, template previews, settings and keyboard reorder', asyn
   page,
 }, info) => {
   await signIn(page)
-  await nav(page, 'Template gallery')
+  await nav(page, 'Templates')
   await expect(
-    page.getByRole('heading', { name: 'Template gallery', exact: true }),
+    page.getByRole('heading', { name: 'Project templates', exact: true }),
   ).toBeVisible()
   await page
     .getByRole('button', { name: 'Preview', exact: true })
     .first()
     .click()
   await expect(
-    page.getByRole('heading', { name: 'Collection checklist', exact: true }),
+    page.getByRole('heading', { name: /Requested content/ }),
   ).toBeVisible()
   await noOverflow(page)
   await page.screenshot({
@@ -143,17 +145,31 @@ test('all project types, template previews, settings and keyboard reorder', asyn
   ]) {
     await nav(page, 'Projects')
     await page
-      .getByRole('link', { name: 'New project', exact: false })
+      .getByRole('link', { name: 'Create project', exact: false })
       .first()
       .click()
+    await page
+      .getByRole('navigation', { name: 'Project type', exact: true })
+      .getByRole('button', {
+        name:
+          type === 'WEBSITE'
+            ? 'Website'
+            : type === 'WEB_APP'
+              ? 'Web app'
+              : 'Mobile app',
+        exact: true,
+      })
+      .click()
+    await page.locator('.reference-template-tile').first().click()
+    await page.getByRole('button', { name: 'Use this template' }).click()
     await page.getByLabel('Project name', { exact: true }).fill(name)
-    await page.getByLabel('Project type', { exact: true }).selectOption(type)
     await page
       .getByLabel('Customer', { exact: true })
       .selectOption({ label: 'Lamar Dental' })
     await page.getByLabel('Due date', { exact: true }).fill('2026-12-20')
+    await page.getByRole('button', { name: 'Continue to review' }).click()
     await page
-      .getByRole('button', { name: 'Create project', exact: true })
+      .getByRole('button', { name: 'Create project →', exact: true })
       .click()
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     await noOverflow(page)
@@ -186,7 +202,7 @@ test('public landing and pricing remain responsive and keyboard accessible', asy
 }, info) => {
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: /Great projects/ }),
+    page.getByRole('heading', { name: /Get client content/ }),
   ).toBeVisible()
   await noOverflow(page)
   await page.screenshot({
@@ -199,8 +215,59 @@ test('public landing and pricing remain responsive and keyboard accessible', asy
   ).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.locator('main')).toBeFocused()
-  await page.getByRole('link', { name: 'Explore plans', exact: true }).click()
-  await expect(page.getByRole('heading', { name: /Small team/ })).toBeVisible()
+  await page.getByRole('link', { name: 'Pricing', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: /Choose the plan/ }),
+  ).toBeVisible()
+  await noOverflow(page)
+})
+
+test('wizard preserves details and item drawer traps and restores keyboard focus', async ({
+  page,
+}) => {
+  await signIn(page)
+  await nav(page, 'Projects')
+  await page.getByRole('link', { name: 'Create project' }).click()
+  await page.locator('.reference-template-tile').first().click()
+  await page.getByRole('button', { name: 'Use this template' }).click()
+  await page
+    .getByLabel('Project name', { exact: true })
+    .fill('Wizard review verification')
+  await page
+    .getByLabel('Customer', { exact: true })
+    .selectOption({ label: 'Lamar Dental' })
+  await page.getByLabel('Due date', { exact: true }).fill('2026-12-20')
+  await page.getByRole('button', { name: 'Continue to review' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Review and create your project' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: '← Back', exact: true }).click()
+  await expect(page.getByLabel('Project name', { exact: true })).toHaveValue(
+    'Wizard review verification',
+  )
+  await page.getByRole('button', { name: 'Continue to review' }).click()
+  await page.getByRole('button', { name: 'Save as draft', exact: true }).click()
+  await expect(
+    page.getByRole('heading', {
+      name: 'Wizard review verification',
+      exact: true,
+    }),
+  ).toBeVisible()
+  const edit = page
+    .getByRole('button', { name: /^Edit / })
+    .filter({ has: page.locator('svg') })
+    .first()
+  await edit.click()
+  const drawer = page.getByRole('dialog', { name: 'Item settings' })
+  await expect(drawer).toBeVisible()
+  await drawer.getByRole('button', { name: 'Close item settings' }).focus()
+  await page.keyboard.press('Shift+Tab')
+  expect(
+    await drawer.evaluate((el) => el.contains(document.activeElement)),
+  ).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(drawer).not.toBeVisible()
+  await expect(edit).toBeFocused()
   await noOverflow(page)
 })
 
@@ -294,7 +361,7 @@ test('mock failure, billing grace and read-only states offer deliberate recovery
   await page.getByLabel('Scenario', { exact: true }).selectOption('normal')
   await page.getByRole('button', { name: 'Apply scenario' }).click()
   await expect(
-    page.getByRole('heading', { name: 'Lamar Dental website', exact: true }),
+    page.getByRole('link', { name: 'Lamar Dental website', exact: true }),
   ).toBeVisible()
   await page.getByLabel('Scenario', { exact: true }).selectOption('grace')
   await page.getByRole('button', { name: 'Apply scenario' }).click()

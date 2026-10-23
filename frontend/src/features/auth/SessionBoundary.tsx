@@ -14,6 +14,8 @@ export function SessionBoundary() {
   const independent =
     pathname === '/' ||
     pathname === '/about' ||
+    pathname === '/privacy' ||
+    pathname === '/terms' ||
     pathname === '/pricing' ||
     pathname.startsWith('/client/') ||
     pathname.startsWith('/status/')

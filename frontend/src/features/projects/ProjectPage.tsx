@@ -1,6 +1,14 @@
-import { useState, type FormEvent } from 'react'
-import { Link, NavLink, useParams, useSearchParams } from 'react-router'
-import { ArrowDown, ArrowUp, GripVertical, Plus, Pencil } from 'lucide-react'
+import { useState, useEffect, useRef, type FormEvent } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router'
+import {
+  ArrowDown,
+  ArrowUp,
+  GripVertical,
+  Plus,
+  Pencil,
+  FileText,
+  X,
+} from 'lucide-react'
 import { useData } from '@/api/productApi'
 import type {
   Assignment,
@@ -102,49 +110,74 @@ export function ProjectPage() {
               </>
             )}
           </Heading>
-          <div className="project-summary">
-            <DualProgress progress={data.progress} />
-            <p>
-              <strong>{data.progress.clientActionRequired}</strong> required
-              items need client action
-              <br />
-              <small>Optional approved: {data.progress.optionalApproved}</small>
-            </p>
-            <span className="subtle">
-              Structure v{p.structureVersion} · Project v{p.version}
-            </span>
+          <div className="project-navigation-bar">
+            <nav
+              className="tabs project-primary-tabs"
+              aria-label="Project sections"
+            >
+              {[
+                ['checklist', 'Content'],
+                ['activity', 'Activity'],
+                ...(owner
+                  ? [
+                      ['analytics', 'Analytics'],
+                      ['access', 'Client access'],
+                    ]
+                  : []),
+                ...(p.permissions.canReview ? [['review', 'Review']] : []),
+              ].map(([key, label]) => (
+                <Link
+                  key={key}
+                  to={`?tab=${key}`}
+                  className={tab === key ? 'active' : ''}
+                  aria-current={tab === key ? 'page' : undefined}
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
+            <nav className="project-tools" aria-label="Project tools">
+              {[
+                ['preview', 'Client preview'],
+                ...(owner
+                  ? [
+                      ['assignments', 'Team'],
+                      ['reminders', 'Reminders'],
+                    ]
+                  : []),
+                ...(p.permissions.canExport ? [['exports', 'Exports']] : []),
+                ...(owner ? [['details', 'Details']] : []),
+              ].map(([key, label]) => (
+                <Link
+                  key={key}
+                  to={`?tab=${key}`}
+                  className={tab === key ? 'active' : ''}
+                  aria-current={tab === key ? 'page' : undefined}
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
           </div>
-          <nav className="tabs" aria-label="Project sections">
-            {[
-              ['checklist', 'Checklist'],
-              ['preview', 'Client preview'],
-              ...(owner
-                ? [
-                    ['access', 'Client access'],
-                    ['assignments', 'Team'],
-                    ['reminders', 'Reminders'],
-                  ]
-                : []),
-              ...(p.permissions.canReview ? [['review', 'Review']] : []),
-              ['activity', 'Activity'],
-              ...(p.permissions.canExport ? [['exports', 'Exports']] : []),
-              ...(owner
-                ? [
-                    ['analytics', 'Insights'],
-                    ['details', 'Details'],
-                  ]
-                : []),
-            ].map(([key, label]) => (
-              <NavLink
-                key={key}
-                to={`?tab=${key}`}
-                className={tab === key ? 'active' : ''}
-                aria-current={tab === key ? 'page' : undefined}
-              >
-                {label}
-              </NavLink>
-            ))}
-          </nav>
+          <details className="project-progress-disclosure">
+            <summary>
+              Collection progress · {data.progress.submittedRequired}/
+              {data.progress.requiredTotal} submitted ·{' '}
+              {data.progress.approvedRequired}/{data.progress.requiredTotal}{' '}
+              approved
+            </summary>
+            <div className="project-summary">
+              <DualProgress progress={data.progress} />
+              <p>
+                <strong>{data.progress.clientActionRequired}</strong> required
+                items need client action
+                <br />
+                <small>
+                  Optional approved: {data.progress.optionalApproved}
+                </small>
+              </p>
+            </div>
+          </details>
           <ErrorNotice error={command.error} />
           {tab === 'checklist' && (
             <StructureEditor
@@ -292,6 +325,9 @@ function StructureEditor({
     section: Section
     item?: Item
   } | null>(null)
+  const [selectedSection, setSelectedSection] = useState('')
+  const currentSection =
+    data.structure.find((s) => s.id === selectedSection) || data.structure[0]
   const [drag, setDrag] = useState('')
   const [sectionTitle, setSectionTitle] = useState('')
   async function reorder(sections: Section[]) {
@@ -323,10 +359,9 @@ function StructureEditor({
     <>
       <div className="section-intro">
         <div>
-          <h2>The collection checklist</h2>
+          <h2>Project content</h2>
           <p className="subtle">
-            Clear questions make room for better answers. Drag items or use
-            their move buttons.
+            Organise your content and capture what you need from your client.
           </p>
         </div>
         <span className="subtle">{data.structure.length} sections</span>
@@ -340,192 +375,262 @@ function StructureEditor({
           Refresh latest structure (keeps editor open)
         </button>
       )}
-      <div className="stack">
-        {data.structure.map((s, index) => (
-          <Panel key={s.id}>
-            <header className="section-header">
-              <div>
-                <span className="section-number">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <h2>{s.title}</h2>
-                {!s.enabled && <Badge>DISABLED</Badge>}
-              </div>
-              {editable && (
-                <div className="actions">
-                  <button
-                    className="icon-button"
-                    aria-label={`Move ${s.title} section up`}
-                    disabled={!index || command.pending}
-                    onClick={() => moveSection(index, -1)}
-                  >
-                    <ArrowUp size={16} />
-                  </button>
-                  <button
-                    className="icon-button"
-                    aria-label={`Move ${s.title} section down`}
-                    disabled={
-                      index === data.structure.length - 1 || command.pending
-                    }
-                    onClick={() => moveSection(index, 1)}
-                  >
-                    <ArrowDown size={16} />
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={command.pending}
-                    onClick={() =>
-                      void command.run(
-                        `${root}/sections/${s.id}`,
-                        {
-                          enabled: !s.enabled,
-                          expectedStructureVersion:
-                            data.project.structureVersion,
-                        },
-                        'PATCH',
-                      )
-                    }
-                  >
-                    {s.enabled ? 'Disable' : 'Enable'}
-                  </button>
-                </div>
-              )}
-            </header>
-            {editable && (
-              <details className="section-rename">
-                <summary>Edit section name</summary>
-                <form
-                  className="inline-form"
-                  onSubmit={async (e) => {
-                    e.preventDefault()
-                    await command.run(
-                      `${root}/sections/${s.id}`,
-                      {
-                        title: new FormData(e.currentTarget).get('title'),
-                        expectedStructureVersion: data.project.structureVersion,
-                      },
-                      'PATCH',
-                    )
-                  }}
-                >
-                  <Field label="Section name">
-                    <input
-                      name="title"
-                      defaultValue={s.title}
-                      required
-                      maxLength={120}
-                    />
-                  </Field>
-                  <button
-                    className="secondary-button"
-                    disabled={command.pending}
-                  >
-                    Save section name
-                  </button>
-                </form>
-              </details>
-            )}
-            <ol className="checklist-rows">
-              {s.items.map((i, n) => (
-                <li
-                  key={i.id}
-                  draggable={editable}
-                  onDragStart={() => setDrag(i.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    if (!editable || !s.items.some((i) => i.id === drag)) return
-                    const sections = structuredClone(data.structure)
-                    const target = sections.find((t) => t.id === s.id)!
-                    const from = target.items.findIndex((i) => i.id === drag)
-                    const [item] = target.items.splice(from, 1)
-                    target.items.splice(n, 0, item)
-                    void reorder(sections)
-                    setDrag('')
-                  }}
-                >
-                  <GripVertical size={17} className="subtle" />
-                  <div className="grow">
-                    <strong>
-                      {i.label}{' '}
-                      {i.required && <span className="required-mark">*</span>}
-                    </strong>
-                    <p>
-                      {i.type.replaceAll('_', ' ')}
-                      {i.visibleWhen ? ' · Conditional' : ''}
-                      {i.enabled === false ? ' · Disabled' : ''}
-                    </p>
-                  </div>
-                  <Badge>{i.state}</Badge>
-                  {editable && (
-                    <div className="actions">
-                      <button
-                        className="icon-button"
-                        disabled={!n || command.pending}
-                        aria-label={`Move ${i.label} up`}
-                        onClick={() => moveItem(s, n, -1)}
-                      >
-                        <ArrowUp size={16} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        disabled={n === s.items.length - 1 || command.pending}
-                        aria-label={`Move ${i.label} down`}
-                        onClick={() => moveItem(s, n, 1)}
-                      >
-                        <ArrowDown size={16} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        aria-label={`Edit ${i.label}`}
-                        onClick={() => setEditing({ section: s, item: i })}
-                      >
-                        <Pencil size={16} />
-                      </button>
+      <div className="structure-workbench">
+        <nav className="structure-navigation" aria-label="Content sections">
+          <h3>
+            {data.project.projectType === 'WEBSITE'
+              ? 'Website structure'
+              : 'Application structure'}
+          </h3>
+          {data.structure.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSelectedSection(s.id)}
+              aria-current={currentSection?.id === s.id ? 'page' : undefined}
+              className={currentSection?.id === s.id ? 'selected' : ''}
+            >
+              <FileText size={17} />
+              <span>{s.title}</span>
+              <small>{s.items.length}</small>
+            </button>
+          ))}
+        </nav>
+        <div className="structure-detail">
+          {data.structure.map(
+            (s, index) =>
+              s.id === currentSection?.id && (
+                <Panel key={s.id}>
+                  <header className="section-header">
+                    <div>
+                      <span className="section-number">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <h2>{s.title}</h2>
+                      {!s.enabled && <Badge>DISABLED</Badge>}
                     </div>
+                    {editable && (
+                      <div className="actions">
+                        <button
+                          className="icon-button"
+                          aria-label={`Move ${s.title} section up`}
+                          disabled={!index || command.pending}
+                          onClick={() => moveSection(index, -1)}
+                        >
+                          <ArrowUp size={16} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label={`Move ${s.title} section down`}
+                          disabled={
+                            index === data.structure.length - 1 ||
+                            command.pending
+                          }
+                          onClick={() => moveSection(index, 1)}
+                        >
+                          <ArrowDown size={16} />
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={command.pending}
+                          onClick={() =>
+                            void command.run(
+                              `${root}/sections/${s.id}`,
+                              {
+                                enabled: !s.enabled,
+                                expectedStructureVersion:
+                                  data.project.structureVersion,
+                              },
+                              'PATCH',
+                            )
+                          }
+                        >
+                          {s.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                      </div>
+                    )}
+                  </header>
+                  {editable && (
+                    <details className="section-rename">
+                      <summary>Edit section name</summary>
+                      <form
+                        className="inline-form"
+                        onSubmit={async (e) => {
+                          e.preventDefault()
+                          await command.run(
+                            `${root}/sections/${s.id}`,
+                            {
+                              title: new FormData(e.currentTarget).get('title'),
+                              expectedStructureVersion:
+                                data.project.structureVersion,
+                            },
+                            'PATCH',
+                          )
+                        }}
+                      >
+                        <Field label="Section name">
+                          <input
+                            name="title"
+                            defaultValue={s.title}
+                            required
+                            maxLength={120}
+                          />
+                        </Field>
+                        <button
+                          className="secondary-button"
+                          disabled={command.pending}
+                        >
+                          Save section name
+                        </button>
+                      </form>
+                    </details>
                   )}
-                </li>
-              ))}
-            </ol>
-            {editable && (
-              <button
-                className="add-item"
-                onClick={() => setEditing({ section: s })}
-              >
-                <Plus size={16} /> Add item
-              </button>
-            )}
-          </Panel>
-        ))}
+                  <div className="reference-table-wrap">
+                    <table className="reference-table structure-items">
+                      <thead>
+                        <tr>
+                          <th>Label</th>
+                          <th>Type</th>
+                          <th>Required</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {s.items.map((i, n) => (
+                          <tr
+                            key={i.id}
+                            draggable={editable}
+                            onDragStart={() => setDrag(i.id)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              if (
+                                !editable ||
+                                !s.items.some((i) => i.id === drag)
+                              )
+                                return
+                              const sections = structuredClone(data.structure)
+                              const target = sections.find(
+                                (t) => t.id === s.id,
+                              )!
+                              const from = target.items.findIndex(
+                                (i) => i.id === drag,
+                              )
+                              const [item] = target.items.splice(from, 1)
+                              target.items.splice(n, 0, item)
+                              void reorder(sections)
+                              setDrag('')
+                            }}
+                          >
+                            <td>
+                              <div className="structure-item-label">
+                                <GripVertical size={16} className="subtle" />
+                                <div>
+                                  <strong>
+                                    {i.label}{' '}
+                                    {i.required && (
+                                      <span className="required-mark">*</span>
+                                    )}
+                                  </strong>
+                                  {i.visibleWhen && <small>Conditional</small>}
+                                  {i.enabled === false && (
+                                    <small>Disabled</small>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="item-type">
+                              {i.type.toLowerCase().replaceAll('_', ' ')}
+                            </td>
+                            <td className="item-required">
+                              {i.required ? 'Yes' : 'No'}
+                            </td>
+                            <td>
+                              <Badge>{i.state}</Badge>
+                            </td>
+                            <td>
+                              {editable && (
+                                <div className="actions">
+                                  <button
+                                    className="icon-button"
+                                    disabled={!n || command.pending}
+                                    aria-label={`Move ${i.label} up`}
+                                    onClick={() => moveItem(s, n, -1)}
+                                  >
+                                    <ArrowUp size={16} />
+                                  </button>
+                                  <button
+                                    className="icon-button"
+                                    disabled={
+                                      n === s.items.length - 1 ||
+                                      command.pending
+                                    }
+                                    aria-label={`Move ${i.label} down`}
+                                    onClick={() => moveItem(s, n, 1)}
+                                  >
+                                    <ArrowDown size={16} />
+                                  </button>
+                                  <button
+                                    className="icon-button"
+                                    aria-label={`Edit ${i.label}`}
+                                    onClick={() =>
+                                      setEditing({ section: s, item: i })
+                                    }
+                                  >
+                                    <Pencil size={16} />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {editable && (
+                    <button
+                      className="add-item"
+                      onClick={() => setEditing({ section: s })}
+                    >
+                      <Plus size={16} /> Add item
+                    </button>
+                  )}
+                </Panel>
+              ),
+          )}
+        </div>
       </div>
       {editable && (
-        <Panel title="Add a section">
-          <form
-            className="inline-form"
-            onSubmit={async (e) => {
-              e.preventDefault()
-              if (
-                await command.run(`${root}/sections`, {
-                  title: sectionTitle,
-                  expectedStructureVersion: data.project.structureVersion,
-                })
-              )
-                setSectionTitle('')
-            }}
-          >
-            <Field label="Section title">
-              <input
-                required
-                value={sectionTitle}
-                onChange={(e) => setSectionTitle(e.target.value)}
-                placeholder="e.g. Brand and identity"
-              />
-            </Field>
-            <button className="secondary-button" disabled={command.pending}>
-              Add section
-            </button>
-          </form>
-        </Panel>
+        <details className="add-section-details">
+          <summary>＋ Add section</summary>
+          <Panel title="Add a section">
+            <form
+              className="inline-form"
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (
+                  await command.run(`${root}/sections`, {
+                    title: sectionTitle,
+                    expectedStructureVersion: data.project.structureVersion,
+                  })
+                )
+                  setSectionTitle('')
+              }}
+            >
+              <Field label="Section title">
+                <input
+                  required
+                  value={sectionTitle}
+                  onChange={(e) => setSectionTitle(e.target.value)}
+                  placeholder="e.g. Brand and identity"
+                />
+              </Field>
+              <button className="secondary-button" disabled={command.pending}>
+                Add section
+              </button>
+            </form>
+          </Panel>
+        </details>
       )}
       {editing && (
         <ItemEditor
@@ -553,6 +658,16 @@ function ItemEditor({
   item?: Item
   onClose: () => void
 }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const element = dialog.current
+    const previous = document.activeElement as HTMLElement | null
+    element?.showModal()
+    return () => {
+      element?.close()
+      previous?.focus()
+    }
+  }, [])
   const [type, setType] = useState<ItemDefinition['type']>(
     item?.type || 'SHORT_TEXT',
   )
@@ -639,13 +754,43 @@ function ItemEditor({
       )
       if (result) onClose()
     } catch {
-      setLocalError(
-        'Repeater columns must be valid JSON following the displayed example.',
-      )
+      setLocalError('Check the field settings and try saving again.')
     }
   }
   return (
-    <section className="editor-panel" aria-label="Item editor">
+    <dialog
+      ref={dialog}
+      className="item-settings-drawer"
+      aria-label="Item settings"
+      onCancel={onClose}
+      onKeyDown={(event) => {
+        if (event.key !== 'Tab') return
+        const controls = Array.from(
+          event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
+          ),
+        ).filter((element) => element.getClientRects().length > 0)
+        const first = controls[0]
+        const last = controls.at(-1)
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault()
+          last?.focus()
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault()
+          first?.focus()
+        }
+      }}
+    >
+      <header className="drawer-heading">
+        <h2>{type === 'REPEATER' ? 'Repeater builder' : 'Item settings'}</h2>
+        <button
+          className="icon-button"
+          onClick={onClose}
+          aria-label="Close item settings"
+        >
+          <X size={20} />
+        </button>
+      </header>
       <Panel title={item ? 'Edit checklist item' : 'New checklist item'}>
         <p className="subtle">
           Your edits stay here if another change causes a version conflict.
@@ -754,7 +899,7 @@ function ItemEditor({
                   defaultValue={item?.validation.maxRows || 20}
                 />
               </Field>
-              <fieldset className="stack-form">
+              <fieldset className="stack-form repeater-columns">
                 <legend>Entry fields · up to 8</legend>
                 {columns.map((c, index) => (
                   <div className="inset stack-form" key={index}>
@@ -892,6 +1037,47 @@ function ItemEditor({
                   Add entry field
                 </button>
               </fieldset>
+              <section
+                className="repeater-preview"
+                aria-label="Repeater preview"
+              >
+                <h3>Preview — one row</h3>
+                <p className="subtle">
+                  A repeating group of fields. Limited to one level and 20 rows.
+                </p>
+                <div>
+                  {columns.map((column, index) => (
+                    <div className="product-field" key={index}>
+                      <label htmlFor={`preview-column-${index}`}>
+                        {column.label}
+                        {column.required ? ' *' : ''}
+                      </label>
+                      {column.type === 'LONG_TEXT' ? (
+                        <textarea
+                          id={`preview-column-${index}`}
+                          disabled
+                          placeholder="Add a short description…"
+                        />
+                      ) : column.type === 'SINGLE_SELECT' ? (
+                        <select id={`preview-column-${index}`} disabled>
+                          <option>Select an option</option>
+                          {column.options?.map((o) => (
+                            <option key={o.key}>{o.label}</option>
+                          ))}
+                        </select>
+                      ) : column.type === 'IMAGE' ? (
+                        <div className="preview-upload">Upload image</div>
+                      ) : (
+                        <input
+                          id={`preview-column-${index}`}
+                          disabled
+                          placeholder={`Enter ${column.label.toLowerCase()}`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
             </>
           )}
           <Field label="Show when an earlier single select equals">
@@ -929,6 +1115,12 @@ function ItemEditor({
               </select>
             </Field>
           )}
+          {controller && (
+            <p className="reference-info">
+              When hidden, previously entered answers are retained. Hidden items
+              return when their condition is met.
+            </p>
+          )}
           {item && ['SUBMITTED', 'APPROVED'].includes(item.state) && (
             <label className="check-row">
               <input required name="reopen" type="checkbox" />
@@ -959,7 +1151,7 @@ function ItemEditor({
           </div>
         </form>
       </Panel>
-    </section>
+    </dialog>
   )
 }
 function PreviewPanel({ root }: { root: string }) {
