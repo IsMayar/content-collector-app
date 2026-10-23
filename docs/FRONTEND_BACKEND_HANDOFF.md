@@ -98,3 +98,17 @@ npm run format:check
 ```
 
 The 24-test Vitest suite uses MSW's Node interceptor and fresh synthetic state. The 12-scenario Playwright suite uses installed Edge and an automatically managed mock server on port 5174. Browser regression instructions/results are recorded with FE01 in `IMPLEMENTATION_STATUS.md`. No backend tests or full-stack acceptance completion are implied.
+
+## Boards 06–10 UI contract additions (2026-10-23)
+
+Frontend uses the existing authenticated RTK paths. The following MSW additions require backend agreement/implementation; they do not constitute backend completion:
+
+- Team invitation command accepts `assignments: [{projectId, canReview, canExport}]`. Validate every project before reserving a seat. Apply assignments only when the matching invited account accepts; reject expired/revoked/used invitations. The demo returns a synthetic `/team-invite#token=...` URL.
+- Ownership transfer accepts `{targetMemberId,currentPassword}` at `POST /workspaces/{wid}/ownership-transfer`. Owner reauthentication and an active target member are required; refresh the signed-in identity after the role change.
+- `GET /workspaces/{wid}/projects/{pid}/assets` returns `{data: AssetSummary[]}` with `itemLabel` and optional short-lived `previewUrl`. List/download requires live project access. Delete requires owner access and refuses immutable submission references. Signed demo download grants recheck live scope and expiration.
+- Owner upload reservation/finalization/cancellation uses the corresponding project `/uploads` routes and `GET /assets/{id}` for processing. Shared reservation/type/size/quota/scan-state logic is reused without creating a client identity. Uploaded files are linked to a content item but never create a client submission.
+- Export creation accepts optional `sectionIds`; validate against this project and snapshot only visible approved content in those sections. Existing version/partial-approval checks remain.
+
+Reference details not supplied by current contracts: asset version lineage, dimensions, uploader/timestamps, member join dates, client last-access timestamps, and a client personal invitation message. These are not fabricated in the UI. File cards show real synthetic uploads, not the reference board’s sample clinic photographs. The service’s actual supported file types/limits and password rules take precedence over illustrative board text. Board frames, screen numbers and phone hardware are not application UI.
+
+Still requires live backend/storage/email integration, actual camera/device testing, and visual acceptance against the supplied boards. No 100% pixel-match claim is made.

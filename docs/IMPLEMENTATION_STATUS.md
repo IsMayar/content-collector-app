@@ -250,3 +250,11 @@ Milestone status: Not started
 | T38  | First pilot onboarding and release review                | Public MVP checklist complete; no unsupported product promises | Not started |
 
 MVP completion means M0 through M7 are implemented and verified. It is reasonable to invite controlled email-only development testers after M4, but do not call that the full feature-complete MVP described here.
+
+## Reference boards 06–10 refresh — 2026-10-23
+
+Implemented the team/member and client-access tables and invitation drawers; ownership transfer; client invitation, checklist home, files/feedback navigation and editor/comments layout; explicit AI draft comparison; review queue, exact-revision review and revision comparison; project file gallery/list, scoped uploads/downloads and file detail drawer; two-step section-selective export configuration/history; completion/archive screen. Shared modal focus handling, responsive layouts and keyboard focus retained.
+
+Verification: production build and strict TypeScript passed; ESLint passed; 45 Vitest tests passed. Full 33-case browser run passed 30 cases and exposed an ambiguous new-test locator. Focused reruns then exposed and fixed a stale agency asset list after processing. Final 9 workflow cases passed at desktop 1440×1000, tablet 768×1024 and phone 360×800, covering draft→review→export, uploads/AI acceptance, and team invitation→agency upload→download→completion. This was not a final clean rerun of all 33 cases. See `verification/BOARDS_06_10.md`.
+
+This remains frontend/mock verification. Backend files and supplied specifications were preserved. New mock contract extensions and unavailable reference metadata are recorded in `FRONTEND_BACKEND_HANDOFF.md`; no new full-stack milestone is marked complete.
