@@ -76,7 +76,13 @@ export interface ProjectRecord {
 }
 export interface WorkspaceRecord extends WorkspaceDetail {
   members: Member[]
-  pendingInvites: InviteSummary[]
+  pendingInvites: (InviteSummary & {
+    assignments?: {
+      projectId: string
+      canReview: boolean
+      canExport: boolean
+    }[]
+  })[]
   clients: Client[]
   templates: TemplateRecord[]
   subscription: Subscription

@@ -202,7 +202,24 @@ registerProductResolver((request, path, _search, body) => {
         'Choose an export format.',
       )
       const visible = visibleItems(r.structure, r.answers)
-      const approved = visible.filter((i) => i.state === 'APPROVED')
+      const selected = Array.isArray(body.sectionIds)
+        ? body.sectionIds
+        : r.structure.map((s) => s.id)
+      requireRule(
+        selected.length &&
+          selected.every((id) => r.structure.some((s) => s.id === id)),
+        422,
+        'SECTIONS_REQUIRED',
+        'Select at least one valid section.',
+      )
+      const included = new Set(
+        r.structure
+          .filter((s) => selected.includes(s.id))
+          .flatMap((s) => s.items.map((i) => i.id)),
+      )
+      const approved = visible.filter(
+        (i) => i.state === 'APPROVED' && included.has(i.id),
+      )
       requireRule(
         approved.length,
         409,

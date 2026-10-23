@@ -31,12 +31,18 @@ export function AiAssistant({
   )
   const result = q.data?.job
   return (
-    <Panel title="A little help finding the words">
+    <Panel
+      title={result?.result ? 'Review your draft' : 'Create a draft with AI'}
+    >
       <p className="subtle">
         Optional writing assistance. Add facts you know to be true; suggestions
         never submit your work.
       </p>
+      <div className="reference-info">
+        ✓ Uses your supplied facts only · Review before accepting
+      </div>
       <form
+        hidden={!!result?.result}
         className="stack-form"
         onSubmit={async (e) => {
           e.preventDefault()
@@ -119,8 +125,23 @@ export function AiAssistant({
           {result.result &&
             ['SUCCEEDED', 'ACCEPTED'].includes(result.state) && (
               <>
-                <h3>Suggested draft</h3>
-                <p className="preserve-text">{result.result.draft}</p>
+                <div className="draft-comparison">
+                  <section>
+                    <h3>Existing answer</h3>
+                    <p className="preserve-text">
+                      {'text' in item.answer.value
+                        ? String(item.answer.value.text)
+                        : 'No text saved yet.'}
+                    </p>
+                  </section>
+                  <section>
+                    <h3>AI suggested draft</h3>
+                    <p className="preserve-text">{result.result.draft}</p>
+                    <small>
+                      {result.result.draft.trim().split(/\s+/).length} words
+                    </small>
+                  </section>
+                </div>
                 <details>
                   <summary>Facts and review notes</summary>
                   <ul>
@@ -158,6 +179,23 @@ export function AiAssistant({
                 >
                   Accept as draft
                 </button>
+                <div className="actions">
+                  <button
+                    className="secondary-button"
+                    onClick={() => setJob('')}
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    className="danger-link"
+                    onClick={() => {
+                      setJob('')
+                      setFacts('')
+                    }}
+                  >
+                    Discard suggestion
+                  </button>
+                </div>
                 <p className="subtle">
                   You still choose when to submit for review.
                 </p>

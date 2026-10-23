@@ -7,6 +7,7 @@ import {
   requireRule,
   response,
 } from './productHandlers'
+import { mockState } from './handlers'
 import { clone, now, productDb, touch, uid } from './productDb'
 import { initialValue, progressFor, visibleItems } from '@/lib/domain'
 import type {
@@ -56,6 +57,39 @@ registerProductResolver((request, path, _search, body) => {
   if (path[0] !== 'workspaces') return null
   const [, wid, resource, rid, action, aid, subaction] = path
   const method = request.method
+  if (resource === 'ownership-transfer' && method === 'POST') {
+    const actor = agencyActor(request, wid, true, true)
+    requireRule(
+      actor.user.password === body.currentPassword,
+      403,
+      'REAUTH_REQUIRED',
+      'Confirm your current password.',
+    )
+    const target = actor.workspace.members.find(
+      (m) =>
+        m.id === body.targetMemberId &&
+        m.state === 'ACTIVE' &&
+        m.role === 'MEMBER',
+    )
+    requireRule(target, 422, 'INVALID_MEMBER', 'Choose an active team member.')
+    const current = actor.workspace.members.find(
+      (m) => m.id === actor.membership.memberId,
+    )!
+    current.role = 'MEMBER'
+    target.role = 'OWNER'
+    for (const account of Object.values(mockState.accounts))
+      account.memberships = account.memberships.map((m) =>
+        m.workspaceId !== wid
+          ? m
+          : m.memberId === current.id
+            ? { ...m, role: 'MEMBER' }
+            : m.memberId === target.id
+              ? { ...m, role: 'OWNER' }
+              : m,
+      )
+    actor.workspace.workspace.version++
+    return response({ workspace: actor.workspace.workspace })
+  }
   if (resource === 'members') {
     const actor = agencyActor(request, wid, true, method !== 'GET')
     const w = actor.workspace
@@ -80,7 +114,32 @@ registerProductResolver((request, path, _search, body) => {
         'VALIDATION',
         'Enter a valid email.',
       )
+      requireRule(
+        !w.members.some(
+          (m) =>
+            m.state === 'ACTIVE' &&
+            m.user.email.toLowerCase() === String(body.email).toLowerCase(),
+        ) &&
+          !w.pendingInvites.some(
+            (i) =>
+              i.state === 'PENDING' &&
+              i.email.toLowerCase() === String(body.email).toLowerCase(),
+          ),
+        409,
+        'ALREADY_INVITED',
+        'This email already has access or a pending invitation.',
+      )
+      const assignments = (
+        Array.isArray(body.assignments) ? body.assignments : []
+      ) as { projectId: string; canReview: boolean; canExport: boolean }[]
+      for (const a of assignments)
+        agencyProject(request, wid, a.projectId, 'owner', true)
       const invitation = {
+        assignments: assignments.map((a) => ({
+          projectId: a.projectId,
+          canReview: a.canReview === true,
+          canExport: a.canExport === true,
+        })),
         id: uid(),
         email: String(body.email),
         state: 'PENDING' as const,
@@ -88,7 +147,10 @@ registerProductResolver((request, path, _search, body) => {
       }
       w.pendingInvites.push(invitation)
       w.usage.seatsReserved++
-      return response({ invitation }, 201)
+      return response(
+        { invitation, demoUrl: `/team-invite#token=${invitation.id}` },
+        201,
+      )
     }
     if (method === 'DELETE') {
       const member = w.members.find((m) => m.id === rid)

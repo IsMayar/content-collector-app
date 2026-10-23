@@ -27,6 +27,7 @@ import {
 import { ConfirmDialog, Notice } from '@/components/Feedback'
 import { formatBytes, validateAnswer } from '@/lib/domain'
 import { AiAssistant } from '@/features/settings/AiAssistant'
+import { Modal } from '@/components/Modal'
 import { downloadFile } from '@/lib/download'
 
 export function ClientAccessPage() {
@@ -43,15 +44,60 @@ export function ClientAccessPage() {
     if (location.hash) navigate('/client/access', { replace: true })
   }, [location.hash, navigate])
   return (
-    <div className="access-card">
+    <div className="access-card invitation-landing">
       <span className="access-emblem">
         <LockKeyhole size={28} />
       </span>
       <Heading
         eyebrow="YOUR PRIVATE PROJECT SPACE"
-        title="A little detail. A big difference."
-        description="You’re here to bring your project to life. Open your private checklist to get started."
+        title="You’re invited to share content."
+        description="Your agency has invited you to securely share your content, requirements and files for your project."
       />
+      <div className="invitation-benefits">
+        <p>
+          <LockKeyhole />
+          <span>
+            <strong>Private and secure</strong>Access is limited to your invited
+            project.
+          </span>
+        </p>
+        <p>
+          <FileText />
+          <span>
+            <strong>Organised and easy</strong>A simple checklist keeps
+            everything in one place.
+          </span>
+        </p>
+        <p>
+          <Check />
+          <span>
+            <strong>Submit and revise</strong>Send your content for review and
+            respond to feedback.
+          </span>
+        </p>
+      </div>
+      <aside className="invitation-steps">
+        <div className="invitation-art" aria-hidden="true">
+          <FileText size={100} />
+          <LockKeyhole size={40} />
+        </div>
+        <ol>
+          <li>
+            <b>1</b>
+            <strong>Continue</strong>Verify your identity to access the project.
+          </li>
+          <li>
+            <b>2</b>
+            <strong>Fill your checklist</strong>Share content, answer questions
+            and upload files.
+          </li>
+          <li>
+            <b>3</b>
+            <strong>Submit for review</strong>Send your content and respond to
+            feedback.
+          </li>
+        </ol>
+      </aside>
       {token ? (
         <>
           <Notice>
@@ -139,6 +185,7 @@ export function ClientProjectPage() {
   const q = usePortalData<ClientChecklist>(`${root}/checklist`)
   const [selected, setSelected] = useState('')
   const [settings, setSettings] = useState(false)
+  const [view, setView] = useState('home')
   const command = useCommand(true)
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
@@ -194,13 +241,150 @@ export function ClientProjectPage() {
               Leave project
             </button>
           </Heading>
-          <div className="client-progress">
-            <DualProgress progress={data.progress} />
-            <p>
-              <strong>{data.progress.clientActionRequired}</strong> required
-              items need your attention.
-            </p>
-          </div>
+          <nav
+            className="reference-tabs portal-tabs"
+            aria-label="Client project views"
+          >
+            {[
+              ['home', 'Checklist'],
+              ['files', 'Files'],
+              ['activity', 'Activity'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                data-portal-nav
+                className={view === key ? 'active' : ''}
+                aria-pressed={view === key}
+                onClick={() => setView(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          {view === 'home' && (
+            <section className="portal-home">
+              <div>
+                <span className="eyebrow">CLIENT CHECKLIST</span>
+                <h1>Share your content</h1>
+                <p>
+                  Complete the items below so {data.project.agencyDisplayName}{' '}
+                  can build your project. You can save progress and come back
+                  anytime.
+                </p>
+                <p>Due date · {data.project.dueDate}</p>
+              </div>
+              <div className="client-progress">
+                <DualProgress progress={data.progress} />
+                <p>
+                  <strong>{data.progress.clientActionRequired}</strong> required
+                  items need your attention.
+                </p>
+              </div>
+            </section>
+          )}
+          {view === 'home' && (
+            <div className="portal-sections">
+              {data.sections.map((s) => {
+                const complete = s.items.filter((i) =>
+                  ['SUBMITTED', 'APPROVED'].includes(i.state),
+                ).length
+                const approved =
+                  s.items.length > 0 &&
+                  s.items.every((i) => i.state === 'APPROVED')
+                const next =
+                  s.items.find(
+                    (i) => !['SUBMITTED', 'APPROVED'].includes(i.state),
+                  ) || s.items[0]
+                return (
+                  <article key={s.id} className="portal-section-row">
+                    <span
+                      className={`section-ring ${approved ? 'complete' : ''}`}
+                    >
+                      {approved ? <Check size={18} /> : ''}
+                    </span>
+                    <div className="grow">
+                      <h2>{s.title}</h2>
+                      <p>{s.items.length} content items</p>
+                    </div>
+                    <span>
+                      {complete} of {s.items.length}
+                    </span>
+                    <Badge>
+                      {approved
+                        ? 'APPROVED'
+                        : complete
+                          ? 'DRAFT'
+                          : 'NOT_STARTED'}
+                    </Badge>
+                    <button
+                      className="secondary-button"
+                      disabled={!next}
+                      onClick={() => {
+                        setSelected(next.id)
+                        setView('editor')
+                      }}
+                    >
+                      {approved ? 'View details' : 'Continue section'} →
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
+          )}
+          {view === 'files' && (
+            <Panel title="Your project files">
+              <p>Choose a content item to upload or manage its files.</p>
+              <div className="portal-sections">
+                {items
+                  .filter((i) => ['IMAGE', 'FILE'].includes(i.type))
+                  .map((i) => (
+                    <button
+                      className="portal-section-row"
+                      key={i.id}
+                      onClick={() => {
+                        setSelected(i.id)
+                        setView('editor')
+                      }}
+                    >
+                      <FileText />
+                      <strong>{i.label}</strong>
+                      <span>
+                        {i.assets.filter((a) => a.state !== 'DELETED').length}{' '}
+                        files
+                      </span>
+                      <span>Open →</span>
+                    </button>
+                  ))}
+              </div>
+            </Panel>
+          )}
+          {view === 'activity' && (
+            <Panel title="Project feedback">
+              {items.flatMap((i) =>
+                i.comments.map((c) => (
+                  <article className="feedback-entry" key={c.id}>
+                    <strong>
+                      {c.authorDisplayName} · {i.label}
+                    </strong>
+                    <time>{new Date(c.createdAt).toLocaleString()}</time>
+                    <p>{c.body}</p>
+                    <button
+                      className="text-link"
+                      onClick={() => {
+                        setSelected(i.id)
+                        setView('editor')
+                      }}
+                    >
+                      View response →
+                    </button>
+                  </article>
+                )),
+              )}
+              {!items.some((i) => i.comments.length) && (
+                <p>No feedback yet. Your agency’s comments will appear here.</p>
+              )}
+            </Panel>
+          )}
           {data.project.state !== 'ACTIVE' && (
             <Notice>
               This project is {data.project.state.toLowerCase()}. You can read
@@ -208,55 +392,72 @@ export function ClientProjectPage() {
             </Notice>
           )}
           {settings && <ClientPreferences root={root} />}
-          <div className="client-workspace">
-            <aside className="client-checklist">
-              <nav aria-label="Collection checklist">
-                {data.sections.map((s, index) => (
-                  <section key={s.id}>
-                    <h2>
-                      <span>{String(index + 1).padStart(2, '0')}</span>
-                      {s.title}
-                    </h2>
-                    {s.items.map((i) => (
-                      <button
-                        key={i.id}
-                        className={active?.id === i.id ? 'selected' : ''}
-                        aria-current={active?.id === i.id ? 'step' : undefined}
-                        onClick={() => setSelected(i.id)}
-                      >
-                        <span
-                          className={`item-dot dot-${i.state.toLowerCase()}`}
-                        >
-                          {i.state === 'APPROVED' ? <Check size={12} /> : ''}
-                        </span>
-                        <span>
-                          {i.label}
-                          {i.required ? ' *' : ''}
-                        </span>
-                      </button>
+          {view === 'editor' && (
+            <>
+              <button
+                data-portal-nav
+                className="text-link back-checklist"
+                onClick={() => setView('home')}
+              >
+                ← Back to checklist
+              </button>
+              <div className="client-workspace">
+                <aside className="client-checklist">
+                  <nav aria-label="Collection checklist">
+                    {data.sections.map((s, index) => (
+                      <section key={s.id}>
+                        <h2>
+                          <span>{String(index + 1).padStart(2, '0')}</span>
+                          {s.title}
+                        </h2>
+                        {s.items.map((i) => (
+                          <button
+                            key={i.id}
+                            className={active?.id === i.id ? 'selected' : ''}
+                            aria-current={
+                              active?.id === i.id ? 'step' : undefined
+                            }
+                            onClick={() => setSelected(i.id)}
+                          >
+                            <span
+                              className={`item-dot dot-${i.state.toLowerCase()}`}
+                            >
+                              {i.state === 'APPROVED' ? (
+                                <Check size={12} />
+                              ) : (
+                                ''
+                              )}
+                            </span>
+                            <span>
+                              {i.label}
+                              {i.required ? ' *' : ''}
+                            </span>
+                          </button>
+                        ))}
+                      </section>
                     ))}
-                  </section>
-                ))}
-              </nav>
-              <p className="subtle">* Required for this project</p>
-            </aside>
-            <div className="client-editor">
-              {active ? (
-                <AnswerEditor
-                  key={active.id}
-                  root={root}
-                  item={active}
-                  structureVersion={data.project.structureVersion}
-                  onRefresh={() => void q.refetch()}
-                />
-              ) : (
-                <Empty
-                  title="You’re all caught up"
-                  description="There are no visible items in this checklist."
-                />
-              )}
-            </div>
-          </div>
+                  </nav>
+                  <p className="subtle">* Required for this project</p>
+                </aside>
+                <div className="client-editor">
+                  {active ? (
+                    <AnswerEditor
+                      key={active.id}
+                      root={root}
+                      item={active}
+                      structureVersion={data.project.structureVersion}
+                      onRefresh={() => void q.refetch()}
+                    />
+                  ) : (
+                    <Empty
+                      title="You’re all caught up"
+                      description="There are no visible items in this checklist."
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
           <ConfirmDialog
             open={confirm}
             pending={command.pending}
@@ -303,6 +504,7 @@ function AnswerEditor({
   const saving = useRef(false)
   const [conflict, setConflict] = useState(false)
   const [comment, setComment] = useState('')
+  const [aiOpen, setAiOpen] = useState(false)
   const [confirm, setConfirm] = useState<'submit' | 'withdraw' | ''>('')
   const enabled = item.canEdit
   async function save() {
@@ -351,7 +553,7 @@ function AnswerEditor({
     const guard = (e: MouseEvent) => {
       if (!latest.current.dirty) return
       const target = (e.target as HTMLElement).closest(
-        'a, .client-checklist button',
+        'a, .client-checklist button, [data-portal-nav]',
       )
       if (
         target &&
@@ -395,7 +597,7 @@ function AnswerEditor({
     }
   }
   return (
-    <>
+    <div className="answer-layout">
       <Panel>
         <div className="editor-heading">
           <span className="eyebrow">
@@ -406,7 +608,30 @@ function AnswerEditor({
         </div>
         <h2 className="answer-title">{item.label}</h2>
         <p>{item.instructions}</p>
-        {item.example && <p className="example">For example: {item.example}</p>}
+        {item.example && (
+          <details className="answer-tips" open>
+            <summary>Tips and example answer</summary>
+            <div>
+              <section>
+                <strong>What to include</strong>
+                <p>
+                  {item.instructions ||
+                    'Write in your own words and include only details you know to be true.'}
+                </p>
+              </section>
+              <section>
+                <strong>Example answer</strong>
+                <p>{item.example}</p>
+              </section>
+            </div>
+          </details>
+        )}
+        {item.state === 'CHANGES_REQUESTED' && (
+          <Notice error>
+            Changes requested. Review your agency’s feedback and update your
+            response below.
+          </Notice>
+        )}
         {['SUBMITTED', 'APPROVED'].includes(item.state) && (
           <Notice>
             {item.state === 'APPROVED'
@@ -421,6 +646,14 @@ function AnswerEditor({
           disabled={!enabled}
           root={root}
         />
+        {enabled && item.type === 'LONG_TEXT' && item.ai?.enabled && (
+          <button
+            className="secondary-button ai-launch"
+            onClick={() => setAiOpen(true)}
+          >
+            ✧ Help me draft →
+          </button>
+        )}
         <div className="save-status" role="status">
           {saved}
         </div>
@@ -489,59 +722,64 @@ function AnswerEditor({
           revision for your agency to review.
         </p>
       </Panel>
-      {enabled && item.type === 'LONG_TEXT' && item.ai?.enabled && (
-        <AiAssistant
-          root={root}
-          item={item}
-          answerVersion={version}
-          dirty={dirty}
-          onAccepted={(answer) => {
-            setValue(answer.value as AnswerValue)
-            setVersion(answer.version)
-            setDirty(false)
-            setSaved('Accepted suggestion saved as a draft.')
-            onRefresh()
-          }}
-        />
-      )}
-      <Panel title="Project conversation">
-        <p className="subtle">Visible to you and your agency.</p>
-        <div className="comments">
-          {item.comments.map((c) => (
-            <article key={c.id}>
-              <strong>{c.authorDisplayName}</strong>
-              <time>{new Date(c.createdAt).toLocaleString()}</time>
-              <p>{c.body}</p>
-            </article>
-          ))}
-        </div>
-        <form
-          className="stack-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            if (
-              await command.run(`${root}/items/${item.id}/comments`, {
-                body: comment,
-              })
-            ) {
-              setComment('')
+      {aiOpen && enabled && item.type === 'LONG_TEXT' && item.ai?.enabled && (
+        <Modal title="Create a draft with AI" onClose={() => setAiOpen(false)}>
+          <AiAssistant
+            root={root}
+            item={item}
+            answerVersion={version}
+            dirty={dirty}
+            onAccepted={(answer) => {
+              setValue(answer.value as AnswerValue)
+              setVersion(answer.version)
+              setDirty(false)
+              setSaved('Accepted suggestion saved as a draft.')
               onRefresh()
-            }
-          }}
-        >
-          <Field label="Add a comment">
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              required
-              maxLength={4000}
-            />
-          </Field>
-          <button className="secondary-button" disabled={command.pending}>
-            Send comment
-          </button>
-        </form>
-      </Panel>
+              setAiOpen(false)
+            }}
+          />
+        </Modal>
+      )}
+      <aside className="answer-comments">
+        <Panel title="Comments">
+          <p className="subtle">Visible to you and your agency.</p>
+          <div className="comments">
+            {item.comments.map((c) => (
+              <article key={c.id}>
+                <strong>{c.authorDisplayName}</strong>
+                <time>{new Date(c.createdAt).toLocaleString()}</time>
+                <p>{c.body}</p>
+              </article>
+            ))}
+          </div>
+          <form
+            className="stack-form"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              if (
+                await command.run(`${root}/items/${item.id}/comments`, {
+                  body: comment,
+                })
+              ) {
+                setComment('')
+                onRefresh()
+              }
+            }}
+          >
+            <Field label="Add a comment">
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                required
+                maxLength={4000}
+              />
+            </Field>
+            <button className="secondary-button" disabled={command.pending}>
+              Send comment
+            </button>
+          </form>
+        </Panel>
+      </aside>
       <ConfirmDialog
         open={!!confirm}
         pending={command.pending}
@@ -572,7 +810,7 @@ function AnswerEditor({
             })()
         }}
       />
-    </>
+    </div>
   )
 }
 async function fetchLatest(
@@ -852,7 +1090,8 @@ type Transfer = {
   error?: string
   controller?: AbortController
 }
-function UploadQueue({
+export function UploadQueue({
+  client = true,
   root,
   itemId,
   image,
@@ -861,6 +1100,7 @@ function UploadQueue({
   onChange,
   disabled,
 }: {
+  client?: boolean
   root: string
   itemId: string
   image: boolean
@@ -869,7 +1109,7 @@ function UploadQueue({
   onChange: (ids: string[]) => void
   disabled: boolean
 }) {
-  const command = useCommand(true)
+  const command = useCommand(client)
   const [queue, setQueue] = useState<Transfer[]>([])
   const [keep, setKeep] = useState(true)
   const [error, setError] = useState('')
@@ -961,6 +1201,7 @@ function UploadQueue({
         await new Promise((r) => setTimeout(r, 600))
         const result = await fetchLatestAsset(
           `${root}/assets/${reservation.assetId}`,
+          client,
         )
         state = result?.state || 'FAILED'
         if (state === 'REJECTED' || state === 'FAILED')
@@ -1023,7 +1264,14 @@ function UploadQueue({
   }
   return (
     <div className="upload-area">
-      <label className="upload-drop">
+      <label
+        className="upload-drop"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (!disabled) add(e.dataTransfer.files)
+        }}
+      >
         <CloudUpload size={28} />
         <strong>{image ? 'Add images' : 'Add project files'}</strong>
         <span>
@@ -1076,6 +1324,12 @@ function UploadQueue({
         Only ready files can be submitted.
       </small>
       <ErrorNotice error={error || command.error} />
+      {queue.some((t) => t.state === 'failed') && (
+        <Notice error>
+          Some files couldn’t be uploaded. Review each error and retry, or
+          remove the failed upload.
+        </Notice>
+      )}
       {queue.map((t) => (
         <div className="upload-row" key={t.id}>
           <FileText size={20} />
@@ -1100,6 +1354,16 @@ function UploadQueue({
               }}
             >
               Retry
+            </button>
+          )}
+          {['failed', 'cancelled'].includes(t.state) && (
+            <button
+              className="text-link"
+              onClick={() =>
+                setQueue((q) => q.filter((row) => row.id !== t.id))
+              }
+            >
+              Remove
             </button>
           )}
           {['queued', 'uploading', 'processing'].includes(t.state) && (
@@ -1189,11 +1453,14 @@ function UploadQueue({
     </div>
   )
 }
-async function fetchLatestAsset(path: string) {
+async function fetchLatestAsset(path: string, client = true) {
   const { store } = await import('@/app/store')
-  const { portalApi } = await import('@/api/productApi')
+  const { portalApi, workspaceApi } = await import('@/api/productApi')
   const req = store.dispatch(
-    portalApi.endpoints.portalRead.initiate(path, {
+    (client
+      ? portalApi.endpoints.portalRead
+      : workspaceApi.endpoints.read
+    ).initiate(path, {
       forceRefetch: true,
       subscribe: false,
     }),

@@ -16,8 +16,8 @@ import type {
   Item,
   ItemDefinition,
   Member,
-  ProjectContact,
   ProjectDetail,
+  ProjectContact,
   ReminderPolicy,
   ReminderPreview,
   RepeaterColumn,
@@ -43,6 +43,8 @@ import {
   ExportPanel,
 } from '@/features/review/ReviewPanels'
 import { AnalyticsPanel } from '@/features/settings/SettingsPages'
+import { FilesPanel, CompletionPanel } from './FilesPanel'
+import { ContactsPanel } from './AccessPanels'
 import { DeliveryHistory } from '@/features/settings/ReportingExtras'
 
 export function ProjectPage() {
@@ -145,7 +147,9 @@ export function ProjectPage() {
                       ['reminders', 'Reminders'],
                     ]
                   : []),
+                ['files', 'Files'],
                 ...(p.permissions.canExport ? [['exports', 'Exports']] : []),
+                ...(owner ? [['completion', 'Completion']] : []),
                 ...(owner ? [['details', 'Details']] : []),
               ].map(([key, label]) => (
                 <Link
@@ -189,6 +193,10 @@ export function ProjectPage() {
                 !['ARCHIVED', 'COMPLETED'].includes(p.state)
               }
             />
+          )}
+          {tab === 'files' && <FilesPanel root={root} project={p} />}
+          {tab === 'completion' && owner && (
+            <CompletionPanel root={root} project={p} />
           )}
           {tab === 'preview' && <PreviewPanel root={root} />}
           {tab === 'access' && owner && <ContactsPanel root={root} />}
@@ -1156,133 +1164,46 @@ function ItemEditor({
 }
 function PreviewPanel({ root }: { root: string }) {
   const q = useData<ClientChecklist>(`${root}/client-preview`)
+  const [section, setSection] = useState('')
   return (
     <QueryState query={q}>
       <Notice>
         Read-only owner preview. This does not create or impersonate a client
         session.
       </Notice>
-      {q.data?.sections.map((s) => (
-        <Panel key={s.id} title={s.title}>
-          {s.items.map((i) => (
-            <div className="preview-item" key={i.id}>
-              <strong>
-                {i.label}
-                {i.required ? ' *' : ''}
-              </strong>
-              <p>{i.instructions}</p>
-              <div className="disabled-preview">
-                {i.example ||
-                  `Client response · ${i.type.replaceAll('_', ' ')}`}
-              </div>
-            </div>
-          ))}
-        </Panel>
-      ))}
-    </QueryState>
-  )
-}
-function ContactsPanel({ root }: { root: string }) {
-  const q = useData<{ data: ProjectContact[] }>(`${root}/contacts`)
-  const command = useCommand()
-  const [link, setLink] = useState('')
-  return (
-    <>
-      <Panel title="Project-scoped client access">
-        <p className="subtle">
-          Each contact receives access only to this project. Revocation takes
-          effect on their next request.
-        </p>
-        <QueryState query={q}>
-          {q.data?.data.map((c) => (
-            <div className="access-row" key={c.id}>
-              <div className="grow">
-                <strong>{c.name}</strong>
-                <p>
-                  {c.email} · Access until{' '}
-                  {new Date(c.accessExpiresAt).toLocaleDateString()}
-                </p>
-              </div>
-              <Badge>{c.state}</Badge>
-              <button
-                className="secondary-button"
-                disabled={command.pending || c.state !== 'ACTIVE'}
-                onClick={async () => {
-                  const result = await command.run<{ demoUrl?: string }>(
-                    `${root}/contacts/${c.id}/invite`,
-                    {},
-                  )
-                  if (result?.demoUrl) setLink(result.demoUrl)
-                }}
-              >
-                Send / resend invite
-              </button>
-              <button
-                className="danger-link"
-                disabled={command.pending || c.state !== 'ACTIVE'}
-                onClick={() =>
-                  void command.run(
-                    `${root}/contacts/${c.id}/access`,
-                    undefined,
-                    'DELETE',
-                  )
-                }
-              >
-                Revoke
-              </button>
-            </div>
-          ))}
-        </QueryState>
-        {link && (
-          <Notice>
-            Development invitation: <Link to={link}>Open client access</Link>.
-            Keep this tab open to retain in-memory demo state.
-          </Notice>
-        )}
-        <ErrorNotice error={command.error} />
-      </Panel>
-      <Panel title="Add a contact">
-        <form
-          className="stack-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const form = e.currentTarget
-            const v = Object.fromEntries(new FormData(form))
-            if (
-              await command.run(`${root}/contacts`, {
-                ...v,
-                accessExpiresAt: new Date(
-                  String(v.accessExpiresAt),
-                ).toISOString(),
-              })
-            )
-              form.reset()
-          }}
-        >
-          <div className="form-grid">
-            <Field label="Contact name">
-              <input required name="name" />
-            </Field>
-            <Field label="Contact email">
-              <input type="email" required name="email" />
-            </Field>
-            <Field label="Access expiry">
-              <input
-                type="date"
-                required
-                name="accessExpiresAt"
-                defaultValue={new Date(Date.now() + 90 * 864e5)
-                  .toISOString()
-                  .slice(0, 10)}
-              />
-            </Field>
-          </div>
-          <button className="primary-button" disabled={command.pending}>
-            Add contact
+      <nav className="reference-tabs" aria-label="Preview sections">
+        {q.data?.sections.map((s) => (
+          <button
+            key={s.id}
+            className={
+              s.id === (section || q.data?.sections[0]?.id) ? 'active' : ''
+            }
+            onClick={() => setSection(s.id)}
+          >
+            {s.title}
           </button>
-        </form>
-      </Panel>
-    </>
+        ))}
+      </nav>
+      {q.data?.sections
+        .filter((s) => s.id === (section || q.data?.sections[0]?.id))
+        .map((s) => (
+          <Panel key={s.id} title={s.title}>
+            {s.items.map((i) => (
+              <div className="preview-item" key={i.id}>
+                <strong>
+                  {i.label}
+                  {i.required ? ' *' : ''}
+                </strong>
+                <p>{i.instructions}</p>
+                <div className="disabled-preview">
+                  {i.example ||
+                    `Client response · ${i.type.replaceAll('_', ' ')}`}
+                </div>
+              </div>
+            ))}
+          </Panel>
+        ))}
+    </QueryState>
   )
 }
 function AssignmentsPanel({ root }: { root: string }) {

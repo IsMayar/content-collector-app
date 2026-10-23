@@ -47,7 +47,7 @@ describe('safe return destinations', () => {
     await waitFor(() => expect(store.getState().auth.status).toBe('error'))
     expect(
       await screen.findByRole('heading', {
-        name: 'A little detail. A big difference.',
+        name: 'You’re invited to share content.',
       }),
     ).toBeVisible()
     expect(

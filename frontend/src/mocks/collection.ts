@@ -422,6 +422,17 @@ registerProductResolver((request, path, _search, body) => {
     }
     return null
   }
+  return fileOperation(r, projectId, area, itemId, sub, method, body)
+})
+export function fileOperation(
+  r: import('@/api/productTypes').ProjectRecord,
+  projectId: string,
+  area: string,
+  itemId: string,
+  sub: string,
+  method: string,
+  body: Record<string, unknown>,
+) {
   if (area === 'uploads') {
     if (!itemId && method === 'POST') {
       const item = itemIn(r, String(body.itemId))
@@ -571,7 +582,7 @@ registerProductResolver((request, path, _search, body) => {
     }
   }
   return null
-})
+}
 // Transfer URLs are deliberately separate from authenticated JSON endpoints.
 productHandlers.unshift(
   http.put(`${apiRoot}mock-transfer/:id`, async ({ request, params }) => {

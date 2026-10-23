@@ -2,11 +2,12 @@ import { delay, http, HttpResponse } from 'msw'
 import { accountFixtures, agencyId, type MockAccount } from './fixtures'
 import { apiBaseUrl } from '@/api/baseQuery'
 import { productHandlers } from './productHandlers'
-import { resetProductDb } from './productDb'
+import { resetProductDb, productDb, uid } from './productDb'
 import './collaboration'
 import './collection'
 import './review'
 import './commercial'
+import './agencyFiles'
 
 export const mockState = {
   accounts: accountFixtures(),
@@ -180,6 +181,47 @@ export const handlers = [
   mutation('team-invitations/accept', async (request) => {
     if (!authorized(request)) return problem(401, 'SESSION_EXPIRED')
     const { token } = (await request.json()) as { token: string }
+    for (const w of Object.values(productDb.workspaces)) {
+      const invite = w.pendingInvites.find((i) => i.id === token)
+      if (!invite) continue
+      if (
+        invite.state !== 'PENDING' ||
+        new Date(invite.expiresAt).getTime() < Date.now()
+      )
+        return problem(410, 'INVITATION_EXPIRED')
+      const user = account()!
+      if (user.user.email.toLowerCase() !== invite.email.toLowerCase())
+        return problem(403, 'INVITATION_EMAIL_MISMATCH')
+      if (!request.headers.get('Idempotency-Key'))
+        return problem(400, 'IDEMPOTENCY_REQUIRED')
+      const memberId = uid()
+      const membership = {
+        memberId,
+        workspaceId: w.workspace.id,
+        workspaceName: w.workspace.name,
+        role: 'MEMBER' as const,
+      }
+      w.members.push({
+        id: memberId,
+        user: user.user,
+        role: 'MEMBER',
+        state: 'ACTIVE',
+      })
+      user.memberships.push(membership)
+      for (const a of invite.assignments || []) {
+        const p = productDb.projects[a.projectId]
+        if (p?.project.workspaceId === w.workspace.id)
+          p.assignments.push({
+            memberId,
+            canReview: a.canReview,
+            canExport: a.canExport,
+          })
+      }
+      invite.state = 'CONSUMED'
+      w.usage.seatsReserved--
+      w.usage.seatsUsed++
+      return json({ membership })
+    }
     const error = tokenError(token, 'invite')
     if (error) return error
     if (account()?.user.email !== 'member@studio.example')

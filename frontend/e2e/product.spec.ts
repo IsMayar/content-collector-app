@@ -49,9 +49,10 @@ test('owner → client draft → immutable review → approved export', async ({
     .getByRole('link', { name: 'Open client access', exact: true })
     .click()
   await expect(
-    page.getByRole('heading', { name: 'A little detail. A big difference.' }),
+    page.getByRole('heading', { name: 'You’re invited to share content.' }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Open my project' }).click()
+  await page.getByRole('button', { name: 'Continue section' }).first().click()
   await expect(
     page.getByRole('heading', { name: 'Lamar Dental website', exact: true }),
   ).toBeVisible()
@@ -84,6 +85,10 @@ test('owner → client draft → immutable review → approved export', async ({
     .getByRole('link', { name: 'Lamar Dental website', exact: true })
     .click()
   await page.getByRole('link', { name: 'Review', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Review →', exact: true })
+    .first()
+    .click()
   await expect(
     page.getByText('Lamar Dental — synthetic client content', { exact: true }),
   ).toBeVisible()
@@ -98,9 +103,11 @@ test('owner → client draft → immutable review → approved export', async ({
     page.getByText('Exact revision approved.', { exact: true }),
   ).toBeVisible()
   await page.getByRole('link', { name: 'Exports', exact: true }).click()
+  await page.getByRole('button', { name: 'New export' }).click()
   await page
     .getByLabel('I understand this is a partial export', { exact: false })
     .check()
+  await page.getByRole('button', { name: 'Continue →', exact: true }).click()
   await page
     .getByRole('button', { name: 'Create approved export', exact: true })
     .click()
@@ -181,7 +188,7 @@ test('all project types, template previews, settings and keyboard reorder', asyn
     ).toBeVisible()
   }
   for (const [link, heading] of [
-    ['Team', 'Your team'],
+    ['Team', 'Team'],
     ['Insights', 'Insights'],
     ['Billing & usage', 'Room to do your best work'],
     ['Settings', 'Workspace settings'],
@@ -276,6 +283,7 @@ test('client upload processing and explicit AI acceptance preserve submission ch
 }, info) => {
   await page.goto('/client/access#token=client-demo')
   await page.getByRole('button', { name: 'Open my project' }).click()
+  await page.getByRole('button', { name: 'Continue section' }).first().click()
   await page
     .getByRole('navigation', { name: 'Collection checklist' })
     .getByRole('button', { name: 'Hero photo', exact: false })
@@ -314,6 +322,7 @@ test('client upload processing and explicit AI acceptance preserve submission ch
     .getByRole('navigation', { name: 'Collection checklist' })
     .getByRole('button', { name: 'Short introduction', exact: false })
     .click()
+  await page.getByRole('button', { name: 'Help me draft' }).click()
   await page
     .getByLabel('Facts to include (one per line)')
     .fill('Family-owned practice since 2019.\nOpen Monday to Friday.')
@@ -324,7 +333,7 @@ test('client upload processing and explicit AI acceptance preserve submission ch
     .getByRole('button', { name: 'Generate suggestion', exact: true })
     .click()
   await expect(
-    page.getByRole('heading', { name: 'Suggested draft', exact: true }),
+    page.getByRole('heading', { name: 'AI suggested draft', exact: true }),
   ).toBeVisible()
   await expect(page.getByLabel('Your response', { exact: true })).toHaveValue(
     '',
@@ -380,5 +389,75 @@ test('mock failure, billing grace and read-only states offer deliberate recovery
   await expect(
     page.getByText('This workspace is read-only.', { exact: false }),
   ).toBeVisible()
+  await noOverflow(page)
+})
+
+test('team invitation drawer, project file upload and handoff screens', async ({
+  page,
+}, info) => {
+  await signIn(page)
+  await nav(page, 'Team')
+  await page.getByRole('button', { name: 'Invite member' }).click()
+  await expect(
+    page.getByRole('dialog', { name: 'Invite a team member' }),
+  ).toBeVisible()
+  await page.getByLabel('Teammate email').fill('new-member@example.test')
+  await page.getByRole('checkbox', { name: /^Lamar Dental website/ }).check()
+  await page.getByRole('switch', { name: 'Can review content' }).check()
+  await page.screenshot({
+    path: info.outputPath('team-invitation.png'),
+    fullPage: true,
+  })
+  await noOverflow(page)
+  await page.getByRole('button', { name: 'Send invitation' }).click()
+  await expect(
+    page.getByRole('cell', { name: 'new-member@example.test', exact: true }),
+  ).toBeVisible()
+  await nav(page, 'Projects')
+  await page
+    .getByRole('link', { name: 'Lamar Dental website', exact: true })
+    .click()
+  await page.getByRole('link', { name: 'Files', exact: true }).click()
+  await page.getByRole('button', { name: 'Upload files' }).click()
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1XkAAAAASUVORK5CYII=',
+    'base64',
+  )
+  await page.getByLabel('Choose images from library or files').setInputFiles({
+    name: 'agency-photo.png',
+    mimeType: 'image/png',
+    buffer: png,
+  })
+  await expect(
+    page.getByRole('dialog').getByText('READY', { exact: true }),
+  ).toBeVisible({ timeout: 15000 })
+  await page
+    .getByRole('button', { name: 'Close Upload files', exact: true })
+    .click()
+  await page.getByRole('button', { name: /agency-photo.png/ }).click()
+  await expect(
+    page.getByRole('dialog', { name: 'agency-photo.png' }),
+  ).toBeVisible()
+  const downloading = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  expect((await downloading).suggestedFilename()).toBe('agency-photo.png')
+  await page.screenshot({
+    path: info.outputPath('file-details.png'),
+    fullPage: true,
+  })
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'List view', exact: true }).click()
+  await noOverflow(page)
+  await page.getByRole('link', { name: 'Completion', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Project completion', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Complete project', exact: true }),
+  ).toBeDisabled()
+  await page.screenshot({
+    path: info.outputPath('completion.png'),
+    fullPage: true,
+  })
   await noOverflow(page)
 })

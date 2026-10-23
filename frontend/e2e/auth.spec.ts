@@ -175,7 +175,7 @@ test('registration validation, verification resend and client layout', async ({
   ).toBeVisible()
   await page.goto('/client/access')
   await expect(
-    page.getByRole('heading', { name: 'A little detail. A big difference.' }),
+    page.getByRole('heading', { name: 'You’re invited to share content.' }),
   ).toBeVisible()
   await page.screenshot({
     path: info.outputPath('client-foundation.png'),

@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useData } from '@/api/productApi'
 import type {
-  InviteSummary,
-  Member,
   ProjectAnalytics,
   SessionSummary,
   Subscription,
@@ -24,124 +22,10 @@ import {
 import { ConfirmDialog, Notice } from '@/components/Feedback'
 import { formatBytes, percent } from '@/lib/domain'
 import { apiBaseUrl } from '@/api/baseQuery'
+import { OwnershipPanel } from './OwnershipPanel'
 import { DigestPreview } from './ReportingExtras'
 
-export function TeamPage() {
-  const { id, owner } = useWorkspace()
-  const q = useData<{ data: Member[]; invitations: InviteSummary[] }>(
-    `workspaces/${id}/members`,
-    { skip: !owner },
-  )
-  const usage = useData<UsageSummary>(`workspaces/${id}/usage`, {
-    skip: !owner,
-  })
-  const command = useCommand()
-  const [message, setMessage] = useState('')
-  if (!owner)
-    return (
-      <Empty
-        title="Owner access required"
-        description="Workspace membership is managed by your owner."
-      />
-    )
-  return (
-    <>
-      <Heading
-        title="Your team"
-        description="Good work is better together. Keep access intentional."
-      />
-      <Panel title="Workspace members">
-        <p>
-          {usage.data?.seatsUsed || 0} active + {usage.data?.seatsReserved || 0}{' '}
-          reserved of {usage.data?.seatsLimit || 0} seats
-        </p>
-        <QueryState query={q}>
-          {q.data?.data.map((m) => (
-            <div className="access-row" key={m.id}>
-              <div className="avatar">{m.user.displayName.charAt(0)}</div>
-              <div className="grow">
-                <strong>{m.user.displayName}</strong>
-                <p>{m.user.email}</p>
-              </div>
-              <Badge>{m.role}</Badge>
-              <Badge>{m.state}</Badge>
-              {m.role !== 'OWNER' && (
-                <button
-                  className="danger-link"
-                  disabled={m.state !== 'ACTIVE' || command.pending}
-                  onClick={() =>
-                    void command.run(
-                      `workspaces/${id}/members/${m.id}`,
-                      undefined,
-                      'DELETE',
-                    )
-                  }
-                >
-                  Remove access
-                </button>
-              )}
-            </div>
-          ))}
-          {q.data?.invitations.map((i) => (
-            <div className="access-row" key={i.id}>
-              <strong className="grow">{i.email}</strong>
-              <Badge>{i.state}</Badge>
-              <span>Expires {new Date(i.expiresAt).toLocaleDateString()}</span>
-              {i.state === 'PENDING' && (
-                <button
-                  className="danger-link"
-                  onClick={() =>
-                    void command.run(
-                      `workspaces/${id}/members/${i.id}`,
-                      undefined,
-                      'DELETE',
-                    )
-                  }
-                >
-                  Revoke invitation
-                </button>
-              )}
-            </div>
-          ))}
-        </QueryState>
-      </Panel>
-      <Panel title="Invite a teammate">
-        <form
-          className="inline-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const form = e.currentTarget
-            const email = new FormData(form).get('email')
-            if (
-              await command.run(`workspaces/${id}/members/invite`, { email })
-            ) {
-              setMessage('Synthetic team invitation created. No email sent.')
-              form.reset()
-            }
-          }}
-        >
-          <Field label="Teammate email">
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="jamie@studio.example"
-            />
-          </Field>
-          <button className="primary-button" disabled={command.pending}>
-            Invite member
-          </button>
-        </form>
-        <p className="subtle">
-          An invitation reserves a seat. Project assignments and review/export
-          permissions are managed within each project.
-        </p>
-        <ErrorNotice error={command.error} />
-        {message && <Notice>{message}</Notice>}
-      </Panel>
-    </>
-  )
-}
+export { TeamPage } from './TeamPage'
 export function SettingsPage() {
   const { id, owner } = useWorkspace()
   const q = useData<WorkspaceDetail & { logo: string; digestEnabled: boolean }>(
@@ -168,6 +52,7 @@ export function SettingsPage() {
         title="Workspace settings"
         description="The details that make this space yours."
       />
+      <OwnershipPanel />
       <Panel title="Identity and preferences">
         <QueryState query={q}>
           {q.data && (

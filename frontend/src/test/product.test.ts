@@ -600,3 +600,56 @@ describe('shared visibility and validation', () => {
     ).not.toHaveLength(0)
   })
 })
+
+describe('reference workflow permissions', () => {
+  it('requires reauthentication and an active member to transfer ownership', async () => {
+    login()
+    const member = productDb.workspaces[agencyId].members.find(
+      (m) => m.role === 'MEMBER',
+    )!
+    expect(
+      (
+        await request(`workspaces/${agencyId}/ownership-transfer`, 'POST', {
+          targetMemberId: member.id,
+          currentPassword: 'wrong',
+        })
+      ).status,
+    ).toBe(403)
+    await json(`workspaces/${agencyId}/ownership-transfer`, 'POST', {
+      targetMemberId: member.id,
+      currentPassword: 'ContentDemo!2026',
+    })
+    expect(member.role).toBe('OWNER')
+    expect((await request(`workspaces/${agencyId}/members`)).status).toBe(403)
+  })
+  it('rejects cross-tenant file lists and upload reservations by assigned members', async () => {
+    login('member@studio.example')
+    expect(
+      (
+        await request(`${projectRoot}/uploads`, 'POST', {
+          itemId: 'fake',
+          bytes: 2,
+        })
+      ).status,
+    ).toBe(403)
+    expect(
+      (await request(`workspaces/${soloId}/projects/${demoProjectId}/assets`))
+        .status,
+    ).toBe(404)
+  })
+  it('validates project assignments before reserving an invitation seat', async () => {
+    login()
+    const seats = productDb.workspaces[agencyId].usage.seatsReserved
+    expect(
+      (
+        await request(`workspaces/${agencyId}/members/invite`, 'POST', {
+          email: 'new@example.test',
+          assignments: [
+            { projectId: 'missing', canReview: true, canExport: false },
+          ],
+        })
+      ).status,
+    ).toBe(404)
+    expect(productDb.workspaces[agencyId].usage.seatsReserved).toBe(seats)
+  })
+})
