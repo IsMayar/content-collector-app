@@ -27,3 +27,4 @@ void start().catch(() => {
   document.getElementById('root')!.textContent =
     'The application could not start. Check your connection and refresh.'
 })
+import '@/styles/collection.css'
