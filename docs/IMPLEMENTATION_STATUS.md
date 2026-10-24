@@ -258,3 +258,10 @@ Implemented the team/member and client-access tables and invitation drawers; own
 Verification: production build and strict TypeScript passed; ESLint passed; 45 Vitest tests passed. Full 33-case browser run passed 30 cases and exposed an ambiguous new-test locator. Focused reruns then exposed and fixed a stale agency asset list after processing. Final 9 workflow cases passed at desktop 1440×1000, tablet 768×1024 and phone 360×800, covering draft→review→export, uploads/AI acceptance, and team invitation→agency upload→download→completion. This was not a final clean rerun of all 33 cases. See `verification/BOARDS_06_10.md`.
 
 This remains frontend/mock verification. Backend files and supplied specifications were preserved. New mock contract extensions and unavailable reference metadata are recorded in `FRONTEND_BACKEND_HANDOFF.md`; no new full-stack milestone is marked complete.
+
+
+## Reference boards 11–14 refresh — 2026-10-24
+
+Updated reminder policy/cadence/preview/delivery views; analytics/friction/counts sharing; daily digest; workspace/account/session settings; billing/usage/subscription views; client SMS and conflict comparison; shared recovery/loading/offline/install styling. Frontend mock profile/password commands and visibility-aware analytics section summaries were added. This extends the FE03/FE04/FE06/FE07 UI work without advancing full-stack M0–M7 acceptance.
+
+Verification: strict TypeScript/production build, ESLint and Prettier passed; 47 unit tests passed. Complete 36-case browser run passed across desktop/tablet/phone; after the final analytics loading correction, 6 targeted cases passed across those sizes. Production PWA cache-isolation/offline test passed on 2026-10-24 after fixing its outdated landing selector. Evidence and remaining visual/API limits: `verification/BOARDS_11_14.md`, with 27 screenshots. No 100% pixel-match or live backend completion is claimed.

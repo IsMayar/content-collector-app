@@ -112,3 +112,16 @@ Frontend uses the existing authenticated RTK paths. The following MSW additions 
 Reference details not supplied by current contracts: asset version lineage, dimensions, uploader/timestamps, member join dates, client last-access timestamps, and a client personal invitation message. These are not fabricated in the UI. File cards show real synthetic uploads, not the reference board’s sample clinic photographs. The service’s actual supported file types/limits and password rules take precedence over illustrative board text. Board frames, screen numbers and phone hardware are not application UI.
 
 Still requires live backend/storage/email integration, actual camera/device testing, and visual acceptance against the supplied boards. No 100% pixel-match claim is made.
+
+
+## Boards 11–14 UI contracts and gaps (2026-10-24)
+
+- `PATCH /me/profile` accepts `{displayName}` for the authenticated account only. The mock validates non-empty names up to 100 characters and updates displayed workspace memberships. Refresh `/auth/me` after saving.
+- `POST /me/password` accepts `{currentPassword,newPassword}`. The mock requires the current password, accepts 12–128 characters and revokes the synthetic other-device session. Production needs established password policy, secure hashing, rate limits, audit events and actual other-session revocation.
+- Project analytics GET allows assigned members with live read access. Status share management remains owner-only. Optional `ProjectAnalytics.sections` contains `{id,title,progress}` using the same enabled/visibility/required rules as global progress. Server results must preserve those rules.
+- Subscription status view refetches every 10 seconds while open; hosted checkout/portal remain the billing source of truth. The demo never marks a purchase paid merely because the browser returns.
+- Workspace `digestEnabled` is daily, not weekly. Existing settings update persists enabled/timezone; digest preview is aggregate synthetic data and sends nothing. Delivery scheduling, authorized recipient selection and configurable send time need backend contracts.
+
+Unimplemented API capabilities reflected by the reference boards: historical/day-grouped analytics and date/assignee filters, editable reminder templates/variables and sandbox test email, next eligible send times and live issue resolution commands, usage category breakdown, paid seat adjustment, personal photo upload, and data export job lifecycle. Avoid inventing these values or presenting nonfunctional controls. Current reminder channel summaries show the policy's actual configured steps; only clients can consent to SMS.
+
+See `verification/BOARDS_11_14.md` for checks and visual limits. Backend files were not edited for this batch, and their pre-existing working-tree changes remain outside these UI commits.
