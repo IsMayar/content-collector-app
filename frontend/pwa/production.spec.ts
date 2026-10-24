@@ -16,7 +16,7 @@ test('production PWA caches only fixed public assets and shows honest offline na
   )
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: /Great projects/ }),
+    page.getByRole('heading', { name: /Get client content/ }),
   ).toBeVisible()
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready
@@ -58,7 +58,7 @@ test('production PWA caches only fixed public assets and shows honest offline na
   await context.setOffline(true)
   await page.goto('/client/projects/private-offline-canary')
   await expect(
-    page.getByRole('heading', { name: 'A little pause in the connection.' }),
+    page.getByRole('heading', { name: 'You’re offline' }),
   ).toBeVisible()
   const urls = await page.evaluate(async () => {
     const cache = await caches.open('collector-public-v1')

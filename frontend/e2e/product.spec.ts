@@ -190,7 +190,7 @@ test('all project types, template previews, settings and keyboard reorder', asyn
   for (const [link, heading] of [
     ['Team', 'Team'],
     ['Insights', 'Insights'],
-    ['Billing & usage', 'Room to do your best work'],
+    ['Billing & usage', 'Billing'],
     ['Settings', 'Workspace settings'],
   ]) {
     await nav(page, link)
@@ -460,4 +460,173 @@ test('team invitation drawer, project file upload and handoff screens', async ({
     fullPage: true,
   })
   await noOverflow(page)
+})
+
+test('administration boards: settings, usage, reminders and counts-only analytics', async ({
+  page,
+}, info) => {
+  await signIn(page)
+  await nav(page, 'Settings')
+  await expect(
+    page.getByRole('heading', { name: 'Workspace settings', exact: true }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board13-workspace.png'),
+    fullPage: true,
+  })
+  await page.getByRole('link', { name: 'My account', exact: true }).click()
+  await page.getByLabel('Full name', { exact: true }).fill('Alex Morgan')
+  await page.getByRole('button', { name: 'Save profile', exact: true }).click()
+  await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Active sessions', exact: true }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board13-account.png'),
+    fullPage: true,
+  })
+  await page.getByRole('link', { name: 'Usage', exact: true }).click()
+  await expect(
+    page.getByRole('progressbar', { name: 'Storage usage' }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board13-usage.png'),
+    fullPage: true,
+  })
+  await nav(page, 'Projects')
+  await page
+    .getByRole('link', { name: 'Lamar Dental website', exact: true })
+    .click()
+  await page.getByRole('link', { name: 'Reminders', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Reminder channels', exact: true }),
+  ).toBeVisible()
+  await page.screenshot({
+    path: info.outputPath('board11-policy.png'),
+    fullPage: true,
+  })
+  await page.getByRole('button', { name: 'Cadence', exact: true }).click()
+  await expect(page.getByLabel('Local delivery time').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Save policy', exact: true }).click()
+  await expect(
+    page.getByText('Reminder policy saved.', { exact: true }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board11-cadence.png'),
+    fullPage: true,
+  })
+  await page
+    .getByRole('button', { name: 'Email & SMS preview', exact: true })
+    .click()
+  await page.getByLabel('Contact', { exact: true }).selectOption({ index: 1 })
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+  await expect(page.locator('.reminder-email-card blockquote')).toBeVisible()
+  await page.getByLabel('Channel', { exact: true }).selectOption('SMS')
+  await expect(
+    page.getByRole('button', { name: 'Send now', exact: true }),
+  ).toBeDisabled()
+  await page
+    .getByRole('button', { name: 'Delivery activity', exact: true })
+    .click()
+  await expect(
+    page.getByRole('heading', {
+      name: 'Reminder delivery activity',
+      exact: true,
+    }),
+  ).toBeVisible()
+  await page.getByRole('link', { name: 'Analytics', exact: true }).click()
+  await expect(
+    page.getByRole('heading', {
+      name: 'Submissions and approvals',
+      exact: true,
+    }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board12-analytics.png'),
+    fullPage: true,
+  })
+  await page.getByRole('button', { name: 'Item friction', exact: true }).click()
+  await expect(page.getByText('Insufficient data').first()).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Counts-only status share', exact: true })
+    .click()
+  await page
+    .getByLabel('Public alias', { exact: true })
+    .fill('Agency status update')
+  await page
+    .getByRole('button', { name: 'Create counts-only share', exact: true })
+    .click()
+  await expect(
+    page.getByRole('link', { name: 'Open counts-only status link' }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board12-share.png'),
+    fullPage: true,
+  })
+  await page.getByRole('button', { name: 'Revoke share', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await expect(
+    page.getByRole('link', { name: 'Open counts-only status link' }),
+  ).toHaveCount(0)
+})
+
+test('daily digest, deletion cancellation and offline recovery', async ({
+  page,
+}, info) => {
+  await signIn(page)
+  await nav(page, 'Settings')
+  await page.getByRole('link', { name: 'Daily digest', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Next digest preview', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Save digest settings' }).click()
+  await expect(
+    page.getByText('Daily digest preference saved.', { exact: true }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board12-digest.png'),
+    fullPage: true,
+  })
+  await page.getByRole('link', { name: 'Data & privacy', exact: true }).click()
+  await page.getByRole('button', { name: 'Request workspace deletion' }).click()
+  const dialog = page.getByRole('dialog', {
+    name: 'Schedule workspace deletion?',
+  })
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await page.evaluate(() => window.dispatchEvent(new Event('offline')))
+  // Simulate the platform's offline flag as well as its connectivity event.
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      get: () => false,
+    })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(
+    page.getByText('You’re offline — saves are paused', { exact: true }),
+  ).toBeVisible()
+  await noOverflow(page)
+  await page.screenshot({
+    path: info.outputPath('board14-offline.png'),
+    fullPage: true,
+  })
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      get: () => true,
+    })
+    window.dispatchEvent(new Event('online'))
+  })
+  await expect(
+    page.getByText('You’re offline — saves are paused', { exact: true }),
+  ).toHaveCount(0)
 })
