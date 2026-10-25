@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { UnauthorizedPage } from '@/features/foundation/AgencyFoundation'
 import {
   Link,
   NavLink,
@@ -208,6 +209,7 @@ export function AgencyLayout() {
   const [confirm, setConfirm] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const mobileNavigation = useRef<HTMLDetailsElement>(null)
   const home = membership ? `/app/w/${membership.workspaceId}/overview` : '/app'
   const workspace = useData<WorkspaceDetail>(
     membership ? `workspaces/${membership.workspaceId}` : '',
@@ -276,6 +278,7 @@ export function AgencyLayout() {
       setPending(false)
     }
   }
+  if (workspaceId && !membership) return <UnauthorizedPage />
   return (
     <div className="agency-layout">
       <a className="skip-link" href="#main-content">
@@ -339,9 +342,20 @@ export function AgencyLayout() {
         </nav>
       </aside>
       <div className="agency-main">
-        <details className="mobile-navigation">
+        <details ref={mobileNavigation} className="mobile-navigation">
           <summary>Workspace menu</summary>
-          <nav aria-label="Mobile workspace navigation">{navigation}</nav>
+          <nav
+            aria-label="Mobile workspace navigation"
+            onClick={(event) => {
+              if (
+                (event.target as HTMLElement).closest('a') &&
+                mobileNavigation.current
+              )
+                mobileNavigation.current.open = false
+            }}
+          >
+            {navigation}
+          </nav>
         </details>
         <main id="main-content" tabIndex={-1} className="agency-content">
           {error && <Notice error>{error}</Notice>}

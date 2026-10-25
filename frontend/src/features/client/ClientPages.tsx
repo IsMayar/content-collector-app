@@ -253,8 +253,14 @@ export function ClientProjectPage() {
               <button
                 key={key}
                 data-portal-nav
-                className={view === key ? 'active' : ''}
-                aria-pressed={view === key}
+                className={
+                  view === key || (key === 'home' && view === 'editor')
+                    ? 'active'
+                    : ''
+                }
+                aria-pressed={
+                  view === key || (key === 'home' && view === 'editor')
+                }
                 onClick={() => setView(key)}
               >
                 {label}

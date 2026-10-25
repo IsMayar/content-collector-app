@@ -19,7 +19,7 @@ async function nav(page: Page, name: string) {
     await expect(summary).toBeVisible()
     if (!(await mobile.isVisible())) await summary.click()
     await mobile.getByRole('link', { name, exact: true }).click()
-    await summary.click()
+    if (await mobile.isVisible()) await summary.click()
   } else
     await page
       .getByRole('navigation', { name: 'Workspace navigation', exact: true })
@@ -56,6 +56,11 @@ test('owner → client draft → immutable review → approved export', async ({
   await expect(
     page.getByRole('heading', { name: 'Lamar Dental website', exact: true }),
   ).toBeVisible()
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Client project views' })
+      .getByRole('button', { name: 'Checklist', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
   const response = page.getByLabel('Your response', { exact: true })
   await response.fill('Lamar Dental — synthetic client content')
   await expect(

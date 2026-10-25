@@ -30,7 +30,12 @@ export { TeamPage } from './TeamPage'
 export function SettingsPage() {
   const { id, owner, base, user } = useWorkspace()
   const [search, setSearch] = useSearchParams()
-  const tab = search.get('view') || 'workspace'
+  const requestedView = search.get('view') || 'workspace'
+  const tab = ['workspace', 'account', 'privacy', 'team', 'digest'].includes(
+    requestedView,
+  )
+    ? requestedView
+    : 'workspace'
   const q = useData<WorkspaceDetail & { logo: string; digestEnabled: boolean }>(
     `workspaces/${id}/settings`,
     { skip: !owner },
@@ -325,7 +330,10 @@ export function BillingPage() {
   }
   const { id, owner, base } = useWorkspace()
   const [params] = useSearchParams()
-  const view = params.get('view') || 'billing'
+  const requestedView = params.get('view') || 'billing'
+  const view = ['billing', 'usage', 'status'].includes(requestedView)
+    ? requestedView
+    : 'billing'
   const q = useData<Subscription>(`workspaces/${id}/subscription`, {
     skip: !owner,
     pollingInterval: view === 'status' ? 10000 : undefined,

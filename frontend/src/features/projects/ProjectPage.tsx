@@ -25,6 +25,7 @@ import {
   Badge,
   DualProgress,
   ErrorNotice,
+  Empty,
   Field,
   Heading,
   Panel,
@@ -117,12 +118,8 @@ export function ProjectPage() {
               {[
                 ['checklist', 'Content'],
                 ['activity', 'Activity'],
-                ...(owner
-                  ? [
-                      ['analytics', 'Analytics'],
-                      ['access', 'Client access'],
-                    ]
-                  : []),
+                ['analytics', 'Analytics'],
+                ...(owner ? [['access', 'Client access']] : []),
                 ...(p.permissions.canReview ? [['review', 'Review']] : []),
               ].map(([key, label]) => (
                 <Link
@@ -180,6 +177,37 @@ export function ProjectPage() {
             </div>
           </details>
           <ErrorNotice error={command.error} />
+          {(![
+            'checklist',
+            'activity',
+            'analytics',
+            'preview',
+            'files',
+            'access',
+            'assignments',
+            'reminders',
+            'completion',
+            'details',
+            'review',
+            'exports',
+          ].includes(tab) ||
+            ([
+              'access',
+              'assignments',
+              'reminders',
+              'completion',
+              'details',
+            ].includes(tab) &&
+              !owner) ||
+            (tab === 'review' && !p.permissions.canReview) ||
+            (tab === 'exports' && !p.permissions.canExport)) && (
+            <Empty
+              title="This project view is unavailable"
+              description="Choose Content or another permitted project view."
+              to="?tab=checklist"
+              label="Back to content"
+            />
+          )}
           {tab === 'checklist' && (
             <StructureEditor
               key={p.id}
