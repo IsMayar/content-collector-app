@@ -265,3 +265,12 @@ This remains frontend/mock verification. Backend files and supplied specificatio
 Updated reminder policy/cadence/preview/delivery views; analytics/friction/counts sharing; daily digest; workspace/account/session settings; billing/usage/subscription views; client SMS and conflict comparison; shared recovery/loading/offline/install styling. Frontend mock profile/password commands and visibility-aware analytics section summaries were added. This extends the FE03/FE04/FE06/FE07 UI work without advancing full-stack M0–M7 acceptance.
 
 Verification: strict TypeScript/production build, ESLint and Prettier passed; 47 unit tests passed. Complete 36-case browser run passed across desktop/tablet/phone; after the final analytics loading correction, 6 targeted cases passed across those sizes. Production PWA cache-isolation/offline test passed on 2026-10-24 after fixing its outdated landing selector. Evidence and remaining visual/API limits: `verification/BOARDS_11_14.md`, with 27 screenshots. No 100% pixel-match or live backend completion is claimed.
+
+
+## Screen coverage and navigation audit — 2026-10-25
+
+Audited all 76 reference panels: 53 have implemented frontend capability and 23 are partial, with exact missing elements and route destinations listed in `SCREEN_COVERAGE_AUDIT.md`. All 14 board groups are represented; this count does not certify exact visual matching or live backend readiness.
+
+Fixed member project Analytics discoverability; blank unknown/disallowed project tabs; unknown settings/billing views; invalid-workspace recovery; mobile menu closing after navigation; and client Checklist active state while editing. Preserved permission checks and pre-existing backend work.
+
+Verification passed: production build/strict TypeScript, ESLint, formatting and 47 unit tests. Six new navigation browser cases passed across desktop/tablet/phone. Nine targeted keyboard, client→review→export and administration regression cases also passed at those sizes. The original full-stack milestones remain unchanged.
