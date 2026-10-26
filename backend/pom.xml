@@ -15,8 +15,15 @@
 	<description>Website Content Collector backend foundation</description>
 	<properties>
 		<java.version>21</java.version>
+        <!-- Boot does not manage this required Argon2 provider. Match Security 7.1.1's tested version. -->
+        <bouncycastle.version>1.85</bouncycastle.version>
 	</properties>
 	<dependencies>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
+        </dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
