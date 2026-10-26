@@ -195,7 +195,6 @@ test('all project types, template previews, settings and keyboard reorder', asyn
   for (const [link, heading] of [
     ['Team', 'Team'],
     ['Insights', 'Insights'],
-    ['Billing & usage', 'Billing'],
     ['Settings', 'Workspace settings'],
   ]) {
     await nav(page, link)
@@ -380,7 +379,11 @@ test('mock failure, billing grace and read-only states offer deliberate recovery
   await page.getByLabel('Scenario', { exact: true }).selectOption('grace')
   await page.getByRole('button', { name: 'Apply scenario' }).click()
   await scenarios.click()
-  await nav(page, 'Billing & usage')
+  await nav(page, 'Settings')
+  await page
+    .getByRole('navigation', { name: 'Settings navigation' })
+    .getByRole('link', { name: 'Billing', exact: true })
+    .click()
   await expect(page.getByText('PAST DUE', { exact: true })).toBeVisible()
   await page
     .getByRole('button', { name: 'Manage in hosted billing portal' })
@@ -634,4 +637,106 @@ test('daily digest, deletion cancellation and offline recovery', async ({
   await expect(
     page.getByText('You’re offline — saves are paused', { exact: true }),
   ).toHaveCount(0)
+})
+
+test('settings owns billing and selected templates open project details directly', async ({
+  page,
+}, info) => {
+  await signIn(page)
+  await expect(
+    page.getByRole('link', { name: 'Billing & usage', exact: true }),
+  ).toHaveCount(0)
+  await nav(page, 'Settings')
+  const settingsNav = page.getByRole('navigation', {
+    name: 'Settings navigation',
+  })
+  await settingsNav.getByRole('link', { name: 'Billing', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Billing', exact: true }),
+  ).toBeVisible()
+  if ((page.viewportSize()?.width || 1440) >= 768)
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Workspace navigation', exact: true })
+        .getByRole('link', { name: 'Settings', exact: true }),
+    ).toHaveClass(/active/)
+  await settingsNav.getByRole('link', { name: 'Usage', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Usage', exact: true }),
+  ).toBeVisible()
+  for (const type of ['WEBSITE', 'WEB_APP', 'MOBILE_APP']) {
+    await nav(page, 'Templates')
+    await page.getByLabel('Project type', { exact: true }).selectOption(type)
+    const card = page.locator('.template-library-grid .template-card').first()
+    await expect(card).toBeVisible()
+    const title = await card.getByRole('heading').innerText()
+    const use = card.getByRole('link', { name: 'Use template', exact: true })
+    const target = new URL((await use.getAttribute('href'))!, page.url())
+    if (type === 'WEBSITE')
+      await page.screenshot({
+        path: info.outputPath('template-library.png'),
+        fullPage: true,
+      })
+    await use.focus()
+    await page.keyboard.press('Enter')
+    await expect(
+      page.getByRole('heading', { name: 'Project details', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', {
+        name: 'Choose a template to get started.',
+        exact: true,
+      }),
+    ).toHaveCount(0)
+    await expect(page.locator('.wizard-template-summary')).toContainText(title)
+    await page
+      .getByLabel('Project name', { exact: true })
+      .fill(`${type} selected template`)
+    await page
+      .getByLabel('Customer', { exact: true })
+      .selectOption({ label: 'Lamar Dental' })
+    await page.getByLabel('Due date', { exact: true }).fill('2026-12-20')
+    await page
+      .getByRole('button', { name: 'Change template', exact: true })
+      .click()
+    await expect(
+      page.getByRole('heading', {
+        name: 'Choose a template to get started.',
+        exact: true,
+      }),
+    ).toBeVisible()
+    await page
+      .getByRole('button', { name: 'Use this template', exact: false })
+      .click()
+    await expect(page.getByLabel('Project name', { exact: true })).toHaveValue(
+      `${type} selected template`,
+    )
+    await noOverflow(page)
+    if (type === 'WEBSITE')
+      await page.screenshot({
+        path: info.outputPath('template-project-details.png'),
+        fullPage: true,
+      })
+    await page
+      .getByRole('button', { name: 'Continue to review', exact: false })
+      .click()
+    await expect(page.locator('.selected-template')).toContainText(title)
+    const sent = page.waitForRequest(
+      (r) =>
+        r.method() === 'POST' && /\/projects$/.test(new URL(r.url()).pathname),
+    )
+    await page
+      .getByRole('button', { name: 'Create project →', exact: true })
+      .click()
+    expect((await sent).postDataJSON()).toMatchObject({
+      projectType: type,
+      templateVersionId: target.searchParams.get('template'),
+    })
+    await expect(
+      page.getByRole('heading', {
+        name: `${type} selected template`,
+        exact: true,
+      }),
+    ).toBeVisible()
+  }
 })

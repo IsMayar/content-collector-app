@@ -274,3 +274,12 @@ Audited all 76 reference panels: 53 have implemented frontend capability and 23 
 Fixed member project Analytics discoverability; blank unknown/disallowed project tabs; unknown settings/billing views; invalid-workspace recovery; mobile menu closing after navigation; and client Checklist active state while editing. Preserved permission checks and pre-existing backend work.
 
 Verification passed: production build/strict TypeScript, ESLint, formatting and 47 unit tests. Six new navigation browser cases passed across desktop/tablet/phone. Nine targeted keyboard, client→review→export and administration regression cases also passed at those sizes. The original full-stack milestones remain unchanged.
+
+
+## Settings navigation and template flow polish — 2026-10-26
+
+Confirmed the removed sidebar Billing & usage entry and Settings Billing tab target the same BillingPage and workspace subscription/usage data. Billing/Usage stay available within Settings navigation; existing billing URLs remain valid and Settings stays highlighted on them.
+
+Template library cards now use aligned Preview and primary Use template buttons. A preselected template from either the card or preview opens Project details directly, with its title/type/version shown. Ordinary Create project still starts with template selection. Explicit Change template preserves entered details; an unavailable preselected template provides recovery instead of permitting creation without a template.
+
+Verification passed: production build/strict TypeScript, ESLint, Prettier and 9 browser cases across desktop 1440×1000, tablet 768×1024 and phone 360×800. New regression creates WEBSITE/WEB_APP/MOBILE_APP projects and checks the submitted templateVersionId; existing wizard and billing grace/read-only recovery cases also passed. Desktop template cards and phone details screenshots were visually reviewed, with no horizontal overflow in tested journeys. Evidence: `verification/template-flow-*.png`. Backend changes and supplied specifications preserved.

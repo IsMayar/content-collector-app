@@ -125,3 +125,8 @@ Source audit found no completely absent board group. Missing dedicated views inc
 Completed 2026-10-25. Production build/strict TypeScript, ESLint, Prettier and 47 unit tests passed. Six new owner/member navigation cases passed at 1440×1000, 768×1024 and 360×800. Nine additional browser regressions passed at the same sizes: keyboard sign-in/logout, client draft → submission → agency review → approved export, and administration settings/reminders/analytics/share navigation. This audit did not rerun every previous browser case or certify exact visual fidelity. Backend/provider integration is outside these frontend results.
 
 The first navigation run used hard reloads into protected demo URLs, which reset the deliberately in-memory MSW session. The tests were corrected to exercise in-app history navigation; all six then passed. Production session persistence is not proven by synthetic tests.
+
+
+## Navigation update — 2026-10-26
+
+Billing and Usage are reached through Settings tabs; the duplicate primary-sidebar Billing & usage entry was removed. Existing billing/usage route URLs still work. Choosing Use template in the library/preview now starts at Project details with that template selected; ordinary Create project keeps the chooser, and Change template is an explicit optional action.
