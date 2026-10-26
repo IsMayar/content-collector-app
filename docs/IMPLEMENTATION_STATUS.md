@@ -197,6 +197,54 @@ Modified files:
 
 Remaining T05: transactional account registration/verification/recovery services and HTTP contracts, request/password policy, generic anti-enumeration responses, disabled-account/email-change policy, purpose-bound reissue/invalidation orchestration, provider-fake delivery, rate limiting and workflow acceptance tests. Token consumption/account mutation must remain atomic. Session revocation integration must be added when session infrastructure exists; no full account recovery or authentication is claimed. No local tool blocker remains. T04/M0 remain In progress for hosted CI, T05/M1 In progress, and T06+ Not started.
 
+## T05 Part 2 - registration API and email verification - 26 October 2026
+
+Status: **In progress** for T05/M1. This part implements registration and verification without password recovery, login, JWT, refresh sessions, workspace features or frontend changes. T04/M0 remain In progress for hosted CI.
+
+- Implemented exact GET `/api/v1/auth/csrf`, POST `/api/v1/auth/register` and POST `/api/v1/auth/verify-email`, matching existing frontend DTOs. Registration returns generic 202 `{message}` for new/duplicate/active/disabled addresses; verification returns 200 `{verified:true}` without authentication. Exact method/path security rules preserve all unrelated denials and CSRF. The session cookie is anti-CSRF state only. A real token exchange/header/session is exercised by MockMvc tests, not only a security test helper.
+- Added DTO validation (email <=254, display name 2-100 matching the frontend, password 12-128/untrimmed with 512-byte safety cap; no composition rules), transactional registration, database-unique race handling, and transactional account-locked verification. Existing Argon2id/token utilities are reused. Verification checks purpose, account state/email, expiry and revocation, then conditionally consumes and updates account together. Failure rolls back both; concurrent verification has one winner. Invalid DTOs use standard 400 problems, invalid links `TOKEN_INVALID` 400, expired/consumed `TOKEN_EXPIRED`/`TOKEN_CONSUMED` 410 (existing frontend guidance), and shared rate limits return 429 `RATE_LIMITED` with `Retry-After: 60`. Trace headers and bodies match.
+- **Additive V3:** `V3__add_account_delivery_outbox.sql` adds only account `outbox_jobs` and `account_request_limits`. V1/V2 are unchanged. Existing users/tokens remain untouched on upgrade. Outbox metadata contains token/trace IDs, with the raw token encrypted using AES-256-GCM, separate persistent environment key/identifier, random nonce and job/token-bound authenticated data. No raw token is stored in JSON, returned via API or logged. Missing key safely disables registration with 503 before account/token creation for all addresses; health/other foundations remain available.
+- Delivery is behind `VerificationMailSender`; default adapter is disabled, tests use synthetic `.test` recipients. Registration only queues in its transaction. Explicit `VerificationDeliveryWorker.dispatchOne()` claims committed work with SKIP LOCKED/lease/attempts, sends outside transactions, and acknowledges only its lease owner. Definite failures use capped backoff/max five attempts; final outcomes erase ciphertext. Unknown outcomes/expired leases are held for reconciliation, not blind retry; held ciphertext is erased after the 24-hour lifetime during worker maintenance. No production provider, automated scheduler, provider credentials or real inbox delivery is configured or claimed. Provider/worker-runner/key-rotation/reconciliation integration remains pending.
+- Database-backed limits apply to validated requests per transport peer address (5 registrations/20 verifications per minute by default, configurable). No raw IP is stored; stale limiter metadata is removed after a day. Counts survive service failures and are shared across instances. Trusted proxy address handling, edge connection/body/invalid-input controls and operational deployment benchmarks remain deployment work.
+- **Resend contract unresolved:** endpoint catalog omits it; handoff explicitly proposes but does not agree POST `/auth/resend-verification`. Per this request, no competing route was invented. It remains denied. Route/response, cooldown, replacement/invalidations and safe durable delivery need agreement before implementation. Duplicate registration does not replace a usable token.
+- **PASS:** final `backend\mvnw.cmd clean verify` on Java 21.0.11 / Spring Boot 4.1.1: **104 tests, 0 failures, 0 errors, 0 skipped**. Previous 71 retained, plus 30 PostgreSQL/MockMvc/workflow cases and 3 cipher tests. Covered normal/duplicate/concurrent registration, validation/malformed/missing fields, password storage, purpose/expiry/digest, verification failures/concurrency/state, registration/verification rollback, safe DTOs/logs, CSRF/exact routes, rate windows, fake delivery/no send in caller transaction, retry cap/unknown outcome/expired lease/worker claims, AES-GCM tamper/key/AAD checks and V2-to-V3 data preservation. Original security/error and restart suites pass. Initial CSRF test appended an invalid header after a valid one; replacing the header corrected the test setup without disabling protection.
+- **PASS:** real PostgreSQL 18.6, clean V1/V2/V3 migrations and checksum/no-pending validation, V1/current and V2/current upgrade preservation, Hibernate identity validation, full application restart/data/security checks and executable JAR. Existing table/migration count assertions now expect four tables and three migrations; no test was removed or skipped. No new dependencies/versions were introduced.
+- Updated backend/root setup notes, placeholder environment keys and frontend/backend handoff. Original specs, frontend implementation and FE01-FE07 history are unchanged; no new frontend test claim. Hosted GitHub Actions is still unverified/no Git remote configured.
+
+Created files:
+
+- `backend/src/main/java/com/ayaantrix/collector/auth/controller/AccountRegistrationController.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/TokenDeliveryCipher.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationDeliveryWorker.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationMailSender.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationOutbox.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/AccountResponses.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/RegistrationRequest.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/VerificationRequest.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/AccountRequestLimiter.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/AccountWorkflowConfiguration.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/EmailVerificationService.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/RegistrationService.java`
+- `backend/src/main/resources/db/migration/V3__add_account_delivery_outbox.sql`
+- `backend/src/test/java/com/ayaantrix/collector/auth/AccountRegistrationWorkflowTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/delivery/TokenDeliveryCipherTests.java`
+
+Modified files:
+
+- `README.md`
+- `backend/.env.example`
+- `backend/README.md`
+- `backend/src/main/java/com/ayaantrix/collector/auth/repository/UserAccountRepository.java`
+- `backend/src/main/java/com/ayaantrix/collector/common/SecurityConfiguration.java`
+- `backend/src/main/java/com/ayaantrix/collector/common/error/GlobalExceptionHandler.java`
+- `backend/src/main/resources/application.properties`
+- `backend/src/test/java/com/ayaantrix/collector/CollectorApplicationTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/IdentityPersistenceTests.java`
+- `docs/FRONTEND_BACKEND_HANDOFF.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+
+Remaining T05: password recovery (Part 3), explicit resend contract/policy and workflow, configured email sandbox/provider/worker runner, operational reconciliation and key rotation, further abuse controls and end-to-end account acceptance. Login/JWT/refresh/session infrastructure remains T06, not implemented here. T05/M1 remain In progress; T04/M0 remain In progress pending hosted CI. No local verification/tool blocker remains; real inbox delivery and resend agreement are explicitly pending.
+
 ## T02 results — 21 October 2026
 
 - Implemented strict TypeScript and React StrictMode, Vite, Tailwind v4/HeroUI v3 style imports, RouterProvider and Redux Provider, separate empty agency/client RTK Query APIs with reusable transport, and the `@/` source alias.

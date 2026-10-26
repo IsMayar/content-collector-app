@@ -1,6 +1,6 @@
 # Backend foundation
 
-Java 21, Spring Boot 4.1.1 (selected 4.1 line), Maven Wrapper 3.3.4 with Maven 3.9.16, PostgreSQL 18. The Boot parent/BOM manages all library versions, including Spring Security, Hibernate, Flyway, JDBC and Testcontainers. T05 Part 1 adds account identity tables and security utilities; account HTTP workflows and authentication are not implemented.
+Java 21, Spring Boot 4.1.1 (selected 4.1 line), Maven Wrapper 3.3.4 with Maven 3.9.16, PostgreSQL 18. The Boot parent/BOM manages all library versions, including Spring Security, Hibernate, Flyway, JDBC and Testcontainers. T05 Parts 1-2 add identity persistence, registration and email verification. Login, password recovery, JWT and refresh authentication are not implemented.
 
 ## Local setup (PowerShell)
 
@@ -34,13 +34,13 @@ In another PowerShell terminal:
 Invoke-RestMethod -Uri 'http://127.0.0.1:8080/actuator/health'
 ```
 
-Expected HTTP 200 JSON: `{"status":"UP"}`. Database health participates; a reachable application with a failed database check returns HTTP 503 and `{"status":"DOWN"}`. No component names, database details or configuration values are exposed. Only GET on that exact health path is permitted. Other requests return 403, with no form login, Basic authentication or generated user; CSRF stays enabled. This is an intentionally closed foundation until authentication tasks.
+Expected HTTP 200 JSON: `{"status":"UP"}`. Database health participates; a reachable application with a failed database check returns HTTP 503 and `{"status":"DOWN"}`. No component names, database details or configuration values are exposed. Public routes are exact GET `/actuator/health`, GET `/api/v1/auth/csrf`, POST `/api/v1/auth/register` and POST `/api/v1/auth/verify-email`. The two POST routes still require CSRF. All unrelated requests remain denied with no form login, Basic authentication or generated user. Registration and verification do not authenticate a caller.
 
 ## Schema ownership and verification
 
 Flyway alone owns schema changes; SQL initialization is disabled and Hibernate uses `ddl-auto=validate`. V1 creates the empty `collector` schema; Flyway history resides in `public`. Baseline-on-migrate is disabled, checksums validate at startup, and Flyway clean is disabled. Do not run the supplied reference SQL. Add feature-specific V2+ migrations when their tasks begin; never edit an applied migration. A future deployment uses a dedicated Flyway migration step before replicas, as described by the specification.
 
-`./mvnw.cmd verify` compiles and runs the foundation integration test. Docker is required: Testcontainers starts a fresh isolated PostgreSQL 18 database, boots two full HTTP application contexts against it, validates Flyway, verifies the current two-migration history, and checks a test-only data probe survives restart. It also checks health JSON and request denial. The probe never appears in development migrations. Testcontainers removes its disposable resources after the test. No H2 fallback or silently skipped database test is used.
+`./mvnw.cmd verify` compiles and runs the foundation integration test. Docker is required: Testcontainers starts a fresh isolated PostgreSQL 18 database, boots two full HTTP application contexts against it, validates Flyway, verifies the current three-migration history, and checks a test-only data probe survives restart. It also checks health JSON and request denial. The probe never appears in development migrations. Testcontainers removes its disposable resources after the test. No H2 fallback or silently skipped database test is used.
 
 `application-test.properties` supports `TEST_DATABASE_URL`, `TEST_DATABASE_USERNAME` and `TEST_DATABASE_PASSWORD` for test configuration. The foundation integration test explicitly overrides these with its disposable container, so it cannot alter the development database. Hibernate validates the `users` and account-only `access_tokens` entity mappings introduced by V2. Identity persistence/constraint/concurrency tests use a separate disposable PostgreSQL container; a second test database inside it verifies upgrading V1 to V2 without losing existing data.
 
@@ -107,6 +107,48 @@ if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
 Verified 26 October 2026: **71 tests, 0 failures, 0 errors, 0 skipped**; all previous 36 tests plus 35 identity tests. Real PostgreSQL 18.6, clean V1/V2 migration, V1-to-V2 upgrade preservation, Hibernate validation, restart preservation, concurrent single-use consumption, transactional rollback, security/errors and executable JAR packaging passed. Docker was available. Frontend checks were not rerun for this backend-only change; the earlier 68-test evidence is preserved, not claimed as a new run.
 
 T05 and M1 are **In progress**, not complete. Remaining T05 work includes transactional registration/verification/recovery services, request DTO/password policies, generic responses, account-state checks, rate limits, delivery through fakes/sandboxes and later HTTP endpoint tests. Login/JWT/refresh/session revocation belong to their later steps, including T06; no such functionality was introduced. T04/M0 remain In progress because hosted CI is still unverified and no Git remote is configured.
+
+## T05 Part 2 - registration and email verification
+
+| Operation | Request | Response |
+| --- | --- | --- |
+| GET `/api/v1/auth/csrf` | No body; retain the CSRF session cookie | 200 `{ "token": "..." }`, `Cache-Control: no-store` |
+| POST `/api/v1/auth/register` | `{ "email": "alex@example.test", "displayName": "Alex", "password": "a sufficiently long password" }`; `X-XSRF-TOKEN` and the same session | 202 `{ "message": "If this address can be registered, check your inbox for a verification email." }` |
+| POST `/api/v1/auth/verify-email` | `{ "token": "43-character URL-safe email token" }`; CSRF header/session | 200 `{ "verified": true }` |
+
+DTOs trim email/display name/token, never passwords. Email is bounded to 254 characters, display name to 2-100 (existing frontend contract), and password to 12-128 with a 512-byte UTF-8 safety cap and no composition rules. Malformed/invalid DTO input returns standard 400 problems. An unknown/revoked/wrong-purpose/disabled-account/email-mismatch token returns 400 `TOKEN_INVALID`; expired and consumed links use 410 `TOKEN_EXPIRED`/`TOKEN_CONSUMED`, matching existing frontend guidance. No secret or identity entity is returned. Success bodies are non-cacheable.
+
+Registration performs Argon2id work for valid duplicate and new requests. Duplicate, active or disabled accounts receive the same generic 202 body without changes to credentials or tokens. The database uniqueness constraint resolves concurrent creation; a losing transaction rolls back safely. New account/token/outbox insertion is one transaction. Verification locks the account, checks purpose/state/email/expiry, conditionally consumes the token, updates the account and revokes remaining verification tokens in one transaction. A failed account update rolls consumption back. A successful verification creates no login, JWT or authentication session.
+
+Validated registration/verification requests have shared PostgreSQL limits of 5/20 per minute per transport peer address by default (`REGISTRATION_PER_MINUTE`, `VERIFICATION_PER_MINUTE`), returning 429 `RATE_LIMITED` and `Retry-After: 60`. Counts cover duplicates/failures and are shared across API instances. Peer addresses are stored only as SHA-256 keys; stale limiter rows are removed after one day during checks. The application does not trust arbitrary forwarded headers. A production reverse proxy must supply client addresses only through a deliberately trusted proxy configuration; edge limits must also protect malformed requests, CSRF acquisition and connection/body volume. These operational limits are not claimed verified here.
+
+`V3__add_account_delivery_outbox.sql` adds the account subset of reference `collector.outbox_jobs` plus `collector.account_request_limits`. V1/V2 are unchanged. Metadata includes token ID and correlation ID, while the raw token is stored only as an AES-256-GCM encrypted payload, bound to job/token IDs with authenticated metadata and a random 12-byte nonce. A separate Base64-encoded 32-byte encryption key and key identifier are required. Missing configuration leaves health available but registration returns safe 503 `EMAIL_DELIVERY_UNAVAILABLE` for all addresses, without creating accounts or invalidating existing tokens. No encryption key is generated silently at application startup.
+
+Generate a persistent **local-only** key once in the ignored `.env` (do not print or commit it):
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\scripts\Initialize-Local.ps1
+if (-not (Select-String -LiteralPath '.env' -Pattern '^TOKEN_DELIVERY_ENCRYPTION_KEY=.+' -Quiet)) {
+    $deliveryBytes = New-Object byte[] 32
+    $deliveryRandom = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $deliveryRandom.GetBytes($deliveryBytes) } finally { $deliveryRandom.Dispose() }
+    $deliveryKey = [Convert]::ToBase64String($deliveryBytes)
+    Add-Content -LiteralPath '.env' -Value "TOKEN_DELIVERY_ENCRYPTION_KEY=$deliveryKey"
+    Add-Content -LiteralPath '.env' -Value 'TOKEN_DELIVERY_ENCRYPTION_KEY_ID=local-v1'
+    Remove-Variable deliveryKey, deliveryBytes
+}
+```
+
+Use a secret manager in deployment. Keep the key stable while queued messages exist. The boundary currently supports one configured key ID; full multi-key rotation/reconciliation operations remain delivery integration work. `APP_BASE_URL` supplies the trusted frontend origin; HTTPS is required for non-loopback hosts. Email links use `/verify-email#token=...` so a passive GET never consumes a token. Never derive links from request Host/forwarded headers.
+
+`VerificationMailSender` is replaceable; its default adapter is disabled and never sends or logs links. Tests use an in-memory controlled adapter with synthetic `.test` recipients. `VerificationDeliveryWorker.dispatchOne()` is an explicit worker entry point, **not an enabled scheduler or public endpoint**. Registration only enqueues. The worker claims committed jobs using `FOR UPDATE SKIP LOCKED`, a 60-second lease/owner and an attempt count, and calls the adapter outside transactions. Acknowledgements require the current lease owner. Definite failures use capped backoff and at most five attempts; final outcomes erase ciphertext. Unknown send outcomes and expired leases are held in FAILED for provider reconciliation, never blind redelivery. Unresolved held payloads are erased after the 24-hour token lifetime when the worker runs again. The adapter must use the job ID for provider idempotency where supported; delivery is not claimed exactly-once.
+
+**Pending delivery:** no production provider, credentials, automated worker runner or operator reconciliation UI is implemented. Durable queueing is verified; real inbox delivery is not. Keep a provider/sandbox adapter and worker scheduling disabled until configured and tested. Local development without an adapter will not deliver email.
+
+**Pending resend contract:** the original endpoint catalog omits resend and the handoff explicitly calls POST `/auth/resend-verification` a proposal. It remains denied (403); this task does not silently approve a contract or invalidate usable tokens. Agree the route, generic response, replacement/cooldown policy and durable delivery behavior before implementing it. Duplicate registration is not a resend shortcut.
+
+Verification on 26 October 2026: `./mvnw.cmd clean verify` passed **104 tests, 0 failures, 0 errors, 0 skipped** (all prior 71 + 30 workflow/PostgreSQL/MockMvc tests + 3 cipher tests). Real CSRF exchange, exact-route denial, validation/errors/traces, concurrent registration/verification/claims, rollback, rate limiting, encrypted durable delivery/failures, clean V1/V2/V3 migration, V2 upgrade preservation, Hibernate validation, restart and JAR packaging passed. The initial invalid-CSRF test appended an invalid value to a valid header; replacing the header fixed that test setup, with CSRF protection unchanged. No frontend tests were rerun or frontend changes made. T05/M1 remain In progress; T04/M0 remain In progress pending hosted CI.
 
 ## Official setup references (checked 21 October 2026)
 

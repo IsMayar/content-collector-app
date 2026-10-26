@@ -64,11 +64,11 @@ In another PowerShell terminal:
 Invoke-RestMethod -Uri 'http://127.0.0.1:8080/actuator/health'
 ```
 
-Expected HTTP 200 JSON: `{"status":"UP"}`. Only GET on this health path is public; other requests return 403 until authentication is implemented. No login or feature endpoints exist. Stop the backend with Ctrl+C; from `backend/`, `docker compose stop` stops its database without deleting data.
+Expected HTTP 200 JSON: `{"status":"UP"}`. Public account routes now include GET `/api/v1/auth/csrf` and CSRF-protected POST `/api/v1/auth/register` and `/api/v1/auth/verify-email`. Registration requires a persistent delivery encryption key; see the backend setup notes. All unrelated routes remain denied. Login, JWT, refresh and password recovery are not implemented. Stop the backend with Ctrl+C; from `backend/`, `docker compose stop` stops its database without deleting data.
 
 Flyway owns migrations under `backend/src/main/resources/db/migration`; V1 creates only the empty application schema. Hibernate validates rather than creating/updating tables. Do not execute `docs/spec/schema_reference.sql`; add feature migrations in later tasks. The verification suite uses a disposable PostgreSQL 18 container and checks clean startup, migrations, restart persistence and health/security behavior. See [backend setup notes](backend/README.md) for configuration, migration rules and official references.
 
-Next integration step: the owner implements/confirms the documented backend API contracts, then disables mocks as described in the product handoff. T04/M0 remain In progress pending remote CI verification; M1/T05 remain Not started. Use `npm run test:pwa` for the production public-cache/offline check, in addition to the frontend checks above.
+Next integration step: the owner implements/confirms the documented backend API contracts, then disables mocks as described in the product handoff. T04/M0 remain In progress pending remote CI verification; M1/T05 are In progress for account registration and verification. Use `npm run test:pwa` for the production public-cache/offline check, in addition to the frontend checks above.
 
 Use provider fakes and sandboxes during development. Keep secrets out of version control and frontend bundles; production provider credentials stay disabled until their integration stage.
 
@@ -112,4 +112,4 @@ npm run dev
 
 Vite forwards `/api` under the frontend origin; production requires the same reverse-proxy arrangement. Broad CORS is unnecessary. JSON/problem JSON, `X-Request-ID`, memory-only agency bearer credentials and `X-XSRF-TOKEN` follow the [transport handoff](docs/FRONTEND_BACKEND_HANDOFF.md#t04-transport-alignment---26-october-2026). Authentication and the CSRF endpoint are not implemented yet: real API requests, including session bootstrap, intentionally return 403. Use `npm run dev:mock` for synthetic product journeys, not to claim real authentication works.
 
-T04 and M0 remain **In progress** solely pending an actual remote CI run after a repository remote is configured and these commits are pushed. M1/T05 remain **Not started**; no later backend feature was implemented by this task.
+T04 and M0 remain **In progress** solely pending an actual remote CI run after a repository remote is configured and these commits are pushed. M1/T05 remain **In progress**; no later backend feature was implemented by this task.
