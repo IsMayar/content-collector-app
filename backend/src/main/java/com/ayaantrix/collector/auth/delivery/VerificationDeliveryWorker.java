@@ -22,7 +22,7 @@ public class VerificationDeliveryWorker {
     private final Clock clock;
     private final URI app;
     private final TransactionTemplate transactions;
-    private record Claimed(UUID id,UUID tokenId,byte[] encrypted,String keyId,int attempts) {}
+    private record Claimed(UUID id,UUID tokenId,byte[] encrypted,String keyId,int attempts,TokenPurpose purpose) {}
 
     public VerificationDeliveryWorker(JdbcTemplate jdbc,TokenDeliveryCipher cipher,AccountTokenRepository tokens,
             UserAccountRepository users,VerificationMailSender sender,Clock clock,PlatformTransactionManager manager,
@@ -57,35 +57,39 @@ public class VerificationDeliveryWorker {
             jdbc.update("""
                     update collector.outbox_jobs set state='DEAD',encrypted_payload=null,
                     last_error_code='DELIVERY_EXPIRED',updated_at=?
-                    where state='FAILED' and created_at<=?
-                    """,Timestamp.from(now),Timestamp.from(now.minusSeconds(86400)));
+                    where state='FAILED' and (created_at<=? or exists(
+                      select 1 from collector.access_tokens t where t.id=(outbox_jobs.payload_json->>'tokenId')::uuid
+                      and (t.expires_at<=? or t.consumed_at is not null or t.revoked_at is not null)))
+                    """,Timestamp.from(now),Timestamp.from(now.minusSeconds(86400)),Timestamp.from(now));
             var jobs=jdbc.query("""
                     with candidate as (
-                      select id from collector.outbox_jobs where job_type='VERIFY_EMAIL' and attempt_count<5
+                      select id from collector.outbox_jobs where job_type in ('VERIFY_EMAIL','RESET_PASSWORD') and attempt_count<5
                       and state='QUEUED' and available_at<=?
                       order by available_at,id for update skip locked limit 1
                     ) update collector.outbox_jobs j set state='RUNNING',lease_owner=?,lease_expires_at=?,
                       attempt_count=j.attempt_count+1,updated_at=? from candidate c where j.id=c.id
-                    returning j.id,j.payload_json->>'tokenId',j.encrypted_payload,j.encryption_key_id,j.attempt_count
+                    returning j.id,j.payload_json->>'tokenId',j.encrypted_payload,j.encryption_key_id,j.attempt_count,j.job_type
                     """,(row,index)->new Claimed(row.getObject(1,UUID.class),UUID.fromString(row.getString(2)),
-                    row.getBytes(3),row.getString(4),row.getInt(5)),Timestamp.from(now),owner,
+                    row.getBytes(3),row.getString(4),row.getInt(5),TokenPurpose.valueOf(row.getString(6))),Timestamp.from(now),owner,
                     Timestamp.from(now.plusSeconds(60)),Timestamp.from(now));
             return jobs.isEmpty()?null:jobs.getFirst();
         });
         if (job==null) return false;
         var token=tokens.findById(job.tokenId());
         var user=token.flatMap(t->users.findById(t.getUserId()));
-        if (token.isEmpty() || user.isEmpty() || user.get().getState()!=AccountState.UNVERIFIED
+        if (token.isEmpty() || user.isEmpty() || (job.purpose()==TokenPurpose.VERIFY_EMAIL ? user.get().getState()!=AccountState.UNVERIFIED
+                    : user.get().getState()!=AccountState.ACTIVE || user.get().getVerifiedAt()==null)
                 || !token.get().getEmailNormalized().equals(user.get().getEmailNormalized())
-                || !token.get().isUsableFor(TokenPurpose.VERIFY_EMAIL,clock.instant())) {
+                || !token.get().isUsableFor(job.purpose(),clock.instant())) {
             finish(job,owner,"SUCCEEDED","TOKEN_NOT_USABLE",true);return true;
         }
         String raw;
         try { raw=cipher.decrypt(job.encrypted(),job.keyId(),job.id(),job.tokenId()); }
         catch (RuntimeException error) { finish(job,owner,"FAILED","DELIVERY_CIPHER_UNAVAILABLE",false);return true; }
         try {
-            URI link=app.resolve("/verify-email#token="+raw);
-            sender.send(new VerificationMailSender.Message(job.id(),user.get().getEmailNormalized(),link));
+            String path=job.purpose()==TokenPurpose.VERIFY_EMAIL?"/verify-email":"/reset-password";
+            URI link=app.resolve(path+"#token="+raw);
+            sender.send(new VerificationMailSender.Message(job.id(),user.get().getEmailNormalized(),link,job.purpose()));
             finish(job,owner,"SUCCEEDED",null,true);
         } catch (VerificationMailSender.DeliveryFailure error) {
             if (error.outcomeUnknown()) finish(job,owner,"FAILED","DELIVERY_OUTCOME_UNKNOWN",false);

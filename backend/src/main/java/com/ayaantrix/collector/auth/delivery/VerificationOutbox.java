@@ -20,8 +20,22 @@ public class VerificationOutbox {
         jdbc.update("""
                 insert into collector.outbox_jobs
                 (id,job_type,payload_json,encrypted_payload,encryption_key_id,dedupe_key,state,available_at,created_at,updated_at)
-                values (?,'VERIFY_EMAIL',jsonb_build_object('tokenId',?::text,'traceId',?::text),?,?,?,'QUEUED',?,?,?)
-                """,jobId,token.getId().toString(),traceId,payload,cipher.keyId(),"verify-email:"+token.getId(),
+                values (?,?,jsonb_build_object('tokenId',?::text,'traceId',?::text),?,?,?,'QUEUED',?,?,?)
+                """,jobId,token.getPurpose().name(),token.getId().toString(),traceId,payload,cipher.keyId(),
+                (token.getPurpose()==com.ayaantrix.collector.auth.entity.TokenPurpose.VERIFY_EMAIL?"verify-email:":"password-reset:")+token.getId(),
                 Timestamp.from(token.getCreatedAt()),Timestamp.from(token.getCreatedAt()),Timestamp.from(token.getCreatedAt()));
     }
+    // Remove queued/held capability payloads atomically with successful password changes/replacement.
+    public void discardUnusablePasswordResetJobs(UUID userId,java.time.Instant now) {
+        if(!TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Reset delivery cleanup requires a transaction.");
+        jdbc.update("""
+                update collector.outbox_jobs j set state='SUCCEEDED',encrypted_payload=null,
+                lease_owner=null,lease_expires_at=null,last_error_code='TOKEN_NOT_USABLE',updated_at=?
+                where j.job_type='RESET_PASSWORD' and j.state in ('QUEUED','RUNNING','FAILED')
+                and exists(select 1 from collector.access_tokens t where t.id=(j.payload_json->>'tokenId')::uuid
+                  and t.user_id=? and (t.consumed_at is not null or t.revoked_at is not null or t.expires_at<=?))
+                """,Timestamp.from(now),userId,Timestamp.from(now));
+    }
+
 }

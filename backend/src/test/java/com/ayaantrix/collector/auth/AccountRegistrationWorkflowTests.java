@@ -64,7 +64,7 @@ class AccountRegistrationWorkflowTests {
     private FakeMail sender;
     private final SecureAccountTokens secrets=new SecureAccountTokens();
 
-    @Configuration(proxyBeanMethods=false)
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class TestConfiguration {
         @Bean @Primary TestClock workflowClock() { return new TestClock(); }
         @Bean @Primary FakeMail workflowSender() { return new FakeMail(); }
@@ -246,7 +246,7 @@ class AccountRegistrationWorkflowTests {
         for(String path:List.of("register","verify-email","csrf/child","register/child","resend-verification","login","refresh","forgot-password","reset-password","logout")) {
             mvc.perform(get("/api/v1/auth/"+path)).andExpect(status().isForbidden());
         }
-        for(String path:List.of("csrf","register/child","verify-email/child","resend-verification","login","refresh","forgot-password","reset-password","logout"))
+        for(String path:List.of("csrf","register/child","verify-email/child","resend-verification","login","refresh","logout"))
             mvc.perform(protectedPost("/api/v1/auth/"+path,Map.of())).andExpect(status().isForbidden());
     }
     @Test void databaseBackedRateLimitIsGenericAndResetsInNextWindow() throws Exception {
@@ -286,7 +286,7 @@ class AccountRegistrationWorkflowTests {
         String hash=context.getBean(PasswordEncoder.class).encode(PASSWORD);
         upgradeJdbc.update("insert into collector.users(email_normalized,display_name,password_hash) values (?,'Alex',?)",EMAIL,hash);
         var flyway=Flyway.configure().dataSource(source).load();flyway.migrate();assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
-        assertThat(flyway.info().applied()).hasSize(3);assertThat(upgradeJdbc.queryForObject("select password_hash from collector.users",String.class)).isEqualTo(hash);
+        assertThat(flyway.info().applied()).hasSize(4);assertThat(upgradeJdbc.queryForObject("select password_hash from collector.users",String.class)).isEqualTo(hash);
         assertThat(upgradeJdbc.queryForObject("select count(*) from collector.outbox_jobs",Long.class)).isZero();
     }
 }

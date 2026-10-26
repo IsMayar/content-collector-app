@@ -31,7 +31,8 @@ public class SecurityConfiguration {
                                 "/actuator/health"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST,"/api/v1/auth/register","/api/v1/auth/verify-email").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/auth/register","/api/v1/auth/verify-email",
+                                "/api/v1/auth/forgot-password","/api/v1/auth/reset-password").permitAll()
                         .anyRequest().denyAll()
                 )
 

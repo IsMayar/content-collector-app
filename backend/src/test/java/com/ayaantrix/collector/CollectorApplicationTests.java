@@ -49,7 +49,7 @@ class CollectorApplicationTests {
         try (var second = start()) {
             var jdbc = second.getBean(JdbcTemplate.class);
             assertThat(jdbc.queryForObject("select value from collector.restart_probe where id=1", String.class)).isEqualTo("preserved");
-            assertThat(jdbc.queryForObject("select count(*) from public.flyway_schema_history where success", Integer.class)).isEqualTo(3);
+            assertThat(jdbc.queryForObject("select count(*) from public.flyway_schema_history where success", Integer.class)).isEqualTo(4);
             assertThat(second.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(second.getBean(Flyway.class).info().pending()).isEmpty();
             assertHealthAndSecurity(second);

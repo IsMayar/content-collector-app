@@ -8,7 +8,12 @@ public interface VerificationMailSender {
     // The adapter must use deliveryId for provider idempotency where supported.
     void send(Message message);
 
-    record Message(UUID deliveryId, String recipient, URI verificationLink) {
+    record Message(UUID deliveryId, String recipient, URI verificationLink,
+            com.ayaantrix.collector.auth.entity.TokenPurpose purpose) {
+        public Message(UUID deliveryId,String recipient,URI verificationLink) {
+            this(deliveryId,recipient,verificationLink,com.ayaantrix.collector.auth.entity.TokenPurpose.VERIFY_EMAIL);
+        }
+        public URI actionLink() { return verificationLink; }
         @Override public String toString() { return "VerificationMail[redacted]"; }
     }
     final class DeliveryFailure extends RuntimeException {
