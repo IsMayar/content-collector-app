@@ -50,7 +50,7 @@ The guide mentions JUnit 5. The selected Boot 4.1.1 BOM supplies JUnit Jupiter 6
 
 Handled MVC and security errors use `application/problem+json` with `type`, `title`, `status`, `detail`, `code`, `traceId` and `errors`. Validation entries contain `fieldPath` and a safe `message`; rejected values and constraint messages are not echoed. MVC protocol headers such as `Allow` are preserved. Unexpected failures return a generic 500 and log only a correlation ID, without exception messages, causes or stack traces. Application-authored `ApiException` messages must be safe for clients.
 
-Every request receives `X-Request-ID`. A single supplied ID is accepted only when it contains 1–64 ASCII letters, digits, underscores or hyphens. Missing, invalid, oversized or duplicate IDs are replaced with a UUID. Error `traceId` matches the response header. The request retains its ID across dispatches; the filter restores the previous logging context on completion or failure.
+Every request receives `X-Request-ID`. A single supplied ID is accepted only when it contains 1â€“64 ASCII letters, digits, underscores or hyphens. Missing, invalid, oversized or duplicate IDs are replaced with a UUID. Error `traceId` matches the response header. The request retains its ID across dispatches; the filter restores the previous logging context on completion or failure.
 
 The current closed security policy returns standardized 403 `ACCESS_DENIED` for anonymous and authenticated product requests, missing/invalid CSRF tokens, and unknown routes. It does not expose route existence. The MVC handler returns standardized 404 `NOT_FOUND` if a request legitimately reaches MVC without a matching handler/resource; isolated test fixtures exercise this without opening production routes. Only the exact health GET is public. Authentication behavior belongs to later tasks.
 
@@ -69,6 +69,16 @@ The suite includes isolated MVC/security/tracing tests and the real PostgreSQL c
 ```
 
 On 26 October 2026, `clean verify` passed all 32 tests (0 failures, 0 errors, 0 skipped), including PostgreSQL 18.6/Flyway validation, restart preservation and executable JAR packaging. T04 remains In progress for remaining transport/documentation acceptance and remote CI verification.
+
+## Transport and CI (T04 Part 6)
+
+Use one origin: the deployment reverse proxy routes `/api` to this backend, and Vite proxies `/api` to `VITE_API_PROXY_TARGET` in development. No permissive CORS configuration is enabled. Untrusted preflight requests are denied. A separate-origin deployment requires an explicit allowed-origin and credential/cookie review before enabling it.
+
+The session CSRF repository uses `X-XSRF-TOKEN`, matching the frontend contract, while retaining session-backed tokens and default BREACH protection. No CSRF endpoint or authentication was added; `/api/v1/auth/csrf` remains denied in this foundation. Only exact GET `/actuator/health` is public. Controller binding/body validation uses 400; feature semantic validation will use 422. Test-only `ApiException` fixtures verify 401/422 serialization without introducing those endpoints or changing the closed access policy.
+
+On 26 October 2026, the Part 6 `clean verify` run passed **36 tests, 0 failures, 0 errors, 0 skipped**: factory 3, MVC errors 13, tracing 11, security/CSRF/origin policy 8, PostgreSQL clean-start/restart integration 1. Executable JAR packaging passed. A real local Vite proxy smoke check preserved problem JSON and matching request IDs for denied API requests; direct health was UP.
+
+`.github/workflows/backend-ci.yml` uses Java 21, BOM-managed dependencies, Maven Wrapper, Maven caching, a Docker availability check, and `clean verify` on an Ubuntu Docker-capable runner. The frontend has its own locked build/lint/format/test workflow. Official Actions are pinned to release commit SHAs; workflows have read-only repository permissions, push/PR/manual triggers and 20-minute timeouts. Both passed local actionlint 1.7.12 validation. No Git remote is configured, so remote CI execution is pending. Local success is not a GitHub Actions success claim. T04/M0 remain In progress pending remote CI; M1/T05 remain Not started.
 
 ## Official setup references (checked 21 October 2026)
 

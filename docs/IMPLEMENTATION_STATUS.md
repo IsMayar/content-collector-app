@@ -1,6 +1,6 @@
 # Implementation status
 
-Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 22 October 2026.
+Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 26 October 2026.
 
 All tasks were initialized as Not started. T01–T03 are Complete. M0 is In progress; M1–M7 remain Not started.
 
@@ -97,7 +97,7 @@ Material assumptions: mock state is memory-only and resets on full reload; fixtu
 
 ## T04 results — 22 October 2026
 
-Status: In progress — backend implementation.
+Status: In progress — local T04 checks passed; remote CI pending.
 
 ### Implemented
 
@@ -124,23 +124,35 @@ Status: In progress — backend implementation.
 - PASS: Executable Spring Boot JAR packaging.
 - GitHub Actions CI: pending first remote run.
 
-### Part 5 � backend error handling and tracing � 26 October 2026
+### Part 5 — backend error handling and tracing — 26 October 2026
 
 - Completed centralized MVC handling through Spring's `ResponseEntityExceptionHandler` and the existing `ApiProblemFactory`: application errors, body validation, malformed JSON, missing/invalid parameters, 404, 405, 406, 415 and unexpected 500. Responses use `application/problem+json` and the agreed fields; validation entries use `fieldPath`/safe `message`. Framework status/protocol headers are retained. Unexpected failures omit raw exception messages, stack traces, SQL and credentials from responses and application error logs.
-- Request IDs are generated or accepted from exactly one constrained `X-Request-ID` header (1�64 ASCII letters/digits/underscore/hyphen). Invalid/oversized/ambiguous values are replaced. IDs remain stable in the request, response header, error body and logging context. Normal, exceptional, async and error filter dispatches have isolated coverage; previous MDC context is restored.
+- Request IDs are generated or accepted from exactly one constrained `X-Request-ID` header (1–64 ASCII letters/digits/underscore/hyphen). Invalid/oversized/ambiguous values are replaced. IDs remain stable in the request, response header, error body and logging context. Normal, exceptional, async and error filter dispatches have isolated coverage; previous MDC context is restored.
 - Preserved exact GET `/actuator/health` access and deny-by-default security. Anonymous/authenticated denied requests, unknown routes and missing/invalid CSRF tokens return standardized 403 problems. CSRF remains enabled. Isolated MVC fixtures verify standardized 404 after MVC dispatch without adding production routes or weakening security.
-- PASS: `backend\mvnw.cmd clean verify` on Java 21.0.11 / Spring Boot 4.1.1 � **32 tests, 0 failures, 0 errors, 0 skipped**. Breakdown: factory 3; MVC exceptions 11; tracing 11 (including six invalid-ID inputs); security 6; PostgreSQL integration 1. No dependency version changes.
+- PASS: `backend\mvnw.cmd clean verify` on Java 21.0.11 / Spring Boot 4.1.1 — **32 tests, 0 failures, 0 errors, 0 skipped**. Breakdown: factory 3; MVC exceptions 11; tracing 11 (including six invalid-ID inputs); security 6; PostgreSQL integration 1. No dependency version changes.
 - PASS: Docker Desktop engine available; disposable PostgreSQL 18.6 clean startup, Flyway migration/checksum validation, second full startup, preserved probe data, unchanged single migration and no pending migrations. Real HTTP health/access checks passed on both startups. Executable Spring Boot JAR built. No test was disabled or skipped.
 - Documented error format, trace policy and exact verification/diagnostic commands in `backend/README.md`. Frontend, original specifications, migrations and the existing CI workflow were not changed. This scoped backend request supersedes the earlier frontend-only restriction for this work only. No T05+ functionality was implemented.
 - Environment: Docker was initially stopped; starting the installed Docker Desktop restored the engine and full verification succeeded. Existing non-failing Mockito/Java dynamic-agent warnings remain. Remote CI has not been run/verified by this task.
 
+### Part 6 - transport, CI and final documentation - 26 October 2026
+
+- Reviewed Sections 1-10, 19, 21-23 and existing frontend/backend contracts. Retained `/api/v1/`, JSON/problem JSON, same-origin `/api` proxying, cookie credentials, agency-only memory bearer headers and the current deny-by-default boundary. No CORS allowlist was necessary; a regression confirms untrusted cross-origin preflight remains denied.
+- Aligned the backend's session CSRF header with frontend `X-XSRF-TOKEN` while retaining token/session and BREACH protection. No CSRF endpoint, authentication/JWT or T05+ functionality was added. Unknown product routes and `/api/v1/auth/csrf` still return standard 403 problems.
+- Minimal shared frontend transport fixes: explicit JSON/problem JSON Accept default, case-normalized methods before CSRF checks, typed response metadata for request-ID headers, and runtime-checked problem fields/field-error arrays with authoritative HTTP status. Screens, layouts, design components, mock product features and original specifications were untouched. No dependencies or lockfiles changed.
+- PASS: `npm ci` installed 411 packages from the committed lockfile with zero reported vulnerabilities. Node 24.3.0/npm 11.4.2. Stopped the existing project Vite process first to release the Windows native dependency lock.
+- PASS: final `npm run build` (strict TypeScript and production Vite build), `npm run lint`, `npm run format:check`; **68 frontend tests passed, no failures/skips**, using `npm test -- --maxWorkers=1 --pool=threads`. New transport coverage comprises 21 cases: error statuses 400/401/403/404/405/409/415/422/429/500, success 200/201/202/204, headers/JSON/cookies, agency/client separation, denied CSRF acquisition, timeout, network failure, non-JSON gateway failure and malformed envelopes. Initial TypeScript failures in the new metadata typing were fixed; final build passed without changing endpoints or removing tests.
+- PASS: `backend\mvnw.cmd clean verify` - **36 tests, 0 failures, 0 errors, 0 skipped** (factory 3, MVC 13, tracing 11, security 8, PostgreSQL integration 1). Real PostgreSQL 18.6/Flyway migration and validation, two application startups/restart preservation, real HTTP health/security and executable JAR packaging passed. Added test-only 401/422 application-status coverage; body-binding errors remain 400 and semantic 422 behavior is reserved for feature tasks.
+- PASS: actual Vite-to-backend proxy with mocks disabled on temporary local ports: direct health 200 UP, `/api/v1/auth/csrf` and unknown API path 403 `application/problem+json`; header `X-Request-ID` matched body `traceId`. The first PowerShell assertion misread a byte-array response; explicit UTF-8 decoding confirmed the contract. This proves closed-foundation transport, not real authentication.
+- Updated the existing backend workflow (previously untracked), added the missing frontend workflow, and pinned maintained official checkout v7.0.1/setup-java v6.1.0/setup-node v7.1.0 release commits. Java 21/Maven Wrapper, Docker check, `clean verify`; Node 24.3.0/`npm ci`, build/lint/format/all unit-integration tests. Both use dependency caches, read-only permissions, push/PR/manual triggers, no source credentials and bounded execution. PASS: both workflows validated by actionlint 1.7.12. No frontend workflow existed to duplicate.
+- Updated root/backend READMEs and frontend/backend handoff with commands, proxy and security boundaries, exact results and CI limits. Repaired mixed encoding in the previous Part 5 text without rewriting historical evidence or the roadmap.
+
+- Temporary proxy/backend verification processes and the database started for the smoke check were stopped without deleting data. The previously running frontend mock server was restored at `http://127.0.0.1:5173/`.
+
 ### Remaining Work
 
-- Complete API transport conventions.
-- Update root README with verification commands.
-- Verify GitHub Actions CI remotely.
+- **Remote CI only:** `git remote -v` is empty. No repository/run can be identified or inspected. Configure the intended remote and push these commits; then verify the actual Backend CI and Frontend CI runs. No remote success is claimed.
 
-T04 remains In progress until all remaining acceptance checks pass. Part 5 is verified; it does not establish complete T04 or production acceptance.
+T04 remains **In progress** pending remote CI evidence, preserving the previous completion gate. M0 remains **In progress** (T01-T03 Complete, T04 In progress). M1 and T05 remain **Not started**. Local transport/error/regression/documentation work is complete; no task beyond T04 was started.
 
 Next task after T04: M1 / T05.
 

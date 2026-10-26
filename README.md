@@ -16,9 +16,9 @@ Start with [the MVP guide](docs/spec/Website_Content_Collector_MVP.md). Supporti
 
 The specification calls for:
 
-- A supported Node.js LTS meeting the selected Vite version's requirements; the guide's baseline is Node 22.12 or later on the 22 line. Use npm and commit the resolved lockfile when T02 is implemented.
-- Java 21 JDK and Maven; add the Maven wrapper during T03.
-- PostgreSQL 18 as the reference database; confirm the supported provider major and test against that exact major during T03.
+- A supported Node.js LTS meeting the selected Vite version's requirements; the guide's baseline is Node 22.12 or later on the 22 line. Node 24.3.0/npm 11.4.2 were used for the verified frontend setup; install the committed lockfile with `npm ci`.
+- Java 21 JDK; the committed Maven wrapper pins Maven 3.9.16, so a separate Maven installation is unnecessary.
+- PostgreSQL 18, supplied by the isolated Docker Compose setup and tested with Testcontainers.
 - Local S3-compatible storage or isolated development buckets for the later file workflow; scanner and image-decoder tooling at its integration stage.
 
 Planned libraries include React 19, strict TypeScript, Vite, Tailwind CSS v4, HeroUI v3, React Router, Redux Toolkit/RTK Query, React Hook Form and Zod. The backend uses a supported stable Spring Boot line (the guide selects 4.1), Spring Security and Flyway. Verify compatible supported versions at the relevant setup task before pinning dependencies.
@@ -68,6 +68,48 @@ Expected HTTP 200 JSON: `{"status":"UP"}`. Only GET on this health path is publi
 
 Flyway owns migrations under `backend/src/main/resources/db/migration`; V1 creates only the empty application schema. Hibernate validates rather than creating/updating tables. Do not execute `docs/spec/schema_reference.sql`; add feature migrations in later tasks. The verification suite uses a disposable PostgreSQL 18 container and checks clean startup, migrations, restart persistence and health/security behavior. See [backend setup notes](backend/README.md) for configuration, migration rules and official references.
 
-Next integration step: the owner implements/confirms the documented backend API contracts, then disables mocks as described in the product handoff. The original T04+ statuses remain unchanged. Use `npm run test:pwa` for the production public-cache/offline check, in addition to the frontend checks above.
+Next integration step: the owner implements/confirms the documented backend API contracts, then disables mocks as described in the product handoff. T04/M0 remain In progress pending remote CI verification; M1/T05 remain Not started. Use `npm run test:pwa` for the production public-cache/offline check, in addition to the frontend checks above.
 
 Use provider fakes and sandboxes during development. Keep secrets out of version control and frontend bundles; production provider credentials stay disabled until their integration stage.
+
+## T04 verification and real-backend transport
+
+Run frontend regression from PowerShell (stop this project's Vite/preview process before `npm ci`):
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
+npm ci
+if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
+npm run build
+if ($LASTEXITCODE -ne 0) { throw 'Build or TypeScript check failed.' }
+npm run lint
+if ($LASTEXITCODE -ne 0) { throw 'Lint failed.' }
+npm run format:check
+if ($LASTEXITCODE -ne 0) { throw 'Formatting check failed.' }
+npm test -- --maxWorkers=1 --pool=threads
+if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed.' }
+```
+
+The existing `test` script already invokes `vitest run`; one worker limits Windows resource usage without excluding tests. With Docker Desktop's Linux engine running, the full backend check is:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+```
+
+On 26 October 2026, frontend locked installation, strict TypeScript/production build, lint, formatting and **68 tests** passed. Backend **36 tests** passed, including PostgreSQL clean startup, Flyway validation, restart preservation and health/security checks; the executable JAR built. No tests were skipped. Both GitHub Actions workflows passed local actionlint 1.7.12 validation. No Git remote is configured, so hosted CI remains pending; these local results do not prove remote GitHub Actions passed.
+
+For a real-backend connection, start the database/backend using the commands above, then use a second PowerShell terminal:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
+$env:VITE_ENABLE_MOCKS = 'false'
+$env:VITE_API_BASE_URL = '/api/v1/'
+$env:VITE_API_PROXY_TARGET = 'http://127.0.0.1:8080'
+npm run dev
+```
+
+Vite forwards `/api` under the frontend origin; production requires the same reverse-proxy arrangement. Broad CORS is unnecessary. JSON/problem JSON, `X-Request-ID`, memory-only agency bearer credentials and `X-XSRF-TOKEN` follow the [transport handoff](docs/FRONTEND_BACKEND_HANDOFF.md#t04-transport-alignment---26-october-2026). Authentication and the CSRF endpoint are not implemented yet: real API requests, including session bootstrap, intentionally return 403. Use `npm run dev:mock` for synthetic product journeys, not to claim real authentication works.
+
+T04 and M0 remain **In progress** solely pending an actual remote CI run after a repository remote is configured and these commits are pushed. M1/T05 remain **Not started**; no later backend feature was implemented by this task.
