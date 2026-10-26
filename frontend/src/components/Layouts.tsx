@@ -21,7 +21,6 @@ import {
   Users,
   ChartNoAxesCombined,
   Settings,
-  CreditCard,
   FileText,
   LockKeyhole,
   MailCheck,
@@ -198,6 +197,7 @@ export function AuthLayout() {
   )
 }
 export function AgencyLayout() {
+  const { pathname } = useLocation()
   const state = useAppSelector((s) => s.auth)
   const { workspaceId } = useParams()
   const membership = state.memberships.find(
@@ -249,11 +249,20 @@ export function AgencyLayout() {
                 <ChartNoAxesCombined size={18} />
                 <span>Insights</span>
               </NavLink>
-              <NavLink to={`/app/w/${membership.workspaceId}/billing`}>
-                <CreditCard size={18} />
-                <span>Billing & usage</span>
-              </NavLink>
-              <NavLink to={`/app/w/${membership.workspaceId}/settings`}>
+              <NavLink
+                to={`/app/w/${membership.workspaceId}/settings`}
+                className={({ isActive }) =>
+                  isActive ||
+                  pathname === `/app/w/${membership.workspaceId}/billing`
+                    ? 'active'
+                    : undefined
+                }
+                aria-current={
+                  pathname === `/app/w/${membership.workspaceId}/billing`
+                    ? 'page'
+                    : undefined
+                }
+              >
                 <Settings size={18} />
                 <span>Settings</span>
               </NavLink>

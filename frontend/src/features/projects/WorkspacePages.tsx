@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNotify } from '@/components/Feedback'
-import { Upload, Users, UserRound } from 'lucide-react'
+import { Upload, Users, UserRound, ArrowRight } from 'lucide-react'
 import { TemplateEditor } from './TemplateEditor'
 import {
   ProjectTable,
@@ -451,7 +451,7 @@ export function TemplatesPage() {
             </Field>
           </div>
           <QueryState query={query}>
-            <div className="template-grid">
+            <div className="template-grid template-library-grid">
               {query.data?.data
                 .filter(
                   (t) =>
@@ -471,7 +471,7 @@ export function TemplatesPage() {
                       <p>
                         {t.industry.replaceAll('_', ' ')} · Version {t.version}
                       </p>
-                      <div className="actions">
+                      <div className="template-card-actions">
                         <button
                           className="secondary-button"
                           onClick={() => setPreview(t.versionId)}
@@ -480,10 +480,11 @@ export function TemplatesPage() {
                         </button>
                         {owner && (
                           <Link
-                            className="text-link"
+                            className="primary-button template-use-button"
                             to={`${base}/projects/new?type=${t.projectType}&template=${t.versionId}`}
                           >
-                            Use template →
+                            Use template{' '}
+                            <ArrowRight size={16} aria-hidden="true" />
                           </Link>
                         )}
                       </div>

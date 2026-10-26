@@ -31,7 +31,7 @@ export function CreateProjectPage() {
   const { id, base, owner } = useWorkspace()
   const navigate = useNavigate()
   const [search] = useSearchParams()
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(search.get('template') ? 2 : 1)
   const [type, setType] = useState(search.get('type') || 'WEBSITE')
   const [template, setTemplate] = useState(search.get('template') || '')
   const [preview, setPreview] = useState(false)
@@ -175,6 +175,18 @@ export function CreateProjectPage() {
         </Link>
       </Panel>
     )
+  if (step > 1 && !selected)
+    return (
+      <QueryState query={templates}>
+        <Empty
+          title="Template unavailable"
+          description="This template could not be selected. Choose an available template to continue."
+        />
+        <button className="secondary-button" onClick={() => setStep(1)}>
+          Choose a template
+        </button>
+      </QueryState>
+    )
   return (
     <div className="project-wizard">
       <Heading
@@ -280,6 +292,24 @@ export function CreateProjectPage() {
       )}
       {step === 2 && (
         <Panel>
+          <div className="wizard-template-summary">
+            <TemplateSymbol industry={selected?.industry || ''} />
+            <div>
+              <span className="eyebrow">Selected template</span>
+              <strong>{selected?.title}</strong>
+              <small>
+                {projectTypes.find((t) => t.value === type)?.label} · Version{' '}
+                {selected?.version}
+              </small>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setStep(1)}
+            >
+              Change template
+            </button>
+          </div>
           <form onSubmit={details} className="stack-form">
             <div className="form-grid wizard-details">
               <Field
