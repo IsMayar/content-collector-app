@@ -1,6 +1,6 @@
 # Backend foundation
 
-Java 21, Spring Boot 4.1.1 (selected 4.1 line), Maven Wrapper 3.3.4 with Maven 3.9.16, PostgreSQL 18. The Boot parent/BOM manages all library versions, including Spring Security, Hibernate, Flyway, JDBC and Testcontainers. T05 Parts 1-2 add identity persistence, registration and email verification. Login, password recovery, JWT and refresh authentication are not implemented.
+Java 21, Spring Boot 4.1.1 (selected 4.1 line), Maven Wrapper 3.3.4 with Maven 3.9.16, PostgreSQL 18. The Boot parent/BOM manages all library versions, including Spring Security, Hibernate, Flyway, JDBC and Testcontainers. T05 Parts 1-3 add identity persistence, registration, email verification and password recovery/reset. Login, JWT and refresh authentication are not implemented.
 
 ## Local setup (PowerShell)
 
@@ -149,6 +149,47 @@ Use a secret manager in deployment. Keep the key stable while queued messages ex
 **Pending resend contract:** the original endpoint catalog omits resend and the handoff explicitly calls POST `/auth/resend-verification` a proposal. It remains denied (403); this task does not silently approve a contract or invalidate usable tokens. Agree the route, generic response, replacement/cooldown policy and durable delivery behavior before implementing it. Duplicate registration is not a resend shortcut.
 
 Verification on 26 October 2026: `./mvnw.cmd clean verify` passed **104 tests, 0 failures, 0 errors, 0 skipped** (all prior 71 + 30 workflow/PostgreSQL/MockMvc tests + 3 cipher tests). Real CSRF exchange, exact-route denial, validation/errors/traces, concurrent registration/verification/claims, rollback, rate limiting, encrypted durable delivery/failures, clean V1/V2/V3 migration, V2 upgrade preservation, Hibernate validation, restart and JAR packaging passed. The initial invalid-CSRF test appended an invalid value to a valid header; replacing the header fixed that test setup, with CSRF protection unchanged. No frontend tests were rerun or frontend changes made. T05/M1 remain In progress; T04/M0 remain In progress pending hosted CI.
+
+## T05 Part 3 - password recovery and reset
+
+| Operation | JSON request | Success response |
+| --- | --- | --- |
+| POST `/api/v1/auth/forgot-password` | `{ "email": "alex@example.test" }` | 202 `{ "message": "If an eligible account exists, a password reset link will be sent." }` |
+| POST `/api/v1/auth/reset-password` | `{ "token": "43-character URL-safe reset token", "password": "a sufficiently long new password" }` | 200 `{ "message": "Your password has been reset." }` |
+
+Both POSTs require a fresh GET `/api/v1/auth/csrf` exchange, its session cookie and `X-XSRF-TOKEN`. Success is `Cache-Control: no-store`. Only these exact additional POST routes are public; GET/child routes and unrelated authentication operations remain denied. Health stays exact GET `/actuator/health`. CORS, problem JSON and matching `X-Request-ID`/`traceId` behavior are preserved.
+
+Recovery normalizes email and accepts only verified ACTIVE accounts for issuance. Unknown, UNVERIFIED, DISABLED and repeated eligible addresses receive the identical generic 202 without exposing identity or tokens. All valid requests perform an Argon2id hash and observe a default 250 ms minimum response budget. This reduces obvious timing differences; it is not a constant-time guarantee under database contention or load. Recipient-specific queue failures roll back, log only a safe correlation ID and retain the generic response. Missing global delivery-key configuration returns the same safe 503 `EMAIL_DELIVERY_UNAVAILABLE` before looking up any address.
+
+The existing secure generator creates 256-bit, purpose-bound `RESET_PASSWORD` tokens with a 30-minute lifetime. Only SHA-256 digests enter the token table. A locked account row serializes recovery issuance: repeated requests reuse the current usable capability without generating more jobs or resending; after expiry a new request revokes previous outstanding reset tokens and queues one replacement atomically. This is bounded issuance, not a resend endpoint. A new request after a successful reset may issue a new capability, subject to limits.
+
+Reset validates the existing 12-128 character / 512-byte UTF-8 password policy, hashes with Argon2id and atomically consumes the exact reset token, updates the password, revokes other outstanding reset tokens and clears unusable queued/held delivery payloads. The account remains ACTIVE and verified with its original verification time. No login or authenticated session is created. Unknown/revoked/wrong-purpose/ineligible/email-mismatched links return 400 `TOKEN_INVALID`; expired or used links return 410 `TOKEN_EXPIRED`/`TOKEN_CONSUMED`. Invalid DTOs/malformed JSON use existing 400 errors. A password persistence failure rolls the token changes back; concurrent resets have one successful consumer.
+
+Required existing server settings remain `TOKEN_DELIVERY_ENCRYPTION_KEY` (Base64 32 bytes), `TOKEN_DELIVERY_ENCRYPTION_KEY_ID` and trusted `APP_BASE_URL`; use the local-only key setup above and ignored `.env`. Additional optional settings, also listed in `.env.example`:
+
+| Environment variable | Default | Meaning |
+| --- | --- | --- |
+| `RECOVERY_PER_MINUTE` | 5 | Validated recovery requests per transport peer per minute |
+| `RESET_PER_MINUTE` | 20 | Validated reset attempts per transport peer per minute |
+| `RECOVERY_MIN_RESPONSE_MS` | 250 | Minimum recovery response budget; allowed 100-2000 ms |
+
+The existing PostgreSQL limiter shares counts between API instances; 429 includes `Retry-After: 60`. Invalid input is rejected before the limiter, so edge/body/CSRF acquisition limits and trusted proxy address configuration remain deployment requirements. Never put these server secrets in VITE variables.
+
+The same encrypted outbox, AES-GCM cipher, adapter and worker now handle both purposes. Adapter messages carry purpose so implementations must choose verification versus password-reset email copy/expiry; verification links remain `/verify-email#token=...` and reset links use `/reset-password#token=...`. Existing ciphertext/AAD format is unchanged. Workers suppress unusable tokens and retain the existing lease/idempotency/reconciliation behavior. Unknown outcomes are held without automatic resend; a later worker invocation erases expired/consumed/revoked held capabilities (30 minutes for reset), with the existing 24-hour fallback. Reset/replacement also erases stale reset ciphertext in its database transaction. A send already in flight may deliver an inert link; it cannot restore a revoked/consumed capability. Provider delivery is not exactly-once.
+
+`V4__enable_password_reset_delivery.sql` only widens the existing outbox job-type check to allow `RESET_PASSWORD` alongside `VERIFY_EMAIL`. It creates no tables/columns and preserves queued verification data. V1, V2 and V3 are unchanged. No credential-version column is needed now: the specification requires session revocation, which T06 must implement by joining revocation of every account session/refresh family to the successful reset transaction before commit. Current account `updatedAt` is not an implemented session-invalidation mechanism.
+
+Local verification (Docker Desktop Linux engine must be running):
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+```
+
+Verified 26 October 2026: **142 tests, 0 failures, 0 errors, 0 skipped**, executable JAR packaged. All previous 104 tests remain, plus 38 recovery/reset cases. PostgreSQL 18.6 tests cover clean V1-V4 startup/Hibernate validation/restart, V3 upgrade preserving queued ciphertext, normalized/generic recovery, ineligible accounts, timing work/budget, rate windows, issuance/consumption/worker concurrency, rollback, token/password/error/CSRF behavior and held-delivery expiry. The existing test fixture was explicitly marked test-only so its fake mail and clock cannot leak into unrelated application contexts. Existing public-route assertions now recognize the two new POSTs; wrong methods and CSRF remain tested. No tests were skipped and no dependency versions changed.
+
+Remaining T05: resend route/replacement/cooldown agreement and workflow, configured sandbox/provider and worker runner, reconciliation/key rotation operations, deployment abuse controls and full account acceptance. Production email credentials remain disabled; this task delivers through a controlled test fake only. Real inbox delivery and the full browser-to-backend recovery journey were not verified. Session revocation/login/JWT/refresh remain T06 integration work; no frontend files changed or frontend checks rerun. T05/M1 remain In progress; T04/M0 remain In progress because no Git remote is configured and hosted CI is unverified. No local tool blocker affected this verification.
 
 ## Official setup references (checked 21 October 2026)
 

@@ -245,6 +245,53 @@ Modified files:
 
 Remaining T05: password recovery (Part 3), explicit resend contract/policy and workflow, configured email sandbox/provider/worker runner, operational reconciliation and key rotation, further abuse controls and end-to-end account acceptance. Login/JWT/refresh/session infrastructure remains T06, not implemented here. T05/M1 remain In progress; T04/M0 remain In progress pending hosted CI. No local verification/tool blocker remains; real inbox delivery and resend agreement are explicitly pending.
 
+## T05 Part 3 - password recovery and secure reset - 26 October 2026
+
+Status: **In progress** for T05/M1. This authorized backend part completes recovery/reset in the existing account foundation. T04/M0 remain In progress pending hosted CI; T06 and all later backend tasks remain Not started. Prior history and all original milestone/task rows are preserved.
+
+- POST `/api/v1/auth/forgot-password` accepts `{email}` and returns 202 `{message: "If an eligible account exists, a password reset link will be sent."}`. Email is normalized; verified ACTIVE accounts are eligible. Unknown, unverified, disabled and repeated requests have identical generic responses, equal Argon2id work and a default 250 ms response floor (practical mitigation, not a constant-time guarantee). Recipient-specific enqueue failures roll back and retain generic success; globally missing delivery configuration gives uniform safe 503 before lookup.
+- Recovery locks the account and coalesces requests while a usable 30-minute RESET_PASSWORD token exists; no duplicate token/job or resend is created. After expiry, issuance revokes old outstanding reset tokens and queues a replacement in one transaction. SecureRandom 256-bit raw tokens remain encrypted only in the durable outbox; token rows contain SHA-256 digests only.
+- POST `/api/v1/auth/reset-password` accepts `{token,password}` and returns 200 `{message: "Your password has been reset."}`. Existing password/DTO policy and standard errors remain: 400 VALIDATION_FAILED/MALFORMED_REQUEST/TOKEN_INVALID; 410 TOKEN_EXPIRED/TOKEN_CONSUMED. Hashing, account eligibility/email checks, account locking and conditional consumption protect exact-purpose use. Consumption, Argon2id password update, revocation of other reset tokens and stale outbox payload cleanup commit together or roll back together. Verification state is preserved; no authentication is created.
+- Both exact POST routes require the existing CSRF cookie/token exchange and X-XSRF-TOKEN. Wrong methods/child routes/unrelated auth remain denied; exact public health, existing registration/verification, CORS, problem JSON, safe traces and no-store success responses remain. Database-backed limits default to 5 recovery / 20 reset requests per minute per peer, with 429 and Retry-After: 60. Added optional RECOVERY_PER_MINUTE, RESET_PER_MINUTE and RECOVERY_MIN_RESPONSE_MS placeholders; no secrets were committed.
+- Reused the same cipher/outbox/adapter/worker, extending messages with purpose and safe `/reset-password#token=...` links. Existing verification links/ciphertext remain compatible. Concurrent claims have one sender; unknown outcomes remain held for reconciliation, with unusable/expired capability cleanup on subsequent worker runs. Reset/replacement cancels stale pending reset payloads atomically. An already in-flight message can contain an inert link but cannot restore token usability. Provider delivery is not claimed exactly-once.
+- V4__enable_password_reset_delivery.sql widens only the existing job-type constraint. No new table/column/account credential-version field was needed. V1-V3 and all supplied specifications are unchanged. T06 must revoke all actual account sessions/refresh families within the successful reset transaction when those services/tables exist; no implemented session-invalidation claim is made now.
+
+Verification actually performed:
+
+- **PASS:** `backend\mvnw.cmd clean verify`, Java 21 / Spring Boot 4.1.1, **142 tests, 0 failures, 0 errors, 0 skipped**; executable JAR packaged. Docker was available and real PostgreSQL 18.6 Testcontainers ran.
+- All previous **104 tests retained and passing**, plus **38** new recovery/reset cases. Existing registration/verification suite remains 30; cipher 3; identity persistence 13; token entity 3; email normalization 8; password configuration 4; secure tokens 7; application startup/restart 1; problem factory 3; global errors 13; request tracing 11; security 8; recovery/reset 38.
+- Covered normalized/generic/unknown/ineligible recovery, equal expensive work and minimum budget, encrypted purpose/expiry/digest delivery, coalescing and expiry replacement, rate limits/windows, concurrent issuance/consumption/worker claims, actual database rollback on enqueue and password persistence failures, malformed/invalid/missing inputs, invalid/revoked/expired/consumed/wrong-purpose/changed-email/disabled links, remaining token revocation and pending payload erasure, unchanged verification, no auto-login, safe response/log data, real CSRF exchange and denial, problem JSON and correlation IDs, held unknown delivery expiry and replay denial.
+- Clean V1-V4 migration/Hibernate validation, V1/V2 upgrade regression, V3-to-V4 queued verification ciphertext preservation, restart preservation and JAR packaging passed. Existing tests only adjusted expected migration count and newly public POSTs; test clock/mail configuration is now explicitly test-only to prevent component-scan leakage. Security and CSRF were not weakened.
+- **Not performed:** live provider inbox delivery, full browser-to-backend recovery journey or frontend regression (no frontend files changed), session revocation before T06, hosted CI (no Git remote configured). No local tool blocker affected the backend checks. No dependency versions changed.
+
+Exact files created:
+
+- `backend/src/main/java/com/ayaantrix/collector/auth/controller/PasswordRecoveryController.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/PasswordResetRequest.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/RecoveryRequest.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/PasswordRecoveryService.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/PasswordResetService.java`
+- `backend/src/main/resources/db/migration/V4__enable_password_reset_delivery.sql`
+- `backend/src/test/java/com/ayaantrix/collector/auth/PasswordRecoveryWorkflowTests.java`
+
+Exact files modified:
+
+- `backend/.env.example`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationDeliveryWorker.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationMailSender.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationOutbox.java`
+- `backend/src/main/java/com/ayaantrix/collector/common/SecurityConfiguration.java`
+- `backend/src/main/resources/application.properties`
+- `backend/src/test/java/com/ayaantrix/collector/CollectorApplicationTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/AccountRegistrationWorkflowTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/IdentityPersistenceTests.java`
+- `README.md`
+- `backend/README.md`
+- `docs/FRONTEND_BACKEND_HANDOFF.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+
+Remaining T05: agree/implement verification resend route and replacement/cooldown policy; configure/test a sandbox/provider and automated worker runner; operational reconciliation/key rotation, deployment abuse controls and end-to-end account acceptance. Default email delivery remains disabled and only the controlled fake delivered in tests. T06 session invalidation/login/JWT/refresh remain future work. T05/M1 and T04/M0 stay In progress. Code/test commit: `5eaff7f`; documentation is committed separately. No push performed.
+
 ## T02 results — 21 October 2026
 
 - Implemented strict TypeScript and React StrictMode, Vite, Tailwind v4/HeroUI v3 style imports, RouterProvider and Redux Provider, separate empty agency/client RTK Query APIs with reusable transport, and the `@/` source alias.
