@@ -46,6 +46,30 @@ Flyway alone owns schema changes; SQL initialization is disabled and Hibernate u
 
 The guide mentions JUnit 5. The selected Boot 4.1.1 BOM supplies JUnit Jupiter 6.0.3, which runs these Jupiter tests on Java 21; no old JUnit dependency is forced over the BOM. Other resolved versions include Spring Security 7.1.1, Hibernate 7.4.5.Final, Flyway 12.4.0, PostgreSQL JDBC 42.7.13 and Testcontainers 2.0.5.
 
+## API errors and request tracing (T04 Part 5)
+
+Handled MVC and security errors use `application/problem+json` with `type`, `title`, `status`, `detail`, `code`, `traceId` and `errors`. Validation entries contain `fieldPath` and a safe `message`; rejected values and constraint messages are not echoed. MVC protocol headers such as `Allow` are preserved. Unexpected failures return a generic 500 and log only a correlation ID, without exception messages, causes or stack traces. Application-authored `ApiException` messages must be safe for clients.
+
+Every request receives `X-Request-ID`. A single supplied ID is accepted only when it contains 1–64 ASCII letters, digits, underscores or hyphens. Missing, invalid, oversized or duplicate IDs are replaced with a UUID. Error `traceId` matches the response header. The request retains its ID across dispatches; the filter restores the previous logging context on completion or failure.
+
+The current closed security policy returns standardized 403 `ACCESS_DENIED` for anonymous and authenticated product requests, missing/invalid CSRF tokens, and unknown routes. It does not expose route existence. The MVC handler returns standardized 404 `NOT_FOUND` if a request legitimately reaches MVC without a matching handler/resource; isolated test fixtures exercise this without opening production routes. Only the exact health GET is public. Authentication behavior belongs to later tasks.
+
+Run the complete verification with Docker Desktop's Linux engine running:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+```
+
+The suite includes isolated MVC/security/tracing tests and the real PostgreSQL clean-start/restart test. Test-only transport controllers live under `src/test/`; no product endpoints were added. A Docker failure is a failed full verification, not a skipped success. For diagnosis only, the database-independent subset can be run separately:
+
+```powershell
+.\mvnw.cmd '-Dtest=ApiProblemFactoryTests,GlobalExceptionHandlerTests,RequestTraceFilterTests,SecurityConfigurationTests' test
+```
+
+On 26 October 2026, `clean verify` passed all 32 tests (0 failures, 0 errors, 0 skipped), including PostgreSQL 18.6/Flyway validation, restart preservation and executable JAR packaging. T04 remains In progress for remaining transport/documentation acceptance and remote CI verification.
+
 ## Official setup references (checked 21 October 2026)
 
 - [Boot system requirements](https://docs.spring.io/spring-boot/system-requirements.html)

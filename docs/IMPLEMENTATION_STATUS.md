@@ -124,18 +124,23 @@ Status: In progress â€” backend implementation.
 - PASS: Executable Spring Boot JAR packaging.
 - GitHub Actions CI: pending first remote run.
 
+### Part 5 — backend error handling and tracing — 26 October 2026
+
+- Completed centralized MVC handling through Spring's `ResponseEntityExceptionHandler` and the existing `ApiProblemFactory`: application errors, body validation, malformed JSON, missing/invalid parameters, 404, 405, 406, 415 and unexpected 500. Responses use `application/problem+json` and the agreed fields; validation entries use `fieldPath`/safe `message`. Framework status/protocol headers are retained. Unexpected failures omit raw exception messages, stack traces, SQL and credentials from responses and application error logs.
+- Request IDs are generated or accepted from exactly one constrained `X-Request-ID` header (1–64 ASCII letters/digits/underscore/hyphen). Invalid/oversized/ambiguous values are replaced. IDs remain stable in the request, response header, error body and logging context. Normal, exceptional, async and error filter dispatches have isolated coverage; previous MDC context is restored.
+- Preserved exact GET `/actuator/health` access and deny-by-default security. Anonymous/authenticated denied requests, unknown routes and missing/invalid CSRF tokens return standardized 403 problems. CSRF remains enabled. Isolated MVC fixtures verify standardized 404 after MVC dispatch without adding production routes or weakening security.
+- PASS: `backend\mvnw.cmd clean verify` on Java 21.0.11 / Spring Boot 4.1.1 — **32 tests, 0 failures, 0 errors, 0 skipped**. Breakdown: factory 3; MVC exceptions 11; tracing 11 (including six invalid-ID inputs); security 6; PostgreSQL integration 1. No dependency version changes.
+- PASS: Docker Desktop engine available; disposable PostgreSQL 18.6 clean startup, Flyway migration/checksum validation, second full startup, preserved probe data, unchanged single migration and no pending migrations. Real HTTP health/access checks passed on both startups. Executable Spring Boot JAR built. No test was disabled or skipped.
+- Documented error format, trace policy and exact verification/diagnostic commands in `backend/README.md`. Frontend, original specifications, migrations and the existing CI workflow were not changed. This scoped backend request supersedes the earlier frontend-only restriction for this work only. No T05+ functionality was implemented.
+- Environment: Docker was initially stopped; starting the installed Docker Desktop restored the engine and full verification succeeded. Existing non-failing Mockito/Java dynamic-agent warnings remain. Remote CI has not been run/verified by this task.
+
 ### Remaining Work
 
-- Verify CSRF rejection response formatting.
-- Verify malformed JSON and validation errors.
-- Verify unsupported HTTP methods and media types.
-- Verify missing-route handling.
-- Verify request tracing behavior.
 - Complete API transport conventions.
 - Update root README with verification commands.
 - Verify GitHub Actions CI remotely.
 
-T04 remains In progress until these checks pass.
+T04 remains In progress until all remaining acceptance checks pass. Part 5 is verified; it does not establish complete T04 or production acceptance.
 
 Next task after T04: M1 / T05.
 
