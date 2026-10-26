@@ -33,7 +33,7 @@ async function noOverflow(page: Page) {
     ),
   ).toBe(true)
 }
-test('owner → client draft → immutable review → approved export', async ({
+test('owner client draft immutable review approved export', async ({
   page,
 }, info) => {
   const errors: string[] = []
@@ -91,7 +91,7 @@ test('owner → client draft → immutable review → approved export', async ({
     .click()
   await page.getByRole('link', { name: 'Review', exact: true }).click()
   await page
-    .getByRole('button', { name: 'Review →', exact: true })
+    .getByRole('button', { name: 'Review', exact: true })
     .first()
     .click()
   await expect(
@@ -112,7 +112,7 @@ test('owner → client draft → immutable review → approved export', async ({
   await page
     .getByLabel('I understand this is a partial export', { exact: false })
     .check()
-  await page.getByRole('button', { name: 'Continue →', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page
     .getByRole('button', { name: 'Create approved export', exact: true })
     .click()
@@ -181,7 +181,7 @@ test('all project types, template previews, settings and keyboard reorder', asyn
     await page.getByLabel('Due date', { exact: true }).fill('2026-12-20')
     await page.getByRole('button', { name: 'Continue to review' }).click()
     await page
-      .getByRole('button', { name: 'Create project →', exact: true })
+      .getByRole('button', { name: 'Create project', exact: true })
       .click()
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     await noOverflow(page)
@@ -252,7 +252,7 @@ test('wizard preserves details and item drawer traps and restores keyboard focus
   await expect(
     page.getByRole('heading', { name: 'Review and create your project' }),
   ).toBeVisible()
-  await page.getByRole('button', { name: '← Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(page.getByLabel('Project name', { exact: true })).toHaveValue(
     'Wizard review verification',
   )
@@ -726,7 +726,7 @@ test('settings owns billing and selected templates open project details directly
         r.method() === 'POST' && /\/projects$/.test(new URL(r.url()).pathname),
     )
     await page
-      .getByRole('button', { name: 'Create project →', exact: true })
+      .getByRole('button', { name: 'Create project', exact: true })
       .click()
     expect((await sent).postDataJSON()).toMatchObject({
       projectType: type,
