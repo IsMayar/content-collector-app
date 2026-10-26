@@ -39,7 +39,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         // ApiException messages are deliberately authored, client-safe messages.
         var problem = problemFactory.create(status, exception.getCode(), title(status),
                 exception.getMessage(), requestTrace.getTraceId(request));
-        return response(status, new HttpHeaders(), problem);
+        var headers = new HttpHeaders();
+        if (status.value() == 429 && "RATE_LIMITED".equals(exception.getCode())) {
+            headers.set(HttpHeaders.RETRY_AFTER, "60");
+        }
+        return response(status, headers, problem);
     }
 
     // Preserve Spring MVC's status and protocol headers (for example Allow on 405),
