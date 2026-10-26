@@ -292,3 +292,8 @@ Replaced all six agency authentication layouts with the supplied teal welcome-pa
 Project details now show Add a new customer and its fields on the left, Select an existing customer on the right; mobile stacks them. Selection controls required/disabled fields while preserving typed values. Team invitation received corrected search sizing/focus, selected-project count, bounded project cards, empty results and a separate permissions panel. Insights now shows actual loaded-project summary counts, a default selected project's analytics and clear project switching/empty states.
 
 Verification: strict TypeScript/production build, ESLint, Prettier, 47 unit tests and the complete 57-case browser suite passed across desktop/tablet/phone. An initial thread worker startup timeout was resolved by an isolated one-fork unit run. After four final visual icon substitutions, build/lint/format and the production PWA cache/offline test passed again (1 case). No new backend or full-stack milestone acceptance is claimed. Evidence: `verification/PRODUCT_POLISH_2026_10_26.md` and 27 `product-polish-*.png` screenshots.
+
+
+## Auth brand-color alignment — 2026-10-26
+
+Retained the new split auth layout and aligned all six auth pages to the dashboard's shared navy/blue/background/muted/border tokens. Removed teal/green styling and yellow/pink decorative accents; replaced them with blue/cyan tints. Production build/strict TypeScript passed. Three responsive browser cases passed, each visiting all six auth routes at desktop/tablet/phone widths. Desktop sign-in render inspected; evidence: `verification/auth-brand-desktop.png` and `verification/auth-brand-phone.png`.

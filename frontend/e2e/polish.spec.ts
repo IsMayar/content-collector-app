@@ -30,7 +30,7 @@ async function noOverflow(page: Page) {
   ).toBe(true)
 }
 
-test('all authentication pages share the teal layout with no arrow actions', async ({
+test('all authentication pages share the brand layout with no arrow actions', async ({
   page,
 }, info) => {
   for (const [path, title] of [
