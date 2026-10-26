@@ -2,7 +2,7 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 26 October 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0 is In progress; M1–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. M1/T05 are In progress for the authorized account foundation; M2–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -156,6 +156,47 @@ T04 remains **In progress** pending remote CI evidence, preserving the previous 
 
 Next task after T04: M1 / T05.
 
+## T05 Part 1 - account database and secure identity foundation - 26 October 2026
+
+Status: **In progress**. The explicit T05 Part 1 backend request authorizes this work while T04's hosted CI gate remains pending; it does not mark T04 or M0 Complete.
+
+- Added `V2__create_identity_schema.sql` without changing V1 or supplied references. Only `collector.users` and the account subset of `collector.access_tokens` exist: UUID primary keys, canonical unique email, prefixed password hash, display name, verification time/state, account optimistic version, purpose-bound unique SHA-256 digests, foreign key, lifecycle timestamps/checks and account-purpose/active-expiry indexes. Names/purposes use the reference `VERIFY_EMAIL`/`RESET_PASSWORD`. Workspace/team/project/billing/session objects were not added.
+- Added `UserAccount`/`AccountToken`, `AccountState`/`TokenPurpose`, repositories, `EmailAddresses`, `SecureAccountTokens` and `PasswordConfiguration`. Email normalization is locale-independent, missing values are safely rejected, entity Bean Validation covers format, and the database requires canonical lowercase email. Repositories provide normalized-email existence/lookup, ID/save, digest-and-purpose lookup, user/purpose listing and conditional transactional consume/revoke/purpose-scoped invalidation.
+- Passwords use the specification's prefixed Argon2id, 19,456 KiB/two iterations/parallelism one, with random salt. This follows Section 8.1 over the task's BCrypt fallback. Spring's implementation requires Bouncy Castle; Boot's BOM does not manage it, so the sole additional dependency is explicitly pinned `bcprov-jdk18on:1.85`, matching Spring Security 7.1.1's version catalog. All existing BOM-managed versions remain unchanged. Deployment benchmarking and password request policy/rate limits remain later work.
+- SecureRandom generates 256-bit URL-safe unpadded raw tokens; storage uses lowercase 64-character SHA-256 digests only. Verification expiry is 24 hours and reset expiry 30 minutes. Informational validity checks include purpose, issue/expiry time, consumption and revocation. Authoritative database consumption has a single winner under concurrency and joins the caller's transaction; rollback restores usability. Full verification/reset/reissuance workflows are not implemented.
+- Disabled Hibernate SQL/bind/extract/vendor-error diagnostics that can echo hash values during constraint failures; a captured-output regression checks hashes/digests are absent. No raw password/token logging, production credentials, public endpoints, email delivery, JWT, login, refresh sessions, frontend changes or T06+ features were introduced. HTTP security and CSRF tests/configuration remain intact.
+- **PASS:** final `backend\mvnw.cmd clean verify` on Java 21.0.11 / Spring Boot 4.1.1: **71 tests, 0 failures, 0 errors, 0 skipped**. All previous 36 tests remain, plus 35 identity tests: PostgreSQL persistence/constraints/concurrency/rollback/upgrade 13, normalization 8, encoder 4, token generation/digest 7, entity purpose/expiry/secret guards 3. Executable Spring Boot JAR built.
+- **PASS:** disposable PostgreSQL 18.6 clean V1/V2 migration, V1-to-V2 upgrade with preserved pre-existing probe data, Flyway checksum validation/no pending migrations, Hibernate validation of both entities, and original full-application restart/data/health/security test. Its two schema assertions now expect two identity tables and two migrations; no original test was removed/disabled or security assertion weakened. The first run had one incorrect test exception-cause assertion; it was corrected to match the directly thrown validation exception, and the full suite then passed.
+- Frontend and specification files are unchanged. No new frontend run is claimed; existing 68-test T04 evidence is retained. Hosted GitHub Actions still has no configured remote/run evidence and is **pending**.
+
+Created files (paths relative to project root):
+
+- `backend/src/main/resources/db/migration/V2__create_identity_schema.sql`
+- `backend/src/main/java/com/ayaantrix/collector/auth/entity/AccountState.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/entity/TokenPurpose.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/entity/UserAccount.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/entity/AccountToken.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/repository/UserAccountRepository.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/repository/AccountTokenRepository.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/security/EmailAddresses.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/security/PasswordConfiguration.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/security/SecureAccountTokens.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/IdentityPersistenceTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/entity/AccountTokenTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/security/EmailAddressesTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/security/PasswordConfigurationTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/security/SecureAccountTokensTests.java`
+
+Modified files:
+
+- `backend/pom.xml` - required Argon2 provider only.
+- `backend/src/main/resources/application.properties` - sensitive ORM diagnostic suppression.
+- `backend/src/test/java/com/ayaantrix/collector/CollectorApplicationTests.java` - current table/migration counts only.
+- `backend/README.md` - identity schema/utilities, dependency rationale, commands, results and boundaries.
+- `docs/IMPLEMENTATION_STATUS.md` - this evidence and T05/M1 progress.
+
+Remaining T05: transactional account registration/verification/recovery services and HTTP contracts, request/password policy, generic anti-enumeration responses, disabled-account/email-change policy, purpose-bound reissue/invalidation orchestration, provider-fake delivery, rate limiting and workflow acceptance tests. Token consumption/account mutation must remain atomic. Session revocation integration must be added when session infrastructure exists; no full account recovery or authentication is claimed. No local tool blocker remains. T04/M0 remain In progress for hosted CI, T05/M1 In progress, and T06+ Not started.
+
 ## T02 results — 21 October 2026
 
 - Implemented strict TypeScript and React StrictMode, Vite, Tailwind v4/HeroUI v3 style imports, RouterProvider and Redux Provider, separate empty agency/client RTK Query APIs with reusable transport, and the `@/` source alias.
@@ -185,11 +226,11 @@ Milestone status: In progress
 
 ### Milestone M1 Identity and tenant foundation
 
-Milestone status: Not started
+Milestone status: In progress
 
 | Task | Deliverable                                     | Acceptance                                                     | Status      |
 | ---- | ----------------------------------------------- | -------------------------------------------------------------- | ----------- |
-| T05  | Account registration, verification and recovery | Purpose-bound single-use tokens and generic recovery responses | Not started |
+| T05  | Account registration, verification and recovery | Purpose-bound single-use tokens and generic recovery responses | In progress |
 | T06  | JWT access, refresh rotation, logout and CSRF   | Expiry, reuse and concurrent refresh tests pass                | Not started |
 | T07  | Workspace owner, membership and plan seed       | Two tenants cannot access each other's resources               | Not started |
 | T08  | Agency layout and session lifecycle             | Sign-in, workspace switch and cache clearing work              | Not started |
