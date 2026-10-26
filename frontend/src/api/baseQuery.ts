@@ -3,6 +3,7 @@ import {
   type BaseQueryFn,
   type FetchArgs,
   type FetchBaseQueryError,
+  type FetchBaseQueryMeta,
   type BaseQueryApi,
 } from '@reduxjs/toolkit/query/react'
 import { tokenSchema } from '@/api/types'
@@ -21,6 +22,11 @@ const raw = fetchBaseQuery({
   baseUrl: normalizedBaseUrl,
   credentials: 'include',
   timeout: 15000,
+  prepareHeaders: (headers) => {
+    if (!headers.has('Accept'))
+      headers.set('Accept', 'application/json, application/problem+json')
+    return headers
+  },
 })
 const auth = (api: BaseQueryApi) => (api.getState() as { auth: AuthState }).auth
 let refreshInFlight: Promise<boolean> | null = null
@@ -79,10 +85,17 @@ export function refreshSession(api: BaseQueryApi): Promise<boolean> {
 export const createBaseQuery =
   (
     agency = false,
-  ): BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =>
+  ): BaseQueryFn<
+    string | FetchArgs,
+    unknown,
+    FetchBaseQueryError,
+    Parameters<typeof raw>[2],
+    FetchBaseQueryMeta
+  > =>
   async (args, api, options) => {
     const request: FetchArgs =
       typeof args === 'string' ? { url: args } : { ...args }
+    request.method = (request.method || 'GET').toUpperCase()
     const headers = new Headers(request.headers as HeadersInit | undefined)
     if (agency && auth(api).accessToken)
       headers.set('Authorization', `Bearer ${auth(api).accessToken}`)

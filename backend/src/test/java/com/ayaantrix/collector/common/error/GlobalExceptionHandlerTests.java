@@ -112,6 +112,13 @@ class GlobalExceptionHandlerTests {
         org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.traceId").value(id).match(result);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {401, 422})
+    void applicationStatusConventionsArePreserved(int status) throws Exception {
+        problem(mvc.perform(get("/_test/status").param("status", Integer.toString(status))
+                .header("X-Request-ID", "status-1")), status, "TEST_APPLICATION_ERROR", "status-1");
+    }
+
     private ResultActions problem(ResultActions result, int status, String code, String id) throws Exception {
         return result.andExpect(status().is(status))
                 .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
@@ -132,6 +139,11 @@ class GlobalExceptionHandlerTests {
         Map<String, String> body(@Valid @RequestBody Input input) { return Map.of("name", input.name()); }
         @GetMapping("/_test/parameter")
         Map<String, Integer> parameter(@RequestParam("count") int count) { return Map.of("count", count); }
+        @GetMapping("/_test/status")
+        void status(@RequestParam("status") int status) {
+            throw new ApiException(org.springframework.http.HttpStatusCode.valueOf(status),
+                    "TEST_APPLICATION_ERROR", "A safe application message.");
+        }
         @GetMapping("/_test/application")
         void application() { throw new ApiException(HttpStatus.CONFLICT, "VERSION_CONFLICT", "Reload the latest revision."); }
         @GetMapping("/_test/unexpected")

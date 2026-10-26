@@ -11,6 +11,8 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
@@ -18,7 +20,8 @@ public class SecurityConfiguration {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            SecurityProblemHandler securityProblemHandler
+            SecurityProblemHandler securityProblemHandler,
+            CsrfTokenRepository csrfTokenRepository
     ) throws Exception {
 
         return http
@@ -43,9 +46,18 @@ public class SecurityConfiguration {
                         )
                 )
 
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository))
+
                 // CSRF remains enabled for future
                 // cookie-authenticated write requests.
                 .build();
+    }
+
+    @Bean
+    CsrfTokenRepository csrfTokenRepository() {
+        var repository = new HttpSessionCsrfTokenRepository();
+        repository.setHeaderName("X-XSRF-TOKEN");
+        return repository;
     }
 
     @Bean

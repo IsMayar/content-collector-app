@@ -133,6 +133,44 @@ class SecurityConfigurationTests {
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
 
+    @Autowired
+    org.springframework.security.web.csrf.CsrfTokenRepository csrfTokenRepository;
+
+    @Test
+    void configuredFrontendCsrfHeaderPassesOnlyWithValidSessionToken() throws Exception {
+        var filter = new org.springframework.security.web.csrf.CsrfFilter(csrfTokenRepository);
+        var get = new org.springframework.mock.web.MockHttpServletRequest("GET", "/");
+        filter.doFilter(get, new org.springframework.mock.web.MockHttpServletResponse(), (req, res) -> {});
+        var token = (org.springframework.security.web.csrf.CsrfToken) get.getAttribute(
+                org.springframework.security.web.csrf.CsrfToken.class.getName());
+        String encoded = token.getToken();
+        org.junit.jupiter.api.Assertions.assertEquals("X-XSRF-TOKEN", token.getHeaderName());
+        var post = new org.springframework.mock.web.MockHttpServletRequest("POST", "/");
+        post.setSession(get.getSession());
+        post.addHeader("X-XSRF-TOKEN", encoded);
+        var reached = new java.util.concurrent.atomic.AtomicBoolean();
+        filter.doFilter(post, new org.springframework.mock.web.MockHttpServletResponse(),
+                (req, res) -> reached.set(true));
+        org.junit.jupiter.api.Assertions.assertTrue(reached.get());
+
+        var wrong = new org.springframework.mock.web.MockHttpServletRequest("POST", "/");
+        wrong.setSession(get.getSession());
+        wrong.addHeader("X-CSRF-TOKEN", encoded);
+        var denied = new org.springframework.mock.web.MockHttpServletResponse();
+        filter.doFilter(wrong, denied, (req, res) -> org.junit.jupiter.api.Assertions.fail("CSRF bypass"));
+        org.junit.jupiter.api.Assertions.assertEquals(403, denied.getStatus());
+    }
+
+    @Test
+    void crossOriginPreflightDoesNotOpenProtectedRoutes() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options("/api/v1/projects")
+                .header("Origin", "https://untrusted.example")
+                .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .doesNotExist("Access-Control-Allow-Origin"));
+    }
+
     @RestController
     static class HealthStub {
 

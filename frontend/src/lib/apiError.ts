@@ -1,14 +1,32 @@
+import { z } from 'zod'
 import type { Problem } from '@/api/types'
+
+const problemSchema = z.object({
+  type: z.string().optional(),
+  title: z.string().optional(),
+  status: z.number().int().min(400).max(599).optional(),
+  code: z.string().optional(),
+  detail: z.string().optional(),
+  traceId: z.string().optional(),
+  errors: z
+    .array(z.object({ fieldPath: z.string(), message: z.string() }))
+    .optional(),
+})
+
 export function apiProblem(error: unknown): Partial<Problem> {
-  if (
-    typeof error === 'object' &&
-    error &&
-    'data' in error &&
-    typeof error.data === 'object' &&
-    error.data
+  if (typeof error !== 'object' || !error) return {}
+  const status =
+    'status' in error && typeof error.status === 'number'
+      ? error.status
+      : undefined
+  const parsed = problemSchema.safeParse(
+    'data' in error ? error.data : undefined,
   )
-    return error.data as Partial<Problem>
-  return {}
+  // HTTP status is authoritative; never pass unchecked server fields to forms.
+  return {
+    ...(parsed.success ? parsed.data : {}),
+    ...(status ? { status } : {}),
+  }
 }
 export function errorMessage(error: unknown): string {
   const problem = apiProblem(error)
