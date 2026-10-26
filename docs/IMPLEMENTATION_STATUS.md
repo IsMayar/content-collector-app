@@ -292,6 +292,46 @@ Exact files modified:
 
 Remaining T05: agree/implement verification resend route and replacement/cooldown policy; configure/test a sandbox/provider and automated worker runner; operational reconciliation/key rotation, deployment abuse controls and end-to-end account acceptance. Default email delivery remains disabled and only the controlled fake delivered in tests. T06 session invalidation/login/JWT/refresh remain future work. T05/M1 and T04/M0 stay In progress. Code/test commit: `5eaff7f`; documentation is committed separately. No push performed.
 
+## T05 Part 4 - account workflow integration and delivery operations - 26 October 2026
+
+Status: **In progress** for T05/M1. The explicit Part 4 backend request authorizes this focused work. All earlier results and the original M0-M7/T01-T38 roadmap remain preserved. T04/M0 stay In progress because no Git remote/hosted CI evidence exists; T06 and later backend tasks remain Not started.
+
+- Added AccountDeliveryRunner: opt-in SmartLifecycle polling, one sequential thread, 1-50 claims per poll, validated delay/shutdown bounds, guarded startup requiring the existing key and an available explicit adapter, fixed safe failure logs, no global unrelated scheduling, idempotent start/stop, and bounded in-flight drain/interruption. Default worker flag remains false; disabled fallback cannot accidentally dispatch. Existing PostgreSQL leases/claims, purpose eligibility, retry caps and unknown-outcome holding remain authoritative. Maintenance now processes at most 100 stale leases and 100 expired held payloads per dispatch.
+- Added AccountDeliveryOperations: internal-only inspection capped at 100 redacted rows, row-locked decisions using expected timestamp AND attempt count, and transactional confirmed-sent / confirmed-not-sent / abandon handling. UNKNOWN never automatically becomes QUEUED. Only evidence-confirmed not-sent, still-eligible tokens below the attempt cap can requeue. Terminal decisions erase ciphertext; metadata records only resolution, safe CASE-number reference and decision time. Stale/concurrent decisions fail safely; repeated clock values cannot make an old decision apply to a new attempt. Pause/drain all workers and resolve provider evidence first; the runbook does not present shutdown timeout as proof of failure.
+- Reused existing test-only controlled FakeMail; new Mailbox adds completion signalling for automated tests. No development HTTP token mailbox, real provider, SMTP connection, new production credentials or Actuator token exposure was added. Delivery operations runbook documents bounded safe SQL/service inspection, evidence handling, eligibility, restart/shutdown, unavailable cipher/key handling and remaining operational prerequisites. Multi-key rotation and cipher-repair retry tooling remain pending.
+- Resend remains explicitly **unapproved and denied**. Repository inspection found no agreed replacement for the proposed frontend route. The handoff now proposes exact route/DTO/generic response/eligibility, peer and recipient throttle limits, queued/unknown coalescing and atomic token replacement/lifetime rules, all clearly pending approval. Existing frontend mock capability is not treated as approval.
+- Reviewed actual frontend auth request/response shapes, CSRF exchange, token capture and error transport against real controllers. Existing five public account operations remain unchanged; no contract correction was necessary. Deny-by-default authorization, exact health, restricted CORS and CSRF remain. T06 session revocation must join the successful reset transaction when real session/refresh infrastructure exists; no login/JWT/refresh work was introduced.
+- No migration or dependency update was necessary. V1-V4 and all original specification files are unchanged. The existing jsonb outbox metadata holds bounded operational references; no second queue/audit framework was added. Authenticated operator identity/audit evidence lives in the restricted operational case, not an invented T06 session or public endpoint.
+
+Verification actually performed:
+
+- **PASS:** final `backend\mvnw.cmd clean verify`, Java 21.0.11 / Spring Boot 4.1.1, **175 tests, 0 failures, 0 errors, 0 skipped**, executable JAR packaged. All previous **142 retained**, plus **21** AccountDeliveryOperationsTests and **12** AccountDeliveryRunnerTests. No old tests were weakened or removed.
+- PostgreSQL 18.6 Testcontainers covered the real-CSRF register -> scheduled test mailbox -> verify -> recovery -> scheduled reset mail -> HTTP password reset journey; purpose/password/state preservation, consumed links, no secrets in logs, bounded redacted inspection/maintenance, two competing pollers, concurrent/stale reconciliation, unchanged-clock attempt protection, cap/expiry/revocation/disabled/email-change guards, actual rollback, held unknown/cipher states, and real context restart with stable key/queued ciphertext and crashed leases. Existing clean migration, upgrade, Hibernate validation, restart, registration/reset/security/error suites passed.
+- Runner tests covered default-off/explicit-on lifecycle, disabled sender/missing key fail-closed, all configuration bounds, idempotent lifecycle, bounded claims, in-flight shutdown drain, poll recovery and safe failure logging. Initial test-only compilation errors in an overloaded stop method reference and JSON strings were corrected before passing verification. Final review added attempt-count stale protection and reran the full suite successfully.
+- **PASS:** existing frontend auth/transport contract tests: `npm test -- src/test/auth.test.tsx src/test/transport.test.ts --maxWorkers=1 --pool=forks`, **46 tests in 2 files**. No frontend source, UI or product page changed; no broader frontend build/browser claim is made.
+- **Not performed:** live provider/inbox delivery, provider reconciliation against real external records, browser-to-live-backend workflow, T06 session revocation, multi-key rotation and hosted CI. Docker/local tools were available; no local verification blocker remains. A real provider adapter, restricted maintenance deployment/evidence process and approved resend contract are integration prerequisites, not simulated production successes.
+
+Exact files created:
+
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/AccountDeliveryOperations.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/AccountDeliveryRunner.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/AccountDeliveryOperationsTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/delivery/AccountDeliveryRunnerTests.java`
+- `docs/ACCOUNT_DELIVERY_OPERATIONS.md`
+
+Exact files modified:
+
+- `backend/.env.example`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationDeliveryWorker.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/delivery/VerificationMailSender.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/AccountWorkflowConfiguration.java`
+- `backend/src/main/resources/application.properties`
+- `backend/README.md`
+- `docs/FRONTEND_BACKEND_HANDOFF.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+
+Acceptance decision: T05 is **not Complete** while verification resend approval/workflow, real sandbox/provider acceptance and remaining operational/end-to-end account requirements are pending. Worker execution and internal unknown-outcome reconciliation are now implemented and verified within controlled-test scope. Next T05 step is approving the documented resend decisions and configuring a controlled provider integration; T06 authentication/session invalidation stays separate. Code/test commit: `1cb8ed5`; runbook/status/contracts committed separately. No push performed.
+
 ## T02 results — 21 October 2026
 
 - Implemented strict TypeScript and React StrictMode, Vite, Tailwind v4/HeroUI v3 style imports, RouterProvider and Redux Provider, separate empty agency/client RTK Query APIs with reusable transport, and the `@/` source alias.

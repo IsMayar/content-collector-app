@@ -171,3 +171,30 @@ Reset uses the existing password policy and safe 400 TOKEN_INVALID / 410 TOKEN_E
 The earlier reset-contract session revocation requirement remains mandatory for T06: actual account sessions and refresh families must be revoked in the same successful reset transaction once those tables/services exist. Current CSRF session state is not an authenticated session, and no JWT/refresh infrastructure was added. No credential-version schema or implemented session revocation is claimed.
 
 Verification: full backend clean verify passed 142 tests (104 retained + 38 new), zero failures/errors/skips, with PostgreSQL concurrency/rollback/migration and existing registration/verification regressions. No frontend code/tests changed. Production email delivery, an automated worker runner, reconciliation/key rotation and the proposed verification-resend contract remain pending. See backend/README.md for exact configuration and local commands.
+
+
+## T05 Part 4 contract review and resend decision - 26 October 2026
+
+Actual authApi.ts, baseQuery.ts, token capture/form schemas and backend controllers were reviewed. Existing implemented contracts remain GET auth/csrf 200 {token}; POST auth/register 202 generic {message}; POST auth/verify-email 200 {verified:true}; POST auth/forgot-password 202 generic {message}; POST auth/reset-password 200 {message}. Same-origin credentialed requests, fresh X-XSRF-TOKEN exchange, non-cacheable success bodies, 400 input validation, 410 expired/consumed links, 429 with Retry-After, problem JSON and matching X-Request-ID/traceId remain compatible. Token links use trusted frontend origins and URL fragments with explicit POST consumption. No frontend UI/transport change or new public account route was required. Frontend mock short token codes are synthetic fixtures, not production token formats. Login/bootstrap/refresh/session behavior remains T06.
+
+**Resend approval status: unresolved.** Repository guide, original endpoint catalog and subsequent handoff/status records contain no approval superseding the explicit proposal. The existing frontend sends POST auth/resend-verification, but a frontend mock is not contract approval. The real backend continues to deny that route. This is an acknowledged real-integration gap, not successful resend.
+
+Concrete compatible proposal for product/backend approval (NOT implemented or approved):
+
+| Decision | Proposed behavior |
+| --- | --- |
+| Route and DTO | POST /api/v1/auth/resend-verification, JSON {email}, trimmed/normalized and bounded to 254 characters; existing CSRF exchange required |
+| Public result | 202 {message: "If this address can be verified, check your inbox for a verification email."}; Cache-Control no-store; identical for unknown/active/disabled/unverified addresses and suppressed requests |
+| Eligibility | Only UNVERIFIED accounts; never change password, auto-verify, authenticate or resurrect disabled accounts |
+| Abuse policy | PostgreSQL 5 validated requests/minute/transport peer with generic 429 + Retry-After: 60; recipient-specific 60-second cooldown and maximum 3 actual deliveries/hour, persisted under hashed recipient keys; suppressed recipient requests still return generic 202; equal expensive work and response floor |
+| Queued/unknown work | Coalesce current queued/running/known-retry work; hold unknown outcomes for evidence-based reconciliation rather than creating a second message |
+| Explicit resend after confirmed delivery | Once cooldown permits, create a fresh 256-bit VERIFY_EMAIL capability with 24-hour lifetime, revoke previous verification capabilities and cancel their stale pending ciphertext atomically; this is replacement, because successful delivery erases the old raw payload |
+| Concurrency | Lock the account and issuance budget; one replacement job per accepted occurrence with stable dedupe key; no unlimited valid tokens or duplicate concurrent jobs |
+| Errors/configuration | Existing safe problem JSON for malformed input; uniform global delivery-unavailable response before lookup; recipient suppression/failures must not enumerate accounts |
+
+Approval is still required for the route, precise response text, cooldown/hourly cap, queued/unknown coalescing, and whether replacement renews lifetime to 24 hours. These proposed values do not add environment variables or migrations yet. Existing UI countdowns must respect the agreed server policy when implemented.
+
+Part 4 adds explicitly enabled delivery polling and bounded internal reconciliation only. Defaults remain disabled and there is no raw-token/public operations endpoint. See [account delivery operations](ACCOUNT_DELIVERY_OPERATIONS.md) for configuration, state meanings, worker draining, evidence requirements and controlled test mailboxes. Production provider integration and multi-key/cipher-repair operations remain pending. T06 must revoke account sessions/refresh families in the reset transaction when that infrastructure exists.
+
+
+Part 4 verification: **175 backend tests passed**, zero failures/errors/skips (142 preserved + 33 new); **46 existing frontend auth/transport tests passed** in two files using the package.json test script with one fork worker. Backend MockMvc verifies actual CSRF/HTTP account journeys; frontend tests still use controlled HTTP mocks and do not prove full browser/provider or T06 bootstrap integration. No frontend files or supplied contracts/specifications were changed.
