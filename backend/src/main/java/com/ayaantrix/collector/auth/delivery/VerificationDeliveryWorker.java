@@ -39,8 +39,7 @@ public class VerificationDeliveryWorker {
         transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    // Explicit worker entry point. No scheduler/provider is enabled by default.
-    // A future worker runner may call this only with a configured sandbox/production adapter.
+    // Shared entry point for explicit calls and the opt-in AccountDeliveryRunner.
     public boolean dispatchOne() {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("Email delivery cannot run inside a caller transaction.");
@@ -50,17 +49,23 @@ public class VerificationDeliveryWorker {
             // A crashed sender may already have contacted the provider. Recover to
             // reconciliation, never automatic redelivery of an unknown outcome.
             jdbc.update("""
-                    update collector.outbox_jobs set state='FAILED',lease_owner=null,lease_expires_at=null,
-                    last_error_code='DELIVERY_OUTCOME_UNKNOWN',updated_at=?
-                    where state='RUNNING' and lease_expires_at<=?
+                    with stale as (
+                      select id from collector.outbox_jobs where job_type in ('VERIFY_EMAIL','RESET_PASSWORD')
+                        and state='RUNNING' and lease_expires_at<=? order by lease_expires_at,id
+                      for update skip locked limit 100
+                    ) update collector.outbox_jobs j set state='FAILED',lease_owner=null,lease_expires_at=null,
+                    last_error_code='DELIVERY_OUTCOME_UNKNOWN',updated_at=? from stale s where j.id=s.id
                     """,Timestamp.from(now),Timestamp.from(now));
             jdbc.update("""
-                    update collector.outbox_jobs set state='DEAD',encrypted_payload=null,
-                    last_error_code='DELIVERY_EXPIRED',updated_at=?
-                    where state='FAILED' and (created_at<=? or exists(
-                      select 1 from collector.access_tokens t where t.id=(outbox_jobs.payload_json->>'tokenId')::uuid
-                      and (t.expires_at<=? or t.consumed_at is not null or t.revoked_at is not null)))
-                    """,Timestamp.from(now),Timestamp.from(now.minusSeconds(86400)),Timestamp.from(now));
+                    with expired as (
+                      select j.id from collector.outbox_jobs j where j.job_type in ('VERIFY_EMAIL','RESET_PASSWORD')
+                      and j.state='FAILED' and (j.created_at<=? or exists(
+                        select 1 from collector.access_tokens t where t.id=(j.payload_json->>'tokenId')::uuid
+                        and (t.expires_at<=? or t.consumed_at is not null or t.revoked_at is not null)))
+                      order by j.updated_at,j.id for update of j skip locked limit 100
+                    ) update collector.outbox_jobs j set state='DEAD',encrypted_payload=null,
+                    last_error_code='DELIVERY_EXPIRED',updated_at=? from expired e where j.id=e.id
+                    """,Timestamp.from(now.minusSeconds(86400)),Timestamp.from(now),Timestamp.from(now));
             var jobs=jdbc.query("""
                     with candidate as (
                       select id from collector.outbox_jobs where job_type in ('VERIFY_EMAIL','RESET_PASSWORD') and attempt_count<5

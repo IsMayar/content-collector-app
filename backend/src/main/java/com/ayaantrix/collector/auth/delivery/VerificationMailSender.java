@@ -7,6 +7,8 @@ import java.util.UUID;
 public interface VerificationMailSender {
     // The adapter must use deliveryId for provider idempotency where supported.
     void send(Message message);
+    // Disabled default must never consume queued work through the automated runner.
+    default boolean available() { return true; }
 
     record Message(UUID deliveryId, String recipient, URI verificationLink,
             com.ayaantrix.collector.auth.entity.TokenPurpose purpose) {

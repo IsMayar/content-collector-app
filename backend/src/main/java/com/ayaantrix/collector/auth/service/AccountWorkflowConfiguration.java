@@ -11,6 +11,9 @@ public class AccountWorkflowConfiguration {
     Clock accountClock() { return Clock.systemUTC(); }
     @Bean @ConditionalOnMissingBean(VerificationMailSender.class)
     VerificationMailSender disabledVerificationMailSender() {
-        return message -> { throw new VerificationMailSender.DeliveryFailure(false); };
+        return new VerificationMailSender() {
+            @Override public boolean available() { return false; }
+            @Override public void send(Message message) { throw new VerificationMailSender.DeliveryFailure(false); }
+        };
     }
 }
