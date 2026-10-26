@@ -5,9 +5,8 @@ import {
   FileText,
   Image,
   CheckCircle,
-  Upload,
+  FolderOpen,
   LockKeyhole,
-  ChevronRight,
   Search,
 } from 'lucide-react'
 const topics = [
@@ -37,7 +36,7 @@ const topics = [
     body: 'Open the project’s Review tab to inspect the submitted revision. Reviewers with permission can approve that exact revision or request changes with feedback. Internal comments remain private to the agency.',
   },
   {
-    Icon: Upload,
+    Icon: FolderOpen,
     title: 'Export content',
     summary: 'Download organised files and content for your next stage.',
     body: 'Open Exports in the project and choose an available format. Exports contain approved revisions captured in an immutable snapshot. Download a completed export before its link expires.',
@@ -89,7 +88,6 @@ export function HelpPage() {
                 <strong>{title}</strong>
                 <small>{summary}</small>
               </span>
-              <ChevronRight size={17} />
             </summary>
             <p>{body}</p>
           </details>
@@ -110,7 +108,7 @@ export function HelpPage() {
           </p>
         </div>
         <Link className="secondary-button" to="/sign-in">
-          Go to sign in →
+          Go to sign in
         </Link>
       </aside>
     </section>

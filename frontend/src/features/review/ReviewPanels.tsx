@@ -36,7 +36,7 @@ export function ReviewPanel({ root }: { root: string }) {
     return (
       <>
         <button className="text-link" onClick={() => setSelected('')}>
-          ← Back to review queue
+          Back to review queue
         </button>
         <RevisionReview key={item.id} root={root} item={item} />
       </>
@@ -92,7 +92,7 @@ export function ReviewPanel({ root }: { root: string }) {
                               className="primary-button"
                               onClick={() => setSelected(item.id)}
                             >
-                              Review →
+                              Review
                             </button>
                           </td>
                         </tr>
@@ -562,12 +562,12 @@ export function ExportPanel({
                   className="text-link"
                   onClick={() => setStep(1)}
                 >
-                  ← Edit configuration
+                  Edit configuration
                 </button>
               </div>
             )}
             <button className="primary-button" disabled={command.pending}>
-              {step === 1 ? 'Continue →' : 'Create approved export'}
+              {step === 1 ? 'Continue' : 'Create approved export'}
             </button>
           </form>
           <ErrorNotice error={command.error} />

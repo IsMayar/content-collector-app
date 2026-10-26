@@ -207,7 +207,7 @@ export function TeamPage() {
             reserved once the invitation is sent.
           </p>
           <form
-            className="stack-form"
+            className="stack-form team-invitation-form"
             onSubmit={async (e) => {
               e.preventDefault()
               const f = new FormData(e.currentTarget)
@@ -249,8 +249,11 @@ export function TeamPage() {
             </div>
             <div className="invite-assignment-grid">
               <section>
-                <h3>Assign to projects</h3>
-                <label className="board-search">
+                <div className="assignment-section-heading">
+                  <h3>Assign to projects</h3>
+                  <span aria-live="polite">{assigned.length} selected</span>
+                </div>
+                <label className="board-search invite-project-search">
                   <Search size={16} />
                   <input
                     aria-label="Search projects to assign"
@@ -259,42 +262,66 @@ export function TeamPage() {
                     placeholder="Search projects…"
                   />
                 </label>
-                {projects.data?.data
-                  .filter((p) =>
+                <div className="assignment-project-list">
+                  {projects.data?.data
+                    .filter((p) =>
+                      p.title.toLowerCase().includes(search.toLowerCase()),
+                    )
+                    .map((p) => (
+                      <label className="assignment-choice" key={p.id}>
+                        <input
+                          type="checkbox"
+                          checked={assigned.includes(p.id)}
+                          onChange={(e) =>
+                            setAssigned(
+                              e.target.checked
+                                ? [...assigned, p.id]
+                                : assigned.filter((id) => id !== p.id),
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>{p.title}</strong>
+                          <small>Client: {p.clientBusinessName}</small>
+                        </span>
+                        <Badge>{p.projectType}</Badge>
+                      </label>
+                    ))}
+                </div>
+                {projects.data &&
+                  !projects.data.data.some((p) =>
                     p.title.toLowerCase().includes(search.toLowerCase()),
-                  )
-                  .map((p) => (
-                    <label className="assignment-choice" key={p.id}>
-                      <input
-                        type="checkbox"
-                        checked={assigned.includes(p.id)}
-                        onChange={(e) =>
-                          setAssigned(
-                            e.target.checked
-                              ? [...assigned, p.id]
-                              : assigned.filter((id) => id !== p.id),
-                          )
-                        }
-                      />
-                      <span>
-                        <strong>{p.title}</strong>
-                        <small>Client: {p.clientBusinessName}</small>
-                      </span>
-                      <Badge>{p.projectType}</Badge>
-                    </label>
-                  ))}
+                  ) && (
+                    <p className="assignment-empty" role="status">
+                      No matching projects. Try another name.
+                    </p>
+                  )}
+                <p className="assignment-help">
+                  Only selected projects will be visible to this teammate. You
+                  can update assignments later.
+                </p>
               </section>
-              <section>
+              <section className="assignment-permissions">
                 <h3>Permissions for selected projects</h3>
                 <label className="permission-choice">
-                  <input name="review" type="checkbox" role="switch" />
+                  <input
+                    name="review"
+                    type="checkbox"
+                    role="switch"
+                    disabled={!assigned.length}
+                  />
                   <span>
                     <strong>Can review content</strong>
                     <small>Review submissions and request changes.</small>
                   </span>
                 </label>
                 <label className="permission-choice">
-                  <input name="export" type="checkbox" role="switch" />
+                  <input
+                    name="export"
+                    type="checkbox"
+                    role="switch"
+                    disabled={!assigned.length}
+                  />
                   <span>
                     <strong>Can export content</strong>
                     <small>
@@ -322,7 +349,7 @@ export function TeamPage() {
                 Cancel
               </button>
               <button className="primary-button" disabled={command.pending}>
-                Send invitation →
+                Send invitation
               </button>
             </div>
           </form>

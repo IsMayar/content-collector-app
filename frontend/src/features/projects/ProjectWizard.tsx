@@ -171,7 +171,7 @@ export function CreateProjectPage() {
           className="primary-button"
           to={`${base}/projects/${partial}?tab=access`}
         >
-          Open project access →
+          Open project access
         </Link>
       </Panel>
     )
@@ -215,7 +215,7 @@ export function CreateProjectPage() {
           {preview && selected ? (
             <>
               <button className="back-link" onClick={() => setPreview(false)}>
-                ← All templates
+                All templates
               </button>
               <QueryState query={detail}>
                 {detail.data && (
@@ -284,7 +284,7 @@ export function CreateProjectPage() {
                 disabled={!selected}
                 onClick={() => setStep(2)}
               >
-                Use this template →
+                Use this template
               </button>
             </div>
           </div>
@@ -341,54 +341,114 @@ export function CreateProjectPage() {
               >
                 <input required {...field('timezone')} />
               </Field>
-              <Field label="Customer">
-                <select
-                  required={!newClient}
-                  disabled={newClient}
-                  {...field('clientId')}
-                >
-                  <option value="">Choose a customer</option>
-                  {clients.data?.data.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.businessName}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  checked={newClient}
-                  onChange={(e) => {
-                    setNewClient(e.target.checked)
-                    createdClient.current = ''
-                  }}
-                />
-                Add a new customer
-              </label>
-              {newClient && (
-                <>
-                  <Field label="Business name">
-                    <input required {...field('businessName')} />
-                  </Field>
-                  <Field label="Contact name">
-                    <input {...field('contactName')} />
-                  </Field>
-                  <Field label="Customer email">
-                    <input required type="email" {...field('email')} />
-                  </Field>
-                </>
-              )}
             </div>
+            <fieldset className="customer-selection">
+              <legend>Who is this project for?</legend>
+              <div className="customer-options">
+                <section
+                  className={
+                    newClient ? 'customer-option selected' : 'customer-option'
+                  }
+                >
+                  <label className="customer-mode">
+                    <input
+                      type="radio"
+                      name="customerMode"
+                      value="new"
+                      checked={newClient}
+                      onChange={() => {
+                        setNewClient(true)
+                        createdClient.current = ''
+                      }}
+                    />
+                    <span>
+                      <strong>Add a new customer</strong>
+                      <small>Create a customer for this project.</small>
+                    </span>
+                  </label>
+                  <div className="customer-fields">
+                    <Field label="Business name">
+                      <input
+                        required={newClient}
+                        disabled={!newClient}
+                        placeholder="Customer or business name"
+                        {...field('businessName')}
+                      />
+                    </Field>
+                    <Field label="Contact name">
+                      <input
+                        disabled={!newClient}
+                        placeholder="Main contact"
+                        {...field('contactName')}
+                      />
+                    </Field>
+                    <Field label="Customer email">
+                      <input
+                        required={newClient}
+                        disabled={!newClient}
+                        type="email"
+                        placeholder="name@company.com"
+                        {...field('email')}
+                      />
+                    </Field>
+                  </div>
+                </section>
+                <section
+                  className={
+                    !newClient ? 'customer-option selected' : 'customer-option'
+                  }
+                >
+                  <label className="customer-mode">
+                    <input
+                      type="radio"
+                      name="customerMode"
+                      value="existing"
+                      checked={!newClient}
+                      onChange={() => {
+                        setNewClient(false)
+                        createdClient.current = ''
+                      }}
+                    />
+                    <span>
+                      <strong>Select an existing customer</strong>
+                      <small>Use a customer already in your workspace.</small>
+                    </span>
+                  </label>
+                  <div className="customer-fields">
+                    <Field label="Customer">
+                      <select
+                        required={!newClient}
+                        disabled={newClient}
+                        {...field('clientId')}
+                      >
+                        <option value="">Choose a customer</option>
+                        {clients.data?.data.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.businessName}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {customer && !newClient && (
+                      <div className="customer-contact">
+                        <strong>{customer.businessName}</strong>
+                        <p>{customer.contactName || 'No contact name added'}</p>
+                        <small>{customer.email || 'No email added'}</small>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </fieldset>
             <div className="wizard-footer">
               <button
                 type="button"
                 className="secondary-button"
                 onClick={() => setStep(1)}
               >
-                ← Back
+                Back
               </button>
-              <button className="primary-button">Continue to review →</button>
+              <button className="primary-button">Continue to review</button>
             </div>
           </form>
         </Panel>
@@ -472,7 +532,7 @@ export function CreateProjectPage() {
               disabled={busy}
               onClick={() => setStep(2)}
             >
-              ← Back
+              Back
             </button>
             <div className="actions">
               <button
@@ -490,8 +550,8 @@ export function CreateProjectPage() {
                 {busy
                   ? 'Creating…'
                   : invite
-                    ? 'Create project and send invitation →'
-                    : 'Create project →'}
+                    ? 'Create project and send invitation'
+                    : 'Create project'}
               </button>
             </div>
           </div>

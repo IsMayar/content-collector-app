@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
-import { Check, CloudUpload, FileText, LockKeyhole } from 'lucide-react'
+import { Check, FolderOpen, FileText, LockKeyhole } from 'lucide-react'
 import { clientApi } from '@/api/clientApi'
 import { useAppDispatch } from '@/app/hooks'
 import { usePortalData } from '@/api/productApi'
@@ -118,7 +118,7 @@ export function ClientAccessPage() {
               }
             }}
           >
-            Open my project →
+            Open my project
           </button>
         </>
       ) : (
@@ -330,7 +330,7 @@ export function ClientProjectPage() {
                         setView('editor')
                       }}
                     >
-                      {approved ? 'View details' : 'Continue section'} →
+                      {approved ? 'View details' : 'Continue section'}
                     </button>
                   </article>
                 )
@@ -358,7 +358,7 @@ export function ClientProjectPage() {
                         {i.assets.filter((a) => a.state !== 'DELETED').length}{' '}
                         files
                       </span>
-                      <span>Open →</span>
+                      <span>Open</span>
                     </button>
                   ))}
               </div>
@@ -381,7 +381,7 @@ export function ClientProjectPage() {
                         setView('editor')
                       }}
                     >
-                      View response →
+                      View response
                     </button>
                   </article>
                 )),
@@ -405,7 +405,7 @@ export function ClientProjectPage() {
                 className="text-link back-checklist"
                 onClick={() => setView('home')}
               >
-                ← Back to checklist
+                Back to checklist
               </button>
               <div className="client-workspace">
                 <aside className="client-checklist">
@@ -657,7 +657,7 @@ function AnswerEditor({
             className="secondary-button ai-launch"
             onClick={() => setAiOpen(true)}
           >
-            ✧ Help me draft →
+            ✧ Help me draft
           </button>
         )}
         <div className="save-status" role="status">
@@ -1306,7 +1306,7 @@ export function UploadQueue({
           if (!disabled) add(e.dataTransfer.files)
         }}
       >
-        <CloudUpload size={28} />
+        <FolderOpen size={28} />
         <strong>{image ? 'Add images' : 'Add project files'}</strong>
         <span>
           {image

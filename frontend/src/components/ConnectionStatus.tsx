@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { WifiOff, Download, X } from 'lucide-react'
+import { WifiOff, Smartphone, X } from 'lucide-react'
 type InstallEvent = Event & {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: string }>
@@ -44,7 +44,7 @@ export function ConnectionStatus() {
       )}
       {install && (
         <aside className="install-prompt" aria-label="Install application">
-          <Download />
+          <Smartphone />
           <div>
             <strong>Install Content Collector</strong>
             <p>

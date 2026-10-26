@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useNotify } from '@/components/Feedback'
-import { Upload, Users, UserRound, ArrowRight } from 'lucide-react'
+import { ImagePlus, Users, UserRound } from 'lucide-react'
 import { TemplateEditor } from './TemplateEditor'
 import {
   ProjectTable,
@@ -109,7 +109,7 @@ export function OnboardingPage() {
                 <span className="logo-placeholder">A</span>
               )}
               <label className="logo-upload">
-                <Upload size={24} />
+                <ImagePlus size={24} />
                 <span>Upload logo</span>
                 <small>PNG, JPG or WebP · Max 1 MB</small>
                 <input
@@ -186,7 +186,7 @@ export function OnboardingPage() {
           </Field>
           <ErrorNotice error={command.error} />
           <button className="primary-button" disabled={saving}>
-            {saving ? 'Creating…' : 'Create workspace →'}
+            {saving ? 'Creating…' : 'Create workspace'}
           </button>
           <p className="subtle">
             14-day trial. Plans and prices are proposed for this preview.
@@ -214,7 +214,7 @@ export function ProjectsPage() {
     <>
       <Heading
         title="Projects"
-        description="Manage all projects across your agency workspace."
+        description="Live client projects: track content, deadlines, reviews and delivery."
       >
         {owner && (
           <Link className="primary-button" to={`${base}/projects/new`}>
@@ -351,7 +351,7 @@ export function TemplatesPage() {
               setEditing('')
             }}
           >
-            ← Templates / {selected.industry.replaceAll('_', ' ')}
+            Templates / {selected.industry.replaceAll('_', ' ')}
           </button>
           <Heading
             title={selected.title}
@@ -362,7 +362,7 @@ export function TemplatesPage() {
                 className="primary-button"
                 to={`${base}/projects/new?type=${selected.projectType}&template=${selected.versionId}`}
               >
-                Use this template →
+                Use this template
               </Link>
             )}
           </Heading>
@@ -408,7 +408,7 @@ export function TemplatesPage() {
         <>
           <Heading
             title="Project templates"
-            description="Save and reuse content structures across projects."
+            description="Reusable starting structures for new projects. Your live client work is in Projects."
           />
           <nav className="reference-tabs" aria-label="Template library">
             {[
@@ -484,7 +484,6 @@ export function TemplatesPage() {
                             to={`${base}/projects/new?type=${t.projectType}&template=${t.versionId}`}
                           >
                             Use template{' '}
-                            <ArrowRight size={16} aria-hidden="true" />
                           </Link>
                         )}
                       </div>

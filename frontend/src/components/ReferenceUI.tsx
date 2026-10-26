@@ -19,7 +19,6 @@ import {
   Scissors,
   Rocket,
   Check,
-  ChevronRight,
 } from 'lucide-react'
 import type {
   Project,
@@ -168,7 +167,7 @@ export function ProjectTable({
                   aria-label={`Open ${p.title}`}
                   to={`${base}/projects/${p.id}`}
                 >
-                  <ChevronRight size={16} />
+                  Open
                 </Link>
               </td>
             </tr>

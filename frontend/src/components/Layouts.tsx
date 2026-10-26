@@ -21,11 +21,6 @@ import {
   Users,
   ChartNoAxesCombined,
   Settings,
-  FileText,
-  LockKeyhole,
-  MailCheck,
-  ShieldCheck,
-  UserPlus,
 } from 'lucide-react'
 
 export function Brand() {
@@ -80,118 +75,63 @@ export function PublicLayout() {
 }
 export function AuthLayout() {
   const { pathname } = useLocation()
-  const stories: Record<
-    string,
-    {
-      Icon: typeof FileText
-      title: string
-      description: string
-      tips: string[]
-    }
-  > = {
-    '/sign-in': {
-      Icon: FileText,
-      title: 'Your content, organized',
-      description:
-        'Secure access for your team, clients and projects, all in one place.',
-      tips: [
-        'Collect content and files',
-        'Keep projects moving',
-        'Built for agencies',
-      ],
-    },
-    '/sign-up': {
-      Icon: Users,
-      title: 'Built for teams',
-      description:
-        'Create your account to set up your workspace, invite your team and start collecting content.',
-      tips: [
-        'Set up your workspace',
-        'Invite team members',
-        'Create your first project',
-      ],
-    },
-    '/verify-email': {
-      Icon: MailCheck,
-      title: 'Confirm your email',
-      description:
-        'Verifying your email helps keep your account secure and gives you access to all features.',
-      tips: [
-        'Click the link in your inbox',
-        'Check your spam folder',
-        'Resend if needed',
-      ],
-    },
-    '/forgot-password': {
-      Icon: LockKeyhole,
-      title: 'Get back to your work',
-      description:
-        'Reset your password to regain access to your projects and content.',
-      tips: [
-        'Enter your work email',
-        'Check your inbox',
-        'Click the reset link',
-      ],
-    },
-    '/reset-password': {
-      Icon: ShieldCheck,
-      title: 'Keep your account secure',
-      description:
-        'Use a strong, unique password to protect your workspace and content.',
-      tips: [
-        'Create a strong password',
-        'Keep it private',
-        'You can change it anytime',
-      ],
-    },
-    '/team-invite': {
-      Icon: UserPlus,
-      title: 'Collaborate with your team',
-      description:
-        'Join your team to access shared projects, templates and content.',
-      tips: [
-        'Work with your team',
-        'Access shared projects',
-        'Keep everything organized',
-      ],
-    },
-  }
-  const story = stories[pathname] || stories['/sign-in']
-  const Icon = story.Icon
+  const signup = pathname === '/sign-up'
+  const story = signup
+    ? {
+        title: 'Welcome back!',
+        description:
+          'Your clients, content and projects are waiting. Sign in and pick up where you left off.',
+        to: '/sign-in',
+        action: 'Sign in',
+      }
+    : pathname === '/sign-in'
+      ? {
+          title: 'Hello, friend!',
+          description:
+            'Bring your team and your clients together. Create a workspace and make room for your next great project.',
+          to: '/sign-up',
+          action: 'Create account',
+        }
+      : {
+          title: 'A fresh start.',
+          description:
+            'Keep your workspace secure and your projects moving. We’ll help you get back to your content.',
+          to: '/sign-in',
+          action: 'Back to sign in',
+        }
   return (
-    <div className="auth-layout">
+    <div className="auth-layout auth-refresh">
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <header className="auth-top">
-        <Brand />
-        <nav aria-label="Help and navigation">
-          <Link to="/about">Help</Link>
-          <Link to="/">← Back</Link>
-        </nav>
-      </header>
-      <main id="main-content" tabIndex={-1} className="auth-main">
-        <div className="auth-content">
-          <Outlet />
-        </div>
+      <div className="auth-main">
         <aside className="auth-story" aria-label="About Content Collector">
-          <div className="reference-auth-icon" aria-hidden="true">
-            <Icon size={64} strokeWidth={1.7} />
-            <span>✓</span>
-          </div>
+          <Brand />
           <div className="story-copy">
+            <span className="auth-side-eyebrow">Content Collector</span>
             <h2>{story.title}</h2>
             <p>{story.description}</p>
-            <ul className="auth-benefits">
-              {story.tips.map((t) => (
-                <li key={t}>{t}</li>
-              ))}
-            </ul>
+            <Link className="auth-side-action" to={story.to}>
+              {story.action}
+            </Link>
           </div>
+          <span className="auth-decoration auth-circle" aria-hidden="true" />
+          <span className="auth-decoration auth-diamond" aria-hidden="true" />
         </aside>
-      </main>
+        <main id="main-content" tabIndex={-1} className="auth-content">
+          <Outlet />
+          <nav className="auth-help-nav" aria-label="Help and navigation">
+            <Link to="/about">Help</Link>
+            <Link to="/">Home</Link>
+          </nav>
+        </main>
+      </div>
       <footer className="auth-footer">
-        Your agency account. Your clients’ next great project.
+        <span>Content Collector by AYAANTRIX</span>
+        <nav aria-label="Legal navigation">
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+        </nav>
       </footer>
     </div>
   )

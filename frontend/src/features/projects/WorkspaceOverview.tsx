@@ -7,7 +7,6 @@ import {
   Mail,
   AlertTriangle,
   Layers,
-  ChevronRight,
 } from 'lucide-react'
 import { useData } from '@/api/productApi'
 import type { Paged, Project } from '@/api/productTypes'
@@ -101,9 +100,7 @@ export function DashboardPage() {
             <div className="dashboard-grid">
               <Panel
                 title={owner ? 'Recent projects' : 'My assigned projects'}
-                action={
-                  <Link to={`${base}/projects`}>View all projects →</Link>
-                }
+                action={<Link to={`${base}/projects`}>View all projects</Link>}
               >
                 <ProjectTable projects={projects.slice(0, 5)} base={base} />
               </Panel>
@@ -143,7 +140,6 @@ export function DashboardPage() {
                         <strong>{title}</strong>
                         <small>{caption}</small>
                       </span>
-                      <ChevronRight size={16} />
                     </Link>
                   ))}
                 </div>
@@ -191,7 +187,6 @@ export function DashboardPage() {
                         <strong>{t.label} template</strong>
                         <small>Choose your collection structure</small>
                       </span>
-                      <ChevronRight size={16} />
                     </Link>
                   ))}
                 </div>

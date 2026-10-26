@@ -221,7 +221,7 @@ export function ContactsPanel({ root }: { root: string }) {
               form="client-invite-form"
               disabled={command.pending}
             >
-              Send invitation →
+              Send invitation
             </button>
           </div>
         </Modal>

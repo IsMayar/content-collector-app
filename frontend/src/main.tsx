@@ -29,3 +29,4 @@ void start().catch(() => {
 })
 import '@/styles/collection.css'
 import '@/styles/administration.css'
+import '@/styles/product-polish.css'

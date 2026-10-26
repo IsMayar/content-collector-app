@@ -1,11 +1,5 @@
 import { Link } from 'react-router'
-import {
-  ArrowUpRight,
-  Check,
-  Layers,
-  MessageSquare,
-  ShieldCheck,
-} from 'lucide-react'
+import { Check, Layers, MessageSquare, ShieldCheck } from 'lucide-react'
 import { Panel } from '@/components/ProductUI'
 export function LandingPage() {
   return (
@@ -24,7 +18,7 @@ export function LandingPage() {
           </p>
           <div className="actions">
             <Link to="/sign-up" className="primary-button">
-              Create workspace <ArrowUpRight size={18} />
+              Create workspace
             </Link>
             <Link to="/client/access" className="secondary-button">
               View client experience

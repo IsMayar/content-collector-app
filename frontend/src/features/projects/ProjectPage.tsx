@@ -1,14 +1,6 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
-import {
-  ArrowDown,
-  ArrowUp,
-  GripVertical,
-  Plus,
-  Pencil,
-  FileText,
-  X,
-} from 'lucide-react'
+import { GripVertical, Plus, Pencil, FileText, X } from 'lucide-react'
 import { useData } from '@/api/productApi'
 import type {
   Assignment,
@@ -76,7 +68,7 @@ export function ProjectPage() {
       {p && data && (
         <>
           <Link className="back-link" to={`${base}/projects`}>
-            ← All projects
+            All projects
           </Link>
           <Heading
             eyebrow={`${p.clientBusinessName} / ${p.projectType.replaceAll('_', ' ')}`}
@@ -449,7 +441,7 @@ function StructureEditor({
                           disabled={!index || command.pending}
                           onClick={() => moveSection(index, -1)}
                         >
-                          <ArrowUp size={16} />
+                          Up
                         </button>
                         <button
                           className="icon-button"
@@ -460,7 +452,7 @@ function StructureEditor({
                           }
                           onClick={() => moveSection(index, 1)}
                         >
-                          <ArrowDown size={16} />
+                          Down
                         </button>
                         <button
                           className="secondary-button"
@@ -590,7 +582,7 @@ function StructureEditor({
                                     aria-label={`Move ${i.label} up`}
                                     onClick={() => moveItem(s, n, -1)}
                                   >
-                                    <ArrowUp size={16} />
+                                    Up
                                   </button>
                                   <button
                                     className="icon-button"
@@ -601,7 +593,7 @@ function StructureEditor({
                                     aria-label={`Move ${i.label} down`}
                                     onClick={() => moveItem(s, n, 1)}
                                   >
-                                    <ArrowDown size={16} />
+                                    Down
                                   </button>
                                   <button
                                     className="icon-button"

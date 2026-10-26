@@ -85,7 +85,6 @@ export function AuthForm({
           isDisabled={isSubmitting}
         >
           {isSubmitting ? 'Please wait…' : submitLabel}
-          <span aria-hidden="true">{isSubmitting ? '…' : '→'}</span>
         </Button>
       </fieldset>
     </form>

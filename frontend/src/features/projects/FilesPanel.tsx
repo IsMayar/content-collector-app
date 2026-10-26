@@ -225,7 +225,7 @@ export function FilesPanel({
                     ? 'Original retained'
                     : 'Optimized working copy'}
                 </small>
-                <span className="text-link">↗ {a.itemLabel}</span>
+                <span className="text-link">{a.itemLabel}</span>
               </button>
             ))}
           </div>
