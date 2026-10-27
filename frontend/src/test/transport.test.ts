@@ -3,7 +3,7 @@ import { http, HttpResponse, delay } from 'msw'
 import { createBaseQuery } from '@/api/baseQuery'
 import { apiProblem, errorMessage } from '@/lib/apiError'
 import { createAppStore } from '@/app/store'
-import { tokenReceived } from '@/features/auth/authSlice'
+import { tokenReceived, identityReceived } from '@/features/auth/authSlice'
 import type { BaseQueryApi, FetchArgs } from '@reduxjs/toolkit/query'
 import { server } from './setup'
 
@@ -207,4 +207,49 @@ describe('shared HTTP transport contract', () => {
         .status,
     ).toBe(422)
   })
+})
+
+it('renews the CSRF nonce when retrying a protected write after refresh', async () => {
+  let refreshed = false
+  let csrfReads = 0
+  server.use(
+    http.get(`${base}auth/csrf`, () => {
+      csrfReads++
+      return HttpResponse.json({
+        token: refreshed ? 'csrf-after-refresh' : 'csrf-before-refresh',
+      })
+    }),
+    http.post(`${base}auth/refresh`, () => {
+      refreshed = true
+      return HttpResponse.json({
+        accessToken: 'renewed-access',
+        expiresIn: 300,
+      })
+    }),
+    http.delete(`${base}protected-write`, ({ request }) => {
+      if (request.headers.get('Authorization') !== 'Bearer renewed-access')
+        return HttpResponse.json(envelope(401), { status: 401 })
+      if (request.headers.get('X-XSRF-TOKEN') !== 'csrf-after-refresh')
+        return HttpResponse.json(envelope(403), { status: 403 })
+      return new HttpResponse(null, { status: 204 })
+    }),
+  )
+  const client = boundary(true)
+  client.store.dispatch(
+    identityReceived({
+      user: {
+        id: 'synthetic',
+        email: 'synthetic@example.test',
+        displayName: 'Synthetic',
+        verified: true,
+      },
+      memberships: [],
+    }),
+  )
+  client.store.dispatch(
+    tokenReceived({ accessToken: 'expired-access', expiresIn: 300 }),
+  )
+  const result = await client.run({ url: 'protected-write', method: 'DELETE' })
+  expect(result.error).toBeUndefined()
+  expect(csrfReads).toBe(3)
 })

@@ -17,6 +17,10 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ['real-auth/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+  {
     files: ['public/sw.js'],
     languageOptions: { globals: globals.serviceworker },
   },

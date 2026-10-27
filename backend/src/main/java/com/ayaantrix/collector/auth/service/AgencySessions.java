@@ -77,7 +77,7 @@ public class AgencySessions {
             .map(s->new SessionResponses.Session(s.getId(),s.getId().equals(current),s.getCreatedAt(),s.getLastSeenAt(),s.getExpiresAt(),"Browser session")).toList();
     }
     public void logout(String raw,String bearer){
-        if(raw!=null){logout(raw);return;}
+        if(logoutCookie(raw))return;
         if(bearer==null || !bearer.startsWith("Bearer "))return;
         final Jwt jwt;try{jwt=access.decode(bearer.substring(7));}catch(org.springframework.security.oauth2.jwt.JwtException invalid){return;}
         transactions.executeWithoutResult(status->{
@@ -89,14 +89,15 @@ public class AgencySessions {
             }
         });
     }
-    public void logout(String raw){
-        if(raw==null)return;
-        final String digest;try{digest=hashes.digest(raw);}catch(IllegalArgumentException invalid){return;}
-        transactions.executeWithoutResult(status->{var located=tokens.locate(digest);if(located.isEmpty())return;
+    public void logout(String raw){logoutCookie(raw);}
+    private boolean logoutCookie(String raw){
+        if(raw==null)return false;
+        final String digest;try{digest=hashes.digest(raw);}catch(IllegalArgumentException invalid){return false;}
+        return Boolean.TRUE.equals(transactions.execute(status->{var located=tokens.locate(digest);if(located.isEmpty())return false;
             users.findLockedById(located.get().getUserId()).orElseThrow(this::unauthorized);
             var session=sessions.findLockedById(located.get().getSessionId()).orElseThrow(this::unauthorized);
-            session.revoke(clock.instant());sessions.saveAndFlush(session);
-        });
+            session.revoke(clock.instant());sessions.saveAndFlush(session);return true;
+        }));
     }
     public void revoke(Jwt jwt,UUID sessionId){
         transactions.executeWithoutResult(status->{

@@ -118,6 +118,12 @@ export const createBaseQuery =
     ) {
       if (await refreshSession(api)) {
         headers.set('Authorization', `Bearer ${auth(api).accessToken}`)
+        // Refresh rotates server CSRF state. Never replay a write with the old nonce.
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method || 'GET')) {
+          const protection = await csrf(api)
+          if ('error' in protection) return { error: protection.error! }
+          headers.set('X-XSRF-TOKEN', protection.token)
+        }
         result = await raw(request, api, options)
       }
     }

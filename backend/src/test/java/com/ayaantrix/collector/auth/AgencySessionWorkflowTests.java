@@ -139,7 +139,7 @@ class AgencySessionWorkflowTests {
     @Test void rotationReplacesCookieAndRetainsOldDigestForRaceAndReuseChecks() throws Exception {
         account(EMAIL);var old=signIn();var rotated=mvc.perform(refresh(old.refresh())).andExpect(status().isOk()).andExpect(jsonPath("$.expiresIn").value(300)).andReturn();
         String next=refreshCookie(rotated);assertThat(next).isNotEqualTo(old.refresh());assertThat(count("session_tokens")).isEqualTo(2);
-        mvc.perform(refresh(old.refresh())).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REFRESH_ALREADY_ROTATED")).andExpect(header().doesNotExist("Set-Cookie"));
+        mvc.perform(refresh(old.refresh())).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REFRESH_ALREADY_ROTATED")).andExpect(jsonPath("$.accessToken").doesNotExist()).andExpect(jsonPath("$.refreshToken").doesNotExist()).andExpect(header().doesNotExist("Set-Cookie"));
         assertThat(jdbc.queryForObject("select revoked_at is null from collector.auth_sessions",Boolean.class)).isTrue();
         clock.advance(3);mvc.perform(refresh(old.refresh())).andExpect(status().isUnauthorized());
         assertThat(jdbc.queryForObject("select revoked_at is not null from collector.auth_sessions",Boolean.class)).isTrue();
@@ -260,6 +260,22 @@ class AgencySessionWorkflowTests {
             go.countDown();assertThat(resetting.get(15,TimeUnit.SECONDS)).isTrue();assertThat(refreshing.get(15,TimeUnit.SECONDS)).isIn(200,401);
         }
         assertThat(jdbc.queryForObject("select count(*) from collector.auth_sessions where revoked_at is null",Long.class)).isZero();me(signed,401);
+    }
+    @ParameterizedTest @ValueSource(strings={"MALFORMED","UNKNOWN"})
+    void invalidCookieCannotPreventLogoutOfAValidBearerSession(String mode) throws Exception {
+        account(EMAIL);var signed=signIn();String cookie=mode.equals("MALFORMED")?"bad":secrets.generate();
+        mvc.perform(mutation("/api/v1/auth/logout",Map.of()).cookie(new Cookie(COOKIE,cookie)).header("Authorization","Bearer "+signed.access()))
+            .andExpect(status().isNoContent());
+        me(signed,401);mvc.perform(refresh(signed.refresh())).andExpect(status().isUnauthorized());
+    }
+    @Test void revokedAccessAndRefreshRemainRevokedAfterRestart() throws Exception {
+        account(EMAIL);var signed=signIn();sessions.logout(signed.refresh());context.close();open();
+        me(signed,401);mvc.perform(refresh(signed.refresh())).andExpect(status().isUnauthorized());
+    }
+    @Test void signedTokenCannotBindOneUserToAnotherUsersSession() throws Exception {
+        var first=account(EMAIL);account("other@example.test");var other=login("other@example.test",PASSWORD);
+        String mismatched=context.getBean(AccessTokens.class).issue(first.getId(),other.sid());
+        mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+mismatched)).andExpect(status().isUnauthorized());me(other,200);
     }
     @Test void upgradeFromV4PreservesExistingAccountAndQueuedDelivery(){
         jdbc.execute("create database session_upgrade");var source=new DriverManagerDataSource("jdbc:postgresql://"+POSTGRES.getHost()+":"+POSTGRES.getMappedPort(5432)+"/session_upgrade",POSTGRES.getUsername(),POSTGRES.getPassword());
