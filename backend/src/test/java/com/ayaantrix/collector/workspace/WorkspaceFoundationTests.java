@@ -309,4 +309,85 @@ class WorkspaceFoundationTests {
         assertThat(data.queryForObject("select password_hash from collector.users where id=?",String.class,user)).isEqualTo(passwordHash);
         assertThat(data.queryForObject("select count(*) from collector.workspaces",Integer.class)).isZero();
     }
+    private MvcResult me(Actor actor) throws Exception {
+        return mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+actor.access()).header("X-Request-ID","membership-test"))
+            .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+            .andExpect(header().string("X-Request-ID","membership-test")).andReturn();
+    }
+    @Test void mePreservesUserAndEmptyMembershipContractWithoutCreatingWorkspace() throws Exception {
+        var owner=actor("owner@example.test");var result=me(owner);
+        var body=json.readTree(result.getResponse().getContentAsString());assertThat(body.at("/user/id").asText()).isEqualTo(owner.id().toString());
+        assertThat(body.at("/user/verified").asBoolean()).isTrue();assertThat(body.get("memberships").size()).isZero();assertThat(count("workspaces")).isZero();
+        mvc.perform(get("/api/v1/auth/me").header("Authorization","Bearer "+owner.access())).andExpect(status().isForbidden());
+    }
+    @Test void creationImmediatelyAppearsInMeWithUnchangedAccessJwtAndConsistentTrial() throws Exception {
+        var owner=actor("owner@example.test");me(owner);var w=create(owner);var body=json.readTree(me(owner).getResponse().getContentAsString());
+        assertThat(body.get("memberships").size()).isEqualTo(1);var membership=body.at("/memberships/0");
+        assertThat(membership.get("workspaceId").asText()).isEqualTo(w.id().toString());assertThat(membership.get("workspaceName").asText()).isEqualTo("Workspace");
+        assertThat(membership.get("role").asText()).isEqualTo("OWNER");assertThat(membership.properties()).hasSize(4);
+        assertThat(membership.get("memberId").asText()).isEqualTo(jdbc.queryForObject("select id from collector.workspace_members where workspace_id=?",UUID.class,w.id()).toString());
+        mvc.perform(get(ROOT+"/"+w.id()).header("Authorization","Bearer "+owner.access())).andExpect(status().isOk()).andExpect(jsonPath("$.entitlements.planKey").value("AGENCY"));
+    }
+    @Test void meProjectsOnlyOwnActiveOwnerAndMemberWorkspacesInOneJoin() throws Exception {
+        var owner=actor("owner@example.test");var second=actor("second@example.test");var unrelated=actor("unrelated@example.test");
+        var a=create(owner);var b=create(second);var c=create(unrelated);member(b.id(),owner);
+        var body=json.readTree(me(owner).getResponse().getContentAsString());assertThat(body.get("memberships").size()).isEqualTo(2);
+        assertThat(body.toString()).contains(a.id().toString(),b.id().toString(),"OWNER","MEMBER").doesNotContain(c.id().toString(),second.id().toString(),unrelated.id().toString());
+        // DTO constructor projection is a single workspace/member join, not entity traversal/N+1.
+        var memberships=context.getBean(WorkspaceRepository.class).memberships(owner.id());assertThat(memberships).hasSize(2);
+    }
+    @ParameterizedTest @ValueSource(strings={"DISABLED","REMOVED"})
+    void meExcludesMembershipImmediatelyAfterDisableOrRemoval(String state) throws Exception {
+        var owner=actor("owner@example.test");var member=actor("member@example.test");var w=create(owner);member(w.id(),member);
+        assertThat(json.readTree(me(member).getResponse().getContentAsString()).get("memberships").size()).isEqualTo(1);
+        if(state.equals("DISABLED"))jdbc.update("update collector.workspace_members set state='DISABLED' where workspace_id=? and user_id=?",w.id(),member.id());
+        else jdbc.update("delete from collector.workspace_members where workspace_id=? and user_id=?",w.id(),member.id());
+        assertThat(json.readTree(me(member).getResponse().getContentAsString()).get("memberships").size()).isZero();
+        mvc.perform(get(ROOT+"/"+w.id()).header("Authorization","Bearer "+member.access())).andExpect(status().isNotFound());
+    }
+    @Test void meReflectsRoleAndNameChangesWithoutReissuingJwt() throws Exception {
+        var owner=actor("owner@example.test");var member=actor("member@example.test");var w=create(owner);member(w.id(),member);me(owner);
+        tx.executeWithoutResult(t->{jdbc.update("update collector.workspace_members set role='MEMBER' where workspace_id=? and user_id=?",w.id(),owner.id());
+            jdbc.update("update collector.workspace_members set role='OWNER' where workspace_id=? and user_id=?",w.id(),member.id());
+            jdbc.update("update collector.workspaces set name='Renamed' where id=?",w.id());});
+        var body=json.readTree(me(owner).getResponse().getContentAsString());assertThat(body.at("/memberships/0/role").asText()).isEqualTo("MEMBER");
+        assertThat(body.at("/memberships/0/workspaceName").asText()).isEqualTo("Renamed");
+        mvc.perform(write("PATCH",ROOT+"/"+w.id(),Map.of("name","Denied","expectedVersion",0),owner)).andExpect(status().isForbidden());
+    }
+    @Test void membershipProjectionAfterRefreshUsesDatabaseNotOldTokenClaims() throws Exception {
+        var owner=actor("owner@example.test");var w=create(owner);var sessions=context.getBean(AgencySessions.class);
+        var issued=sessions.login(new LoginRequest("owner@example.test",PASSWORD));
+        var refreshed=sessions.refresh(issued.refreshToken());
+        mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+refreshed.accessToken())).andExpect(status().isOk())
+            .andExpect(jsonPath("$.memberships[0].workspaceId").value(w.id().toString()));
+        var jwt=context.getBean(AccessTokens.class).decode(refreshed.accessToken());assertThat(jwt.getClaims()).doesNotContainKeys("memberships","roles","workspaceId");
+    }
+    @ParameterizedTest @ValueSource(strings={"DISABLED","REVOKED"})
+    void meNeverProjectsMembershipForDisabledAccountOrRevokedSession(String state) throws Exception {
+        var owner=actor("owner@example.test");create(owner);
+        if(state.equals("DISABLED"))jdbc.update("update collector.users set state='DISABLED' where id=?",owner.id());
+        else context.getBean(AgencySessions.class).logoutAll(owner.jwt());
+        mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+owner.access()).header("X-Request-ID","revoked-me"))
+            .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.memberships").doesNotExist()).andExpect(jsonPath("$.traceId").value("revoked-me"));
+    }
+    @Test void meIgnoresForgedUserQueryAndWorkspaceHeaders() throws Exception {
+        var owner=actor("owner@example.test");var other=actor("other@example.test");var a=create(owner);var b=create(other);
+        var result=mvc.perform(get("/api/v1/me").param("userId",other.id().toString()).header("X-Workspace-ID",b.id().toString()).header("Authorization","Bearer "+owner.access()))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.user.id").value(owner.id().toString())).andReturn();
+        assertThat(result.getResponse().getContentAsString()).contains(a.id().toString()).doesNotContain(b.id().toString(),other.id().toString());
+    }
+    @Test void persistedMembershipProjectionAndAuthorizationSurviveRestart() throws Exception {
+        var owner=actor("owner@example.test");var w=create(owner);me(owner);context.close();open();
+        mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+owner.access())).andExpect(status().isOk()).andExpect(jsonPath("$.memberships[0].workspaceId").value(w.id().toString()));
+        mvc.perform(get(ROOT+"/"+w.id()).header("Authorization","Bearer "+owner.access())).andExpect(status().isOk());
+    }
+    @Test void passwordResetRevokesWorkspaceAndMeAccessTogether() throws Exception {
+        var owner=actor("owner@example.test");var w=create(owner);var secrets=context.getBean(SecureAccountTokens.class);String reset=secrets.generate();
+        context.getBean(com.ayaantrix.collector.auth.repository.AccountTokenRepository.class).saveAndFlush(new com.ayaantrix.collector.auth.entity.AccountToken(
+            users.findById(owner.id()).orElseThrow(),secrets.digest(reset),com.ayaantrix.collector.auth.entity.TokenPurpose.RESET_PASSWORD,NOW));
+        mvc.perform(write("POST","/api/v1/auth/reset-password",Map.of("token",reset,"password","synthetic changed workspace password"),owner)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+owner.access())).andExpect(status().isUnauthorized());
+        mvc.perform(get(ROOT+"/"+w.id()).header("Authorization","Bearer "+owner.access())).andExpect(status().isUnauthorized());
+    }
+
 }

@@ -3,7 +3,11 @@ import { setupListeners } from '@reduxjs/toolkit/query'
 import { agencyApi } from '@/api/agencyApi'
 import { clientApi } from '@/api/clientApi'
 import authReducer from '@/features/auth/authSlice'
-import { signedOut } from '@/features/auth/authSlice'
+import {
+  signedOut,
+  identityReceived,
+  type AuthState,
+} from '@/features/auth/authSlice'
 
 export const createAppStore = () => {
   const sessionListener = createListenerMiddleware()
@@ -12,6 +16,22 @@ export const createAppStore = () => {
     effect: (_action, api) => {
       api.dispatch(agencyApi.util.resetApiState())
       api.dispatch(clientApi.util.resetApiState())
+    },
+  })
+  sessionListener.startListening({
+    actionCreator: identityReceived,
+    effect: (_action, api) => {
+      const previous = (api.getOriginalState() as { auth: AuthState }).auth
+      const current = (api.getState() as { auth: AuthState }).auth
+      if (
+        previous.user &&
+        (previous.user.id !== current.user?.id ||
+          JSON.stringify(previous.memberships) !==
+            JSON.stringify(current.memberships))
+      ) {
+        api.dispatch(agencyApi.util.resetApiState())
+        api.dispatch(clientApi.util.resetApiState())
+      }
     },
   })
   return configureStore({

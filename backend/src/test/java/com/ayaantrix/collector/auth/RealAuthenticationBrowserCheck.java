@@ -2,6 +2,11 @@ package com.ayaantrix.collector.auth;
 
 import com.ayaantrix.collector.CollectorApplication;
 import com.ayaantrix.collector.auth.dto.LoginRequest;
+import com.ayaantrix.collector.auth.delivery.*;
+import com.ayaantrix.collector.workspace.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import com.ayaantrix.collector.auth.entity.*;
 import com.ayaantrix.collector.auth.repository.*;
 import com.ayaantrix.collector.auth.security.*;
@@ -31,12 +36,19 @@ class RealAuthenticationBrowserCheck {
     @Container static final PostgreSQLContainer POSTGRES=new PostgreSQLContainer(DockerImageName.parse(
         "public.ecr.aws/docker/library/postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873").asCompatibleSubstituteFor("postgres"));
     @TempDir Path directory;
+    static class Mailbox implements VerificationMailSender {
+        final List<Message> messages=new CopyOnWriteArrayList<>();
+        public void send(Message message){messages.add(message);}
+    }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class Configuration {
+        @Bean @Primary Mailbox browserMailbox(){return new Mailbox();}
         @Bean @Primary AccountRegistrationWorkflowTests.TestClock browserClock(){var clock=new AccountRegistrationWorkflowTests.TestClock();clock.now.set(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));return clock;}
     }
-    @Test void realHttpsBrowserAuthLifecycleWithoutMocks() throws Exception {
-        String password="Synthetic browser-only password",next="Synthetic replacement browser password",email="browser-only@example.test";
+    @Test void realHttpsBrowserAuthLifecycleWithoutMocks() throws Exception {run(false);}
+    @Test void realHttpsWorkspaceOnboardingWithoutMocks() throws Exception {run(true);}
+    private void run(boolean onboarding) throws Exception {
+        String password="Synthetic browser-only password",next="Synthetic replacement browser password",email=onboarding?"browser-onboarding@example.test":"browser-only@example.test";
         String certificatePassword=UUID.randomUUID().toString();Path certificate=directory.resolve("browser.p12");
         String keytool=Path.of(System.getProperty("java.home"),"bin","keytool.exe").toString();
         var cert=new ProcessBuilder(keytool,"-genkeypair","-alias","browser","-keyalg","RSA","-keysize","2048","-validity","1",
@@ -48,17 +60,45 @@ class RealAuthenticationBrowserCheck {
             "--server.port=0","--server.address=127.0.0.1","--spring.datasource.url="+POSTGRES.getJdbcUrl(),
             "--spring.datasource.username="+POSTGRES.getUsername(),"--spring.datasource.password="+POSTGRES.getPassword(),
             "--collector.jwt.private-key="+keys.privateFile(),"--collector.jwt.public-keys="+keys.publicFile(),"--collector.jwt.key-id="+keys.kid(),
-            "--collector.jwt.issuer=https://browser.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+pepper,
+            "--collector.delivery.encryption-key="+pepper,"--collector.delivery.encryption-key-id=browser-test","--collector.jwt.issuer=https://browser.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+pepper,
             "--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false")) {
             var clock=app.getBean(AccountRegistrationWorkflowTests.TestClock.class);var users=app.getBean(UserAccountRepository.class);
-            var user=new UserAccount(email,"Synthetic Browser User",app.getBean(PasswordEncoder.class).encode(password),clock.instant());user.markVerified(clock.instant());users.saveAndFlush(user);
+            UserAccount user=null;
+            if(!onboarding){user=new UserAccount(email,"Synthetic Browser User",app.getBean(PasswordEncoder.class).encode(password),clock.instant());user.markVerified(clock.instant());users.saveAndFlush(user);}
             int port=((WebServerApplicationContext)app).getWebServer().getPort();
             Path runner=Path.of(System.getProperty("user.dir")).resolve("../frontend/real-auth/browser-check.mjs").normalize();
             var builder=new ProcessBuilder("node",runner.toString()).redirectError(ProcessBuilder.Redirect.DISCARD);
             builder.environment().remove("DEBUG");builder.environment().remove("PWDEBUG");
             Process process=builder.start();
             try(var io=new BrowserProtocol(process)) {
-                io.step(Map.of("action","start","backend","http://127.0.0.1:"+port,"email",email,"password",password,"certificate",certificate.toString(),"certificatePassword",certificatePassword));
+                io.step(Map.of("action","start","backend","http://127.0.0.1:"+port,"email",email,"password",password,"certificate",certificate.toString(),"certificatePassword",certificatePassword,"onboarding",Boolean.toString(onboarding)));
+                if(onboarding){
+                    io.step(Map.of("action","workspace-register"));
+                    assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
+                    var message=app.getBean(Mailbox.class).messages.getFirst();
+                    assertThat(message.recipient()).isEqualTo(email);assertThat(message.purpose()).isEqualTo(TokenPurpose.VERIFY_EMAIL);
+                    io.step(Map.of("action","workspace-verify","token",message.actionLink().getFragment().substring("token=".length())));
+                    io.step(Map.of("action","signin"));io.step(Map.of("action","workspace-create"));
+                    var jdbc=app.getBean(JdbcTemplate.class);var actor=users.findByEmailNormalized(email).orElseThrow();
+                    UUID workspace=jdbc.queryForObject("select workspace_id from collector.workspace_members where user_id=? and role='OWNER'",UUID.class,actor.getId());
+                    assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("TRIALING");
+                    assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("AGENCY");
+                    assertThat(jdbc.queryForObject("select current_period_end-current_period_start=interval '14 days' from collector.subscriptions where workspace_id=?",Boolean.class,workspace)).isTrue();
+                    io.step(Map.of("action","workspace-reload"));
+                    // Isolated second tenant fixture; no T13 management/test-control HTTP endpoint is introduced.
+                    var other=new UserAccount("other-browser-workspace@example.test","Other Synthetic Owner",app.getBean(PasswordEncoder.class).encode(password),clock.instant());other.markVerified(clock.instant());users.saveAndFlush(other);
+                    var issued=app.getBean(AgencySessions.class).login(new LoginRequest(other.getEmailNormalized(),password));
+                    var security=SecurityContextHolder.createEmptyContext();security.setAuthentication(new JwtAuthenticationToken(app.getBean(AccessTokens.class).decode(issued.accessToken()),List.of()));SecurityContextHolder.setContext(security);
+                    UUID otherWorkspace;
+                    try{otherWorkspace=app.getBean(WorkspaceService.class).create(new WorkspaceDtos.Create("Other private tenant","UTC",PlanKey.SOLO)).id();}finally{SecurityContextHolder.clearContext();}
+                    io.step(Map.of("action","workspace-isolation","other",otherWorkspace.toString()));
+                    jdbc.update("insert into collector.workspace_members(workspace_id,user_id,role) values (?,?,'MEMBER')",otherWorkspace,actor.getId());
+                    io.step(Map.of("action","workspace-member","other",otherWorkspace.toString()));
+                    jdbc.update("update collector.workspace_members set state='DISABLED',updated_at=now() where workspace_id=? and user_id=?",otherWorkspace,actor.getId());
+                    io.step(Map.of("action","workspace-revoked","other",otherWorkspace.toString()));
+                    io.step(Map.of("action","logout"));io.step(Map.of("action","storage"));io.step(Map.of("action","stop"));
+                    return;
+                }
                 io.step(Map.of("action","csrf"));io.step(Map.of("action","cors"));io.step(Map.of("action","bootstrap"));
                 var extra=app.getBean(AgencySessions.class).login(new LoginRequest(email,password));
                 UUID extraId=UUID.fromString(app.getBean(AccessTokens.class).decode(extra.accessToken()).getClaimAsString("sid"));

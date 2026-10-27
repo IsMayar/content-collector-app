@@ -143,6 +143,10 @@ async function command(input) {
       })
       page = await context.newPage()
       observe(page)
+      if (input.onboarding === 'true') {
+        await page.goto(origin + '/sign-up')
+        break
+      }
       await signin()
       phase = 'secure-cookie-check'
       const cookies = await context.cookies(origin + '/api/v1/auth/refresh')
@@ -166,6 +170,188 @@ async function command(input) {
       assert.ok(
         (await run('me')).status === 200,
         'Authenticated identity failed',
+      )
+      break
+    }
+    case 'workspace-register': {
+      await page
+        .getByLabel('Your name', { exact: true })
+        .fill('Synthetic Onboarding Owner')
+      await page
+        .getByLabel('Email address', { exact: true })
+        .fill(settings.email)
+      await page.getByLabel('Password', { exact: true }).fill(settings.password)
+      await page
+        .getByLabel('Confirm password', { exact: true })
+        .fill(settings.password)
+      const result = page.waitForResponse(
+        (res) => new URL(res.url()).pathname === '/api/v1/auth/register',
+      )
+      await page
+        .getByRole('button', { name: 'Create account', exact: true })
+        .click()
+      assert.ok((await result).status() === 202, 'Real registration failed')
+      break
+    }
+    case 'workspace-verify': {
+      await page.goto(origin + '/verify-email#token=' + input.token)
+      const result = page.waitForResponse(
+        (res) => new URL(res.url()).pathname === '/api/v1/auth/verify-email',
+      )
+      await page
+        .getByRole('button', { name: 'Verify email', exact: true })
+        .click()
+      assert.ok((await result).status() === 200, 'Real verification failed')
+      assert.ok(
+        !new URL(page.url()).hash,
+        'Verification capability remained in history',
+      )
+      break
+    }
+    case 'workspace-create': {
+      await expect(
+        page.getByRole('heading', { name: 'Let’s set up your workspace.' }),
+      ).toBeVisible()
+      await page
+        .getByLabel('Workspace name', { exact: true })
+        .fill('Browser acceptance studio')
+      await page.getByLabel('Workspace timezone', { exact: true }).fill('UTC')
+      const result = page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/v1/workspaces' &&
+          res.request().method() === 'POST',
+      )
+      await page
+        .getByRole('button', { name: 'Create workspace', exact: true })
+        .click()
+      assert.ok(
+        (await result).status() === 201,
+        'Real workspace creation failed',
+      )
+      await waitState('authenticated')
+      await expect(page.getByLabel('Workspace', { exact: true })).toHaveValue(
+        /.+/,
+      )
+      settings.workspace = await page
+        .getByLabel('Workspace', { exact: true })
+        .inputValue()
+      await expect(
+        page.getByText('Workspace owner', { exact: true }),
+      ).toBeVisible()
+      assert.ok(
+        (await run('workspaces/' + settings.workspace)).status === 200,
+        'Created workspace unavailable',
+      )
+      const memberships = await page.evaluate(
+        async () =>
+          (await import('/src/app/store.ts')).store.getState().auth.memberships,
+      )
+      assert.ok(
+        memberships.length === 1 &&
+          memberships[0].role === 'OWNER' &&
+          memberships[0].workspaceId === settings.workspace,
+        'Created owner membership absent',
+      )
+      break
+    }
+    case 'workspace-reload': {
+      await page.reload()
+      await waitState('authenticated')
+      await expect(page.getByLabel('Workspace', { exact: true })).toHaveValue(
+        settings.workspace,
+      )
+      await page
+        .getByLabel('Workspace', { exact: true })
+        .selectOption(settings.workspace)
+      await expect(
+        page.getByText('Workspace owner', { exact: true }),
+      ).toBeVisible()
+      assert.ok(
+        (await run('workspaces')).status === 200,
+        'Workspace list unavailable after reload',
+      )
+      assert.ok(
+        (await run('workspaces/' + settings.workspace)).status === 200,
+        'Workspace did not persist',
+      )
+      break
+    }
+    case 'workspace-isolation': {
+      for (const id of [input.other, '00000000-0000-0000-0000-000000000001']) {
+        assert.ok(
+          (await run('workspaces/' + id)).status === 404,
+          'Unrelated tenant metadata exposed',
+        )
+        assert.ok(
+          (
+            await run({
+              url: 'workspaces/' + id,
+              method: 'PATCH',
+              body: { name: 'Denied', expectedVersion: 0 },
+            })
+          ).status === 404,
+          'Unrelated tenant modification accepted',
+        )
+      }
+      break
+    }
+    case 'workspace-member': {
+      await page.evaluate(async () => {
+        const { store } = await import('/src/app/store.ts')
+        const { bootstrapSession } =
+          await import('/src/features/auth/session.ts')
+        await store.dispatch(bootstrapSession())
+      })
+      await waitState('authenticated')
+      await page
+        .getByLabel('Workspace', { exact: true })
+        .selectOption(input.other)
+      await expect(page.getByText('Team member', { exact: true })).toBeVisible()
+      await expect(
+        page
+          .getByRole('navigation', { name: 'Workspace navigation' })
+          .getByRole('link', { name: 'Team', exact: true }),
+      ).toHaveCount(0)
+      assert.ok(
+        (await run('workspaces/' + input.other)).status === 200,
+        'Explicit member access failed',
+      )
+      assert.ok(
+        (
+          await run({
+            url: 'workspaces/' + input.other,
+            method: 'PATCH',
+            body: { name: 'Denied', expectedVersion: 0 },
+          })
+        ).status === 403,
+        'Member owner mutation accepted',
+      )
+      break
+    }
+    case 'workspace-revoked': {
+      await page.evaluate(async () => {
+        const { store } = await import('/src/app/store.ts')
+        const { bootstrapSession } =
+          await import('/src/features/auth/session.ts')
+        await store.dispatch(bootstrapSession())
+      })
+      await waitState('authenticated')
+      await expect(
+        page.getByRole('heading', {
+          name: 'This space isn’t available to your account',
+        }),
+      ).toBeVisible()
+      const retained = await page.evaluate(async (id) => {
+        const state = (await import('/src/app/store.ts')).store.getState()
+        return (
+          state.auth.memberships.some((m) => m.workspaceId === id) ||
+          Object.keys(state.agencyApi.queries).some((key) => key.includes(id))
+        )
+      }, input.other)
+      assert.ok(!retained, 'Revoked membership or private cache retained')
+      assert.ok(
+        (await run('workspaces/' + input.other)).status === 404,
+        'Disabled member retained backend access',
       )
       break
     }

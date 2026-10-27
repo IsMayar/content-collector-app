@@ -22,12 +22,12 @@ public class AgencySessions {
     private record RefreshResult(Issued issued,ApiException failure){}
     private final UserAccountRepository users;private final AuthSessionRepository sessions;private final SessionTokenRepository tokens;
     private final CredentialVerifier credentials;private final SecureAccountTokens secrets;private final RefreshTokenHashes hashes;
-    private final AccessTokens access;private final Clock clock;private final TransactionTemplate transactions;
+    private final AccountMemberships memberships;private final AccessTokens access;private final Clock clock;private final TransactionTemplate transactions;
     public AgencySessions(UserAccountRepository users,AuthSessionRepository sessions,SessionTokenRepository tokens,
             CredentialVerifier credentials,SecureAccountTokens secrets,RefreshTokenHashes hashes,AccessTokens access,
-            Clock clock,PlatformTransactionManager manager){
+            Clock clock,PlatformTransactionManager manager,AccountMemberships memberships){
         this.users=users;this.sessions=sessions;this.tokens=tokens;this.credentials=credentials;this.secrets=secrets;
-        this.hashes=hashes;this.access=access;this.clock=clock;transactions=new TransactionTemplate(manager);
+        this.memberships=memberships;this.hashes=hashes;this.access=access;this.clock=clock;transactions=new TransactionTemplate(manager);
     }
     public Issued login(LoginRequest request){
         access.requireConfigured();hashes.requireConfigured();var verified=credentials.verify(request);
@@ -70,7 +70,14 @@ public class AgencySessions {
             if(!eligible(user) || !session.getUserId().equals(userId) || !session.usable(clock.instant()))throw unauthorized();
         }catch(IllegalArgumentException invalid){throw unauthorized();}
     }
-    public SessionResponses.Me me(Jwt jwt){validateAccess(jwt);return new SessionResponses.Me(SessionResponses.User.from(users.findById(UUID.fromString(jwt.getSubject())).orElseThrow(this::unauthorized)),List.of());}
+    public SessionResponses.Me me(Jwt jwt){
+        return transactions.execute(status->{
+            UUID userId;try{userId=UUID.fromString(jwt.getSubject());}catch(IllegalArgumentException invalid){throw unauthorized();}
+            var user=users.findLockedById(userId).orElseThrow(this::unauthorized);
+            validateAccess(jwt);
+            return new SessionResponses.Me(SessionResponses.User.from(user),memberships.forAuthenticatedUser(userId));
+        });
+    }
     public List<SessionResponses.Session> list(Jwt jwt){
         validateAccess(jwt);var now=clock.instant();UUID current=UUID.fromString(jwt.getClaimAsString("sid"));
         return sessions.findByUserIdOrderByCreatedAtDesc(UUID.fromString(jwt.getSubject()),PageRequest.of(0,100)).stream().filter(s->s.usable(now))

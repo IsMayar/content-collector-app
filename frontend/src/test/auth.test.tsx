@@ -281,3 +281,35 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
     )
   })
 })
+
+it('drops revoked membership navigation and private caches on the next bootstrap', async () => {
+  const { user, store, router } = mount()
+  await signIn(user)
+  await screen.findByRole('heading', { name: 'Welcome back, Alex' })
+  const probe = clientApi.injectEndpoints({
+    endpoints: (build) => ({
+      revokedMembershipProbe: build.query<{ private: boolean }, void>({
+        queryFn: () => ({ data: { private: true } }),
+      }),
+    }),
+  })
+  await store
+    .dispatch(probe.endpoints.revokedMembershipProbe.initiate())
+    .unwrap()
+  const { bootstrapSession } = await import('@/features/auth/session')
+  server.use(
+    http.get('http://localhost:5173/api/v1/me', () =>
+      HttpResponse.json({ user: store.getState().auth.user, memberships: [] }),
+    ),
+  )
+  await store.dispatch(bootstrapSession())
+  await waitFor(() => expect(store.getState().auth.memberships).toEqual([]))
+  expect(store.getState().auth.workspaceId).toBeNull()
+  expect(store.getState().clientApi.queries).toEqual({})
+  await router.navigate(`/app/w/${agencyId}/overview`)
+  expect(
+    await screen.findByRole('heading', {
+      name: 'This space isn’t available to your account',
+    }),
+  ).toBeVisible()
+})

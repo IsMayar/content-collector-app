@@ -9,6 +9,7 @@ public final class SessionResponses {
     }
     public record Login(String accessToken,int expiresIn,User user){@Override public String toString(){return "LoginResponse[redacted]";}}
     public record Access(String accessToken,int expiresIn){@Override public String toString(){return "AccessResponse[redacted]";}}
-    public record Me(User user,List<Object> memberships){}
+    public record Membership(UUID memberId,UUID workspaceId,String workspaceName,String role){}
+    public record Me(User user,List<Membership> memberships){}
     public record Session(UUID id,boolean current,Instant createdAt,Instant lastSeenAt,Instant expiresAt,String label){}
 }
