@@ -1,4 +1,4 @@
-# Agency account sessions - T06 Parts 1 and 2
+# Agency account sessions - T06 Parts 1–3
 
 Implemented 27 October 2026. Repository inspection found no existing T06 Part 1 code; the two authorized requests were completed together. Part 1 supplied credential/JWT foundations; Part 2 supplied real persistent sessions before public login activation. No fake refresh cookie, workspace creation or T07 business endpoint was introduced.
 
@@ -13,7 +13,7 @@ All paths below are relative to /api/v1. JSON POST requests use Content-Type app
 | GET me | Bearer access token | 200 {user,memberships:[]} |
 | GET me/sessions | Bearer access token | 200 {data:[{id,createdAt,lastSeenAt,expiresAt,current,label}]} |
 | DELETE me/sessions/{sessionId} | Bearer and CSRF | 204; only own sessions; cross-user identifiers return 404 |
-| POST auth/logout | {} and refresh cookie, or valid bearer if the cookie is absent; CSRF | 204; revoke current session and clear cookie; repeated logout is idempotent |
+| POST auth/logout | {} and refresh cookie, or valid bearer if the cookie is absent or unusable; CSRF | 204; revoke current session and clear cookie; repeated logout is idempotent |
 | POST auth/logout-all | {} with valid bearer and CSRF | 204; revoke every session of that user and clear cookie |
 
 The empty membership array is deliberate: no workspace/membership tables exist until T07. No workspace is fabricated or seeded. Business routes remain denied even with a valid JWT. The full frontend onboarding/product journey still needs its backend tasks. Existing frontend login/refresh/me DTOs and request paths are unchanged. Session listing follows the original catalog's data envelope and label field, with a generic Browser session label; no raw User-Agent, IP/device fingerprint or invented location is collected. Listing is bounded to 100 recent active sessions.
@@ -52,7 +52,7 @@ Production refresh cookie: **__Secure-collector_refresh**, Secure, HttpOnly, Sam
 
 The dev profile binds to 127.0.0.1 and permits the non-Secure **collector_refresh** name for local HTTP, plus non-Secure CSRF session cookies. Insecure refresh configuration is rejected outside the dev profile or on a non-loopback binding. Never deploy the dev profile publicly. Production HTTPS and trusted proxy/TLS termination must be verified before deployment.
 
-Login, refresh and logout rotate the anti-CSRF HTTP-session ID and remove the old CSRF token; the frontend already fetches a fresh one before each mutation. No Spring resource-server CSRF bypass is enabled: all bearer writes still require CSRF. Broad auth/** permissions and permissive credentialed CORS were not added. Use the existing same-origin Vite/reverse proxy arrangement.
+Login, refresh and logout rotate the anti-CSRF HTTP-session ID and remove the old CSRF token; the frontend fetches a fresh one before each mutation, including the original write retry after a successful refresh. No Spring resource-server CSRF bypass is enabled: all bearer writes still require CSRF. Broad auth/** permissions and permissive credentialed CORS were not added. Use the existing same-origin Vite/reverse proxy arrangement.
 
 ## Local setup and verification
 
@@ -88,6 +88,14 @@ A real login requires an existing verified ACTIVE account. Automated tests creat
 
 For JWT rotation, distribute a public JWKS containing old and new public keys to every instance first. Then change the private file/key ID to the new matching pair and restart/redeploy. Retain the old verification key for at least the access lifetime plus skew after the last old-key issuance; retire it in another rollout. Do not remove an old public key while another instance still signs with it. Automated secret-manager rollout/production validation remains deployment work.
 
-Verification evidence is recorded in IMPLEMENTATION_STATUS.md. Not verified: live browser/TLS-cookie deployment, external providers, hosted CI, operational token archival or full product/workspace journeys. No T06 Complete or full MVP claim is made.
+Verification evidence is recorded in IMPLEMENTATION_STATUS.md. Local real HTTPS browser acceptance now passes (Part 3 below). Not verified: public TLS/proxy deployment, external providers, hosted CI, operational token archival or full product/workspace journeys. No T06 Complete or full MVP claim is made.
 
 Official references checked for this change: [Boot BOM/build system](https://docs.spring.io/spring-boot/reference/using/build-systems.html), [Spring JWT validation and algorithm selection](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html), and [NimbusJwtEncoder](https://docs.spring.io/spring-security/site/docs/7.0.0/api/org/springframework/security/oauth2/jwt/NimbusJwtEncoder.html).
+
+## Part 3 audit and browser acceptance — 27 October 2026
+
+[Full audit findings, matrix, commands and exact manifest](verification/T06_AUTH_AUDIT.md). Fixed valid-bearer logout fallback when a cookie is malformed/unknown and frontend CSRF reacquisition on an expired-access write retry. No endpoint, DTO, race-window or migration change was required. Issued JWTs are rejected by live database validation on the next request after revocation; this does not cancel requests already executing.
+
+Backend clean verify passed 233 tests (all previous 229 plus four); the separate actual Edge/Vite/Spring/PostgreSQL HTTPS lifecycle passed one test with MSW off. Frontend auth/transport passed 47 tests; TypeScript/production build, lint and formatting passed. Tests include safe 409 without credentials, exact two-second reuse revocation, post-restart revocation and cross-user JWT/session binding. Browser evidence includes Secure cookie/deletion, CSRF rejection, untrusted-origin rejection, bootstrap, expired writes/concurrent refresh, reset invalidation and multi-device logout-all.
+
+The isolated browser trusts its generated local test certificate only; public deployment TLS/proxy/key rollout and retention acceptance remain pending. T06 stays In progress. T05 provider/resend and T04 hosted CI gaps remain unchanged.

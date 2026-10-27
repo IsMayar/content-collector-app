@@ -1,6 +1,6 @@
 # Implementation status
 
-Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 26 October 2026.
+Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 27 October 2026.
 
 All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. M1/T05 and T06 are In progress for the authorized account/session implementation; M2–M7 remain Not started.
 
@@ -399,6 +399,35 @@ Exact files modified:
 - `docs/IMPLEMENTATION_STATUS.md`
 
 Current evidence supersedes earlier statements that T06/login/refresh/me are unimplemented or reset session invalidation is deferred. Next T06 follow-up: verify real browser and HTTPS deployment/cookie/key rollout behavior and bounded expired-session retention operations. T07 remains Not started. T05 remains In progress for resend/provider acceptance, and T04/M0 remain In progress until an actual remote CI run. Setup commit: `3655eaf`; implementation/test commit: `f7a2c9b`; documentation committed separately. No push performed.
+
+## T06 Part 3 — final local security audit and real browser integration — 27 October 2026
+
+**T06/M1: In progress.** Code/test commit: `107a718`. Local audit and browser integration complete; deployment acceptance remains pending. [Full audit, reproduction commands, exact files and coverage matrix](verification/T06_AUTH_AUDIT.md).
+
+- Fixed logout reporting success without revoking a valid bearer session when its refresh cookie was malformed/unknown. Two PostgreSQL regressions reproduced the defect before correction and now pass. Fixed stale CSRF nonce on the frontend mutation retry after access refresh; unit and real-browser DELETE regression pass. No security protection was disabled, no dependency/schema/UI feature changed, V1–V5 and supplied specifications remain unchanged.
+- Reviewed credentials/Argon2id/rate limits, JWT keys/RS256/issuer/audience/subject/time, digest-only refresh families/atomic locking/race window, expiry/revocation, cookies/CSRF/CORS and reset transaction. Existing policies retained. Added post-restart revoked-access/refresh and cross-user signed JWT/session binding coverage; strengthened 409 assertions to exclude credentials. Live database validation rejects previously issued JWTs on subsequent requests after revocation/disablement; ordinary rotation alone does not revoke unexpired access in a live family.
+- **PASS:** backend `.\mvnw.cmd clean verify`: **233 tests, 0 failures/errors/skips** (all prior 229 + four new cases); PostgreSQL 18.6 concurrency/restart/upgrade, clean V1–V5, Hibernate validation, registration/verification/recovery/reset regressions and executable JAR packaging.
+- **PASS:** separate explicit `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test`: **1 test, 0 failures/errors/skips**, actual headless Edge, HTTPS Vite, real Spring HTTP and disposable PostgreSQL, verified synthetic account, MSW off. Includes UI login/invalid credentials/reset, Secure/HttpOnly cookie/deletion, missing-CSRF attacks, untrusted origin/preflight, reload bootstrap, expiry/write retry, concurrent requests sharing one refresh, logout, reset invalidation, two-device logout-all, idle expiry and no private browser storage/service-worker interception. Transport/session commands use actual app modules directly, not redesigned product screens. Initial harness polling/preflight observation failures were corrected before the passing run; no application security relaxation.
+- **PASS:** frontend auth/transport **47 tests in 2 files** (previous 46 + nonce regression), strict TypeScript and production build, zero-warning lint, package formatting and browser-runner formatting. No broad visual/PWA/product regression claim.
+- Browser test is deliberately explicit, outside backend-only default Surefire naming; requires Java/Node/frontend dependencies/Edge/Docker. It uses a temporary self-signed HTTPS certificate with trust bypass confined to isolated test contexts. Public TLS/proxy behavior, secret mounts/key rollout, trusted peer/edge abuse controls, retention operations and hosted CI remain unverified. No local tool blocker remains. T05 resend/provider/operational acceptance remains pending; T04/M0 remain pending hosted CI, T07 Not started. No push.
+
+Exact files created:
+
+- `backend/src/test/java/com/ayaantrix/collector/auth/RealAuthenticationBrowserCheck.java`
+- `frontend/real-auth/browser-check.mjs`
+- `docs/verification/T06_AUTH_AUDIT.md`
+
+Exact files modified:
+
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/AgencySessions.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/AgencySessionWorkflowTests.java`
+- `frontend/src/api/baseQuery.ts`
+- `frontend/src/test/transport.test.ts`
+- `frontend/eslint.config.js`
+- `backend/README.md`
+- `docs/AGENCY_SESSION_ARCHITECTURE.md`
+- `docs/FRONTEND_BACKEND_HANDOFF.md`
+- `docs/IMPLEMENTATION_STATUS.md`
 
 ## T02 results — 21 October 2026
 

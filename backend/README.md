@@ -229,3 +229,23 @@ T06/M1 remain In progress pending live browser/TLS-cookie deployment acceptance 
 - [Actuator exposure and health](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html)
 - [Official PostgreSQL container image](https://hub.docker.com/_/postgres)
 - [Maven Wrapper](https://maven.apache.org/tools/wrapper/)
+
+## T06 Part 3 — authentication audit and real browser verification
+
+Fixed two defects: malformed/unknown refresh cookies no longer prevent valid-bearer logout revocation; frontend mutation retries reacquire CSRF after refresh rotates server CSRF state. No V1–V5 or API DTO changes. JWTs are checked against live account/session state on each authenticated request: revocation rejects already-issued access tokens on subsequent requests, including after restart. The two-second 409/no-credentials race policy remains unchanged.
+
+Verified 27 October 2026: backend clean verify **233 tests**, separate real HTTPS browser lifecycle **1 test**, frontend auth/transport **47 tests in 2 files**, with zero test failures/errors/skips in the final runs. Executable JAR, Flyway/Hibernate validation, TypeScript production build, lint and formatting passed. [Detailed evidence and security matrix](../docs/verification/T06_AUTH_AUDIT.md).
+
+Real browser prerequisites: Java 21/keytool and Node on PATH, Docker Desktop Linux engine running, existing frontend dependencies installed from the lockfile and Microsoft Edge installed. The explicit Windows integration check starts its own disposable PostgreSQL, real Spring server and real Vite HTTPS server on random loopback ports; MSW is disabled. It creates a verified synthetic account and temporary keys/certificate, cleans up owned resources and does not modify your development database. Self-signed certificate trust is bypassed only in the isolated test browser. This does not verify public deployment TLS.
+
+Run the explicit check after normal backend verification (it is separate from default backend-only CI; it is not silently skipped):
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test
+if ($LASTEXITCODE -ne 0) { throw 'Real browser authentication check failed.' }
+```
+
+T06/M1 remain In progress for deployment proxy/TLS, persistent key rollout, abuse controls and retention operations; local browser acceptance now passes. T05 resend/provider and T04/M0 hosted CI remain pending. No T07 implemented or push performed.
