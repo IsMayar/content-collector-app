@@ -2,7 +2,7 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 27 October 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. M1/T05 and T06 are In progress for the authorized account/session implementation; M2–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. M1/T05, T06 and T07 are In progress for the authorized account/session/workspace implementation; M2–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -464,7 +464,7 @@ Milestone status: In progress
 | ---- | ----------------------------------------------- | -------------------------------------------------------------- | ----------- |
 | T05  | Account registration, verification and recovery | Purpose-bound single-use tokens and generic recovery responses | In progress |
 | T06  | JWT access, refresh rotation, logout and CSRF   | Expiry, reuse and concurrent refresh tests pass                | In progress |
-| T07  | Workspace owner, membership and plan seed       | Two tenants cannot access each other's resources               | Not started |
+| T07  | Workspace owner, membership and plan seed       | Two tenants cannot access each other's resources               | In progress |
 | T08  | Agency layout and session lifecycle             | Sign-in, workspace switch and cache clearing work              | Not started |
 
 ### Milestone M2 Projects templates and team
@@ -587,3 +587,16 @@ Verification: strict TypeScript/production build, ESLint, Prettier, 47 unit test
 ## Auth brand-color alignment — 2026-10-26
 
 Retained the new split auth layout and aligned all six auth pages to the dashboard's shared navy/blue/background/muted/border tokens. Removed teal/green styling and yellow/pink decorative accents; replaced them with blue/cyan tints. Production build/strict TypeScript passed. Three responsive browser cases passed, each visiting all six auth routes at desktop/tablet/phone widths. Desktop sign-in render inspected; evidence: `verification/auth-brand-desktop.png` and `verification/auth-brand-phone.png`.
+
+## T07 Part 1 — workspace ownership, membership, trial and tenant foundation — 27 October 2026
+
+Status: **T07/M1 In progress**. Code/test commit: `c3cff0d`. Explicit backend authorization covers this foundation; no T08/frontend or later feature implemented. [Full schema/domain/security decisions, exact file manifest and commands](WORKSPACE_FOUNDATION.md).
+
+- V6 adds reference `collector.workspaces`, `workspace_members` and local-trial-only `subscriptions`. No payment provider columns/integration, new plan catalog, synthetic users or workspace-type field. V1–V5 and all supplied specifications remain unchanged. UUID/FK/unique/state/nonnegative/time checks, one active owner per workspace and one owned workspace per user, tenant lookup index and optimistic settings version are enforced.
+- Transactional verified-owner creation inserts workspace + ACTIVE OWNER + server-timed 14-day trial together. Memberships are OWNER/MEMBER and ACTIVE/DISABLED; can_review/can_export stay future project-assignment permissions. Server-defined Solo/Agency allowances follow Section 18; optional initial planKey chooses only a trial, defaults SOLO, and cannot activate paid entitlement. Undefined reduced trial AI/SMS budgets default zero and providers stay disabled. No dependencies added.
+- Central trusted-JWT/account/session/live-membership authorization, scoped package-private repositories, account -> workspace -> member locks, owner-only versioned settings changes. Inaccessible/disabled/removed tenant IDs give 404, a live member's denied owner action gives 403. Exactly one owner is a creation/service invariant; partial unique indexes enforce at most one under arbitrary SQL. Future member/transfer services must preserve the invariant transactionally.
+- Opened only documented GET/POST workspaces and GET/PATCH workspaces/{id}; standard DTOs, Bean Validation, CSRF, no-store and tracing retained. Anonymous opened workspace routes use 401. T13 member/invitation/transfer and all project routes remain denied. Existing `/me` membership projection is unchanged in Part 1; live projection + real onboarding acceptance remain T07 integration work, not a completed T08 frontend journey.
+- **PASS:** `.\mvnw.cmd clean verify`: **278 tests, zero failures/errors/skips** (all prior 233 + 45 workspace cases), PostgreSQL 18.6 V5 upgrade/clean V1–V6/Hibernate/restart, tenant read/write/plan isolation, constraints, rollback, concurrency, JWT/account/security regressions and executable JAR. No tests removed/disabled; historical migration assertions advanced to V6/nine tables.
+- **PASS:** separate real HTTPS authentication browser regression **1 test**, MSW off; new workspace UI onboarding was not tested. Final strengthened lock-wait concurrency rerun **2 cases passed**.
+- **PASS:** frontend auth/transport/product contract regression **69 tests in 3 files**, using existing mocks; frontend code unchanged. This is not new live workspace browser acceptance. Focused initial test-fixture SQL issues/status expectation were corrected before passing; no security protection weakened.
+- Remaining: live `/me` projection and complete real verified-owner onboarding acceptance; T13 management/transfer/project permissions and T32/T33 billing/usage are later work. T04 hosted CI, T05 resend/provider and T06 deployment/retention limitations remain. No local tool blocker or full MVP claim. No push.

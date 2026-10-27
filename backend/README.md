@@ -249,3 +249,15 @@ if ($LASTEXITCODE -ne 0) { throw 'Real browser authentication check failed.' }
 ```
 
 T06/M1 remain In progress for deployment proxy/TLS, persistent key rollout, abuse controls and retention operations; local browser acceptance now passes. T05 resend/provider and T04/M0 hosted CI remain pending. No T07 implemented or push performed.
+
+## T07 Part 1 — workspace foundation
+
+[Workspace schema, ownership, API contracts, locks, trial defaults and evidence](../docs/WORKSPACE_FOUNDATION.md). V6 creates workspaces, workspace_members and the local-trial-only subset of reference subscriptions; V1–V5 unchanged. No payment provider/checkout or later feature tables. A verified authenticated account can own one workspace and join others; creation commits owner membership and 14-day trial atomically. Package-private scoped repositories and centralized live JWT/session/membership checks reject unrelated tenant IDs. Owner settings PATCH requires expectedVersion and writable entitlements. No generic global repository endpoint is exposed.
+
+Available authenticated routes: GET/POST `/api/v1/workspaces`, GET/PATCH `/api/v1/workspaces/{workspaceId}`. Mutations require the existing CSRF exchange. Creation accepts name, optional IANA timezone (default America/Chicago) and optional SOLO/AGENCY planKey (default SOLO); always local TRIALING, never paid activation. GET returns workspace and entitlements; PATCH changes name/timezone only. Missing/expired entitlement denies writes. Section 18 defines seats/storage/paid allowances; undefined reduced trial budgets default zero (`TRIAL_AI_DRAFTS=0`, `TRIAL_SMS_SEGMENTS=0`), bounded at startup to 0–100/0–25. AI/SMS activation stays false until later integrations.
+
+Verification 27 October 2026: full `.\mvnw.cmd clean verify` passed **278 tests, zero failures/errors/skips**, preserving all 233 prior cases and adding 45 workspace/PostgreSQL/MockMvc cases. V5 upgrade, Hibernate validation, restart, database constraints, transactional rollback, two-tenant isolation, concurrent creation/versioning/membership change and executable JAR passed. Separate real HTTPS authentication browser regression passed **1 test**; final strengthened PostgreSQL lock-wait checks passed **2 cases**. Frontend focused auth/transport/product tests passed **69 tests in 3 files**; no frontend source changed.
+
+Use the existing local setup/key initialization/database/start commands above; Flyway applies V6 automatically. No new dependency installation or database reset is required. Do not edit applied migrations or run schema_reference.sql. For full reproduction including the separate real HTTPS authentication regression, see the workspace guide.
+
+T07/M1 remain In progress: Part 1 uses GET workspaces for discovery; wiring existing `/me` membership projection and real owner onboarding acceptance remain. T08 frontend session lifecycle, T13 member invitations/transfer and T32/T33 billing are separate. Existing T04 hosted CI, T05 delivery/resend and T06 deployment/retention limits remain pending; no production credentials/push.
