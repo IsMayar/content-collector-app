@@ -313,3 +313,34 @@ it('drops revoked membership navigation and private caches on the next bootstrap
     }),
   ).toBeVisible()
 })
+
+it('restores the authorized URL workspace as the active selection after reload', async () => {
+  mockState.activeEmail = 'owner@studio.example'
+  mockState.token = 'synthetic-existing-session'
+  const { store } = mount(`/app/w/${soloId}/overview`)
+  await waitFor(() =>
+    expect(store.getState().auth.status).toBe('authenticated'),
+  )
+  await waitFor(() => expect(store.getState().auth.workspaceId).toBe(soloId))
+  expect(screen.getByLabelText('Workspace')).toHaveValue(soloId)
+})
+
+it('ignores an unrelated workspace selection without discarding current private caches', async () => {
+  const { user, store } = mount()
+  await signIn(user)
+  await screen.findByRole('heading', { name: 'Welcome back, Alex' })
+  const probe = clientApi.injectEndpoints({
+    endpoints: (build) => ({
+      invalidSwitchProbe: build.query<{ private: boolean }, void>({
+        queryFn: () => ({ data: { private: true } }),
+      }),
+    }),
+  })
+  await store.dispatch(probe.endpoints.invalidSwitchProbe.initiate()).unwrap()
+  const before = Object.keys(store.getState().clientApi.queries)
+  const selected = store.getState().auth.workspaceId
+  const { selectWorkspace } = await import('@/features/auth/session')
+  store.dispatch(selectWorkspace('unrelated-workspace'))
+  expect(store.getState().auth.workspaceId).toBe(selected)
+  expect(Object.keys(store.getState().clientApi.queries)).toEqual(before)
+})

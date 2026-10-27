@@ -80,13 +80,14 @@ class RealAuthenticationBrowserCheck {
                     var message=app.getBean(Mailbox.class).messages.getFirst();
                     assertThat(message.recipient()).isEqualTo(email);assertThat(message.purpose()).isEqualTo(TokenPurpose.VERIFY_EMAIL);
                     io.step(Map.of("action","workspace-verify","token",message.actionLink().getFragment().substring("token=".length())));
-                    io.step(Map.of("action","signin"));io.step(Map.of("action","workspace-create"));
+                    io.step(Map.of("action","signin-safe"));io.step(Map.of("action","workspace-create"));
                     var jdbc=app.getBean(JdbcTemplate.class);var actor=users.findByEmailNormalized(email).orElseThrow();
                     UUID workspace=jdbc.queryForObject("select workspace_id from collector.workspace_members where user_id=? and role='OWNER'",UUID.class,actor.getId());
                     assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("TRIALING");
                     assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("AGENCY");
                     assertThat(jdbc.queryForObject("select current_period_end-current_period_start=interval '14 days' from collector.subscriptions where workspace_id=?",Boolean.class,workspace)).isTrue();
                     io.step(Map.of("action","workspace-reload"));
+                    clock.advance(331);io.step(Map.of("action","workspace-expired-access"));
                     // Isolated second tenant fixture; no T13 management/test-control HTTP endpoint is introduced.
                     var other=new UserAccount("other-browser-workspace@example.test","Other Synthetic Owner",app.getBean(PasswordEncoder.class).encode(password),clock.instant());other.markVerified(clock.instant());users.saveAndFlush(other);
                     var issued=app.getBean(AgencySessions.class).login(new LoginRequest(other.getEmailNormalized(),password));
@@ -98,7 +99,7 @@ class RealAuthenticationBrowserCheck {
                     io.step(Map.of("action","workspace-member","other",otherWorkspace.toString()));
                     jdbc.update("update collector.workspace_members set state='DISABLED',updated_at=now() where workspace_id=? and user_id=?",otherWorkspace,actor.getId());
                     io.step(Map.of("action","workspace-revoked","other",otherWorkspace.toString()));
-                    io.step(Map.of("action","logout"));io.step(Map.of("action","storage"));io.step(Map.of("action","stop"));
+                    io.step(Map.of("action","cross-tab-logout"));io.step(Map.of("action","storage"));io.step(Map.of("action","stop"));
                     return;
                 }
                 io.step(Map.of("action","csrf"));io.step(Map.of("action","cors"));io.step(Map.of("action","bootstrap"));

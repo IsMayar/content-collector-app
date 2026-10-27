@@ -192,6 +192,13 @@ class WorkspaceFoundationTests {
         mvc.perform(write("PATCH",ROOT+"/"+w.id(),Map.of("name","Stale","expectedVersion",0),owner)).andExpect(status().isConflict());
         mvc.perform(write("PATCH",ROOT+"/"+w.id(),Map.of("name","Missing version"),owner)).andExpect(status().isBadRequest());
     }
+    @Test void optimisticVersionBeyondBoxedLongCacheUsesNumericEquality() throws Exception {
+        var owner=actor("owner@example.test");var w=create(owner);
+        jdbc.update("update collector.workspaces set version=128 where id=?",w.id());
+        mvc.perform(write("PATCH",ROOT+"/"+w.id(),Map.of("name","Updated at 128","expectedVersion",128),owner))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.workspace.version").value(129));
+        mvc.perform(write("PATCH",ROOT+"/"+w.id(),Map.of("name","Stale","expectedVersion",128),owner)).andExpect(status().isConflict());
+    }
     @Test void bodyUserOwnerPlanAndStateCannotEscalatePrivileges() throws Exception {
         var owner=actor("owner@example.test");var other=actor("other@example.test");
         var result=mvc.perform(write("POST",ROOT,Map.of("name","Studio","userId",other.id(),"state","ACTIVE","subscriptionState","ACTIVE"),owner)).andExpect(status().isCreated()).andReturn();

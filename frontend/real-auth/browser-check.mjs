@@ -45,9 +45,14 @@ async function signin(
   target = page,
   password = settings.password,
   expected = 200,
+  returnTo = null,
 ) {
   phase = 'signin-open'
-  await target.goto(origin + '/sign-in')
+  await target.goto(
+    origin +
+      '/sign-in' +
+      (returnTo ? '?returnTo=' + encodeURIComponent(returnTo) : ''),
+  )
   await target.getByLabel('Email address', { exact: true }).fill(settings.email)
   await target.getByLabel('Password', { exact: true }).fill(password)
   phase = 'signin-submit'
@@ -173,6 +178,80 @@ async function command(input) {
       )
       break
     }
+    case 'signin-safe':
+      await signin(
+        page,
+        settings.password,
+        200,
+        'https://untrusted.example/landing',
+      )
+      await expect(page).toHaveURL(origin + '/app/onboarding')
+      break
+    case 'workspace-expired-access': {
+      const before = refreshes
+      assert.ok(
+        (await run('workspaces/' + settings.workspace)).status === 200,
+        'Expired workspace access did not refresh',
+      )
+      assert.ok(
+        refreshes === before + 1,
+        'Workspace access issued redundant refresh',
+      )
+      break
+    }
+    case 'cross-tab-logout': {
+      await page.goto(origin + '/app/w/' + settings.workspace + '/overview')
+      await waitState('authenticated')
+      const peer = await context.newPage()
+      try {
+        await peer.goto(origin + '/app/w/' + settings.workspace + '/overview')
+        await waitState('authenticated', peer)
+        for (const target of [page, peer]) {
+          await expect
+            .poll(() =>
+              target.evaluate(
+                async (id) =>
+                  Object.keys(
+                    (await import('/src/app/store.ts')).store.getState()
+                      .agencyApi.queries,
+                  ).some((key) => key.includes(id)),
+                settings.workspace,
+              ),
+            )
+            .toBe(true)
+        }
+        const result = page.waitForResponse(
+          (res) => new URL(res.url()).pathname === '/api/v1/auth/logout',
+        )
+        await page
+          .getByRole('button', { name: 'Sign out', exact: true })
+          .click()
+        await page
+          .getByRole('dialog')
+          .getByRole('button', { name: 'Sign out', exact: true })
+          .click()
+        assert.ok((await result).status() === 204, 'UI logout failed')
+        for (const target of [page, peer]) {
+          await waitState('anonymous', target)
+          const cleared = await target.evaluate(async () => {
+            const state = (await import('/src/app/store.ts')).store.getState()
+            return (
+              state.auth.accessToken === null &&
+              state.auth.memberships.length === 0 &&
+              Object.keys(state.agencyApi.queries).length === 0 &&
+              Object.keys(state.clientApi.queries).length === 0
+            )
+          })
+          assert.ok(cleared, 'Cross-tab logout retained private state')
+          await expect(
+            target.getByRole('heading', { name: 'Welcome back', exact: true }),
+          ).toBeVisible()
+        }
+      } finally {
+        await peer.close()
+      }
+      break
+    }
     case 'workspace-register': {
       await page
         .getByLabel('Your name', { exact: true })
@@ -237,6 +316,9 @@ async function command(input) {
         .inputValue()
       await expect(
         page.getByText('Workspace owner', { exact: true }),
+      ).toBeVisible()
+      await expect(
+        page.getByText('Synthetic Onboarding Owner', { exact: true }),
       ).toBeVisible()
       assert.ok(
         (await run('workspaces/' + settings.workspace)).status === 200,
@@ -307,6 +389,32 @@ async function command(input) {
         .getByLabel('Workspace', { exact: true })
         .selectOption(input.other)
       await expect(page.getByText('Team member', { exact: true })).toBeVisible()
+      await page.reload()
+      await waitState('authenticated')
+      await expect
+        .poll(() =>
+          page.evaluate(
+            async () =>
+              (await import('/src/app/store.ts')).store.getState().auth
+                .workspaceId,
+          ),
+        )
+        .toBe(input.other)
+      await expect(page.getByLabel('Workspace', { exact: true })).toHaveValue(
+        input.other,
+      )
+      const stale = await page.evaluate(
+        async (id) =>
+          Object.keys(
+            (await import('/src/app/store.ts')).store.getState().agencyApi
+              .queries,
+          ).some((key) => key.includes(id)),
+        settings.workspace,
+      )
+      assert.ok(
+        !stale,
+        'Workspace switch/reload retained previous tenant queries',
+      )
       await expect(
         page
           .getByRole('navigation', { name: 'Workspace navigation' })

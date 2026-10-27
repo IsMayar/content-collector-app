@@ -45,7 +45,7 @@ public class WorkspaceService {
     }
     public WorkspaceDtos.View update(UUID workspace,WorkspaceDtos.Update request){
         var w=authorization.require(workspace,authorization.actor(),true).workspace();
-        if(request.expectedVersion()==null || request.expectedVersion()!=w.version())throw new ApiException(HttpStatus.CONFLICT,"VERSION_CONFLICT","The workspace has changed. Reload and try again.");
+        if(request.expectedVersion()==null || !request.expectedVersion().equals(w.version()))throw new ApiException(HttpStatus.CONFLICT,"VERSION_CONFLICT","The workspace has changed. Reload and try again.");
         if(!entitlements(w).canWrite())throw new ApiException(HttpStatus.FORBIDDEN,"WORKSPACE_READ_ONLY","Workspace changes are unavailable.");
         w.update(request.name()==null?null:name(request.name()),request.timezone()==null?null:timezone(request.timezone()),clock.instant());
         // Flush before constructing the DTO so the incremented version is returned.

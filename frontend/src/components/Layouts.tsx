@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { UnauthorizedPage } from '@/features/foundation/AgencyFoundation'
 import {
   Link,
@@ -144,6 +144,12 @@ export function AgencyLayout() {
     (m) => m.workspaceId === (workspaceId || state.workspaceId),
   )
   const dispatch = useAppDispatch()
+  const routeWorkspace =
+    workspaceId && membership ? membership.workspaceId : null
+  useEffect(() => {
+    if (routeWorkspace && routeWorkspace !== state.workspaceId)
+      dispatch(selectWorkspace(routeWorkspace))
+  }, [dispatch, routeWorkspace, state.workspaceId])
   const navigate = useNavigate()
   const notify = useNotify()
   const [confirm, setConfirm] = useState(false)

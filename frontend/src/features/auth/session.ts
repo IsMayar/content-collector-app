@@ -68,7 +68,13 @@ export const logoutSession = (): AsyncAction => async (dispatch) => {
 }
 export const selectWorkspace =
   (id: string): ThunkAction<void, RootState, unknown, UnknownAction> =>
-  (dispatch) => {
+  (dispatch, getState) => {
+    const state = getState().auth
+    if (
+      id === state.workspaceId ||
+      !state.memberships.some((m) => m.workspaceId === id)
+    )
+      return
     dispatch(clearPrivateCaches())
     dispatch(workspaceSelected(id))
   }
