@@ -134,7 +134,7 @@ class AgencySessionWorkflowTests {
         account(EMAIL);var signed=signIn();mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+signed.access()))
             .andExpect(status().isOk()).andExpect(jsonPath("$.user.email").value(EMAIL)).andExpect(jsonPath("$.memberships").isEmpty()).andExpect(jsonPath("$.user.passwordHash").doesNotExist());
         mvc.perform(get("/api/v1/projects").header("Authorization","Bearer "+signed.access())).andExpect(status().isForbidden());
-        assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector' and table_name='workspaces'",Long.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from collector.workspaces",Long.class)).isZero();
     }
     @Test void rotationReplacesCookieAndRetainsOldDigestForRaceAndReuseChecks() throws Exception {
         account(EMAIL);var old=signIn();var rotated=mvc.perform(refresh(old.refresh())).andExpect(status().isOk()).andExpect(jsonPath("$.expiresIn").value(300)).andReturn();
@@ -229,7 +229,7 @@ class AgencySessionWorkflowTests {
     }
     @Test void sessionAndSigningConfigurationSurviveRealApplicationRestart() throws Exception {
         account(EMAIL);var signed=signIn();context.close();open();me(signed,200);mvc.perform(refresh(signed.refresh())).andExpect(status().isOk());
-        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(5);
+        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(6);
     }
     @Test void bearerOnlyLogoutIsIdempotentAndRevokesTheCurrentSession() throws Exception {
         account(EMAIL);var signed=signIn();
