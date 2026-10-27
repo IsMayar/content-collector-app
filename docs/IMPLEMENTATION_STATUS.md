@@ -2,7 +2,7 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 26 October 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. M1/T05 are In progress for the authorized account foundation; M2–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. M1/T05 and T06 are In progress for the authorized account/session implementation; M2–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -332,6 +332,74 @@ Exact files modified:
 
 Acceptance decision: T05 is **not Complete** while verification resend approval/workflow, real sandbox/provider acceptance and remaining operational/end-to-end account requirements are pending. Worker execution and internal unknown-outcome reconciliation are now implemented and verified within controlled-test scope. Next T05 step is approving the documented resend decisions and configuring a controlled provider integration; T06 authentication/session invalidation stays separate. Code/test commit: `1cb8ed5`; runbook/status/contracts committed separately. No push performed.
 
+## T06 Parts 1 and 2 - secure login, JWTs and persistent agency sessions - 27 October 2026
+
+Status: **In progress** for T06/M1. The first request authorized login/JWT foundations; the latest request authorized complete refresh sessions and activation of the real login contract. Inspection confirmed Part 1 was not already present, so both parts were implemented together before public login activation. This explicit backend authorization is separate from the earlier frontend batches. T05 remains In progress for its original resend/provider requirements; T04/M0 remain In progress for hosted CI. No T07 or later backend task was implemented.
+
+- CredentialVerifier reuses canonical emails and existing Argon2id. Validated login requests use the existing PostgreSQL limiter (10/minute/peer default, configurable LOGIN_PER_MINUTE); unknown accounts perform dummy Argon2id matching. Unknown/wrong/disabled credentials receive the same 401 INVALID_CREDENTIALS; EMAIL_NOT_VERIFIED is returned only after a correct unverified password. The account/hash/state are checked again under the user lock before issuing a session. No password/hash/entity or refresh secret enters response JSON; no workspace is created.
+- AccessTokens uses BOM-managed Spring Security JOSE/resource-server 7.1.1 and Nimbus 10.9.1. RS256 is pinned; local public-only JWKS select known kids and support staged key rollover. The matching PKCS#8 private key and separate 32-byte HMAC pepper are externally configured, stable across restarts and never auto-generated at application startup. Tokens last exactly five minutes, with iss/aud/sub/sid/jti/iat/exp and kid; signature, issuer, exact audience, IDs/timestamps/lifetime, algorithm and bounded 30-second skew are checked. Unsigned/unsupported/malformed/expired/future/unknown-key/wrong-signature claims are rejected. The standard bearer filter rechecks live account/session state without persisting bearer identity in the anti-CSRF HTTP session.
+- V5__create_agency_sessions.sql adds USER-only auth_sessions/session_tokens, scoped foreign keys, digest/timestamp/rotation constraints and indexes. Existing V1-V4 are unchanged. Refresh credentials are 256-bit random capabilities; only HMAC-SHA-256 digests are stored. Sessions last 14 days absolute / seven days idle; refresh advances activity capped at the absolute deadline. Token rows retain rotation/replacement links for reuse detection. Row locks serialize login/reset/refresh/revocation through a consistent user -> session order.
+- Public POST /api/v1/auth/login accepts {email,password}, returns 200 {accessToken,expiresIn:300,user} and the refresh cookie. POST auth/refresh accepts {} plus cookie and returns 200 {accessToken,expiresIn:300} with atomic rotation. A rotated token gets 409 REFRESH_ALREADY_ROTATED during the exact [rotation,rotation+2s) race window, without credentials/cookie changes/revocation; later reuse commits family revocation before returning 401. Other families are unaffected. Failure rolls replacement/rotation/activity back. Refresh attempts also use the shared peer limiter (60/minute).
+- GET /api/v1/me returns safe user and honest memberships:[] until T07. GET me/sessions returns the original catalog's {data:SessionSummary[]} (bounded to 100) and a generic label, without raw device/IP metadata. DELETE me/sessions/{id} revokes only own sessions, with 404 for cross-user IDs. POST auth/logout revokes the persistent current session via cookie or valid bearer when the cookie is absent and returns idempotent 204/clearing; expired optional bearer headers cannot block cookie logout/refresh. POST auth/logout-all revokes all of the authenticated user's sessions.
+- Password reset now revokes every account session within its existing password/token/outbox transaction. A revocation failure rolls the new password and token consumption back; reset/refresh concurrency cannot preserve an old-credential session. Live session/account checks also invalidate issued JWTs on revocation/disablement. Future password-change paths must join this same transaction pattern, not bypass it.
+- Production refresh cookie is __Secure-collector_refresh, Secure/HttpOnly/SameSite=Lax, host-only, Path=/api/v1/auth, with remaining absolute Max-Age. The loopback dev HTTP exception uses collector_refresh; insecure refresh settings outside dev/loopback fail closed. Anti-CSRF session cookies are explicitly Secure/HttpOnly/SameSite=Lax in production and cookie-only tracking is enforced. Login/refresh/logout change the CSRF session ID and remove the old CSRF token; the frontend already refetches before mutations. No bearer-CSRF exemption, broad auth wildcard, CORS relaxation or business permission was introduced. Standard problem JSON/correlation is retained; authenticated account identity failures use 401 while closed business/CSRF denials remain 403.
+- Added Windows local key initialization with a Java 21 single-file generator: restrict the ignored secret directory first, generate once, append UTF-8 ignored .env configuration without printing secrets, and preserve existing/partial files instead of silently replacing keys. Checked generation in an isolated ignored directory; valid public JWKS was produced and no secret was printed. Production uses restricted secret-manager mounts, not committed keys. Partial invalid signing configuration fails closed; fully blank settings leave health/T05 running and return safe AUTH_UNAVAILABLE for login.
+
+Verification actually performed:
+
+- **PASS:** final backend `./mvnw.cmd clean verify`, Java 21.0.11 / Boot 4.1.1, **229 tests, 0 failures, 0 errors, 0 skipped**. All previous **175 tests retained**, plus **33 AgencySessionWorkflowTests**, **19 AccessTokensTests**, **2 RefreshCookiesTests**. Executable JAR packaged successfully; no skipped or bypassed failures.
+- PostgreSQL 18.6 covered login/state/normalization/Argon2id/generic errors, peer throttling with forged forwarded headers, cookie and digest storage, /me bootstrap, atomic rotation, single-winner concurrency, exact race/reuse boundaries, family isolation, absolute/idle expiry, expired-access refresh, logout/idempotency/logout-all/own-session scope, disablement, CSRF even with bearer, old CSRF invalidation, untrusted origin preflight, safe errors/traces, reset revocation and reset/refresh races, actual login/rotation/reset-revocation rollback, V4 upgrade preserving accounts/ciphertext, clean V1-V5/Hibernate validation, real application restart with stable keys/pepper and existing regressions. Existing tests only changed newly activated route statuses/descendant-denial assertions and expected migration/table counts, preserving their test counts.
+- JWT tests verified safe required claims, five-minute TTL, algorithm/key/signature/issuer/audience/expiry/future/malformed rejection, restart stability, retained-public-key rollover/retirement, fail-closed missing/mismatched configuration, and stable keyed refresh digests. Cookie-policy tests verified rejection of insecure non-dev/non-loopback settings and the restricted dev name/path.
+- Initial Java import ambiguity and PostgreSQL CHAR mapping mismatch were corrected before passing verification; the digest mapping now matches the existing AccountToken convention. Final full rerun included the precise two-second boundary and explicit CSRF cookie settings. A dependency tree confirmed BOM resolution (Spring 7.1.1, Nimbus 10.9.1); no independent version override was added.
+- **PASS:** existing frontend auth/transport `npm test -- src/test/auth.test.tsx src/test/transport.test.ts --maxWorkers=1 --pool=threads`: **46 tests in 2 files**. An initial fork worker failed to start (21 transport tests passed, auth file did not execute); the one-thread rerun passed both files. The failed attempt was not claimed as success. Frontend source/UI/mocks/lockfile were unchanged; no broader browser/build claim is made.
+- **Not performed:** live browser/TLS reverse-proxy cookie acceptance, production secret/key rollout, hosted CI, provider delivery or full workspace/product journeys. No local tool blocker remains. T06 stays In progress for deployment acceptance and operational expiry/retention hardening; T05 resend/provider gaps are unchanged. No T07 tables/features or full MVP completion claim was added.
+
+Exact files created:
+
+- `backend/scripts/GenerateAuthKeys.java`
+- `backend/scripts/Initialize-Auth.ps1`
+- `backend/src/main/java/com/ayaantrix/collector/auth/controller/AgencySessionController.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/LoginRequest.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/SessionResponses.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/entity/AuthSession.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/entity/SessionToken.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/repository/AuthSessionRepository.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/repository/SessionTokenRepository.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/security/AccessTokenSecurity.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/security/AccessTokens.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/security/RefreshCookies.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/security/RefreshTokenHashes.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/AgencySessions.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/CredentialVerifier.java`
+- `backend/src/main/resources/db/migration/V5__create_agency_sessions.sql`
+- `backend/src/test/java/com/ayaantrix/collector/auth/AgencySessionWorkflowTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/security/AccessTokensTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/security/RefreshCookiesTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/security/SigningKeyFixture.java`
+- `docs/AGENCY_SESSION_ARCHITECTURE.md`
+
+Exact files modified:
+
+- `.gitignore`
+- `backend/.env.example`
+- `backend/pom.xml`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/PasswordResetService.java`
+- `backend/src/main/java/com/ayaantrix/collector/common/SecurityConfiguration.java`
+- `backend/src/main/java/com/ayaantrix/collector/common/error/SecurityProblemHandler.java`
+- `backend/src/main/resources/application-dev.properties`
+- `backend/src/main/resources/application.properties`
+- `backend/src/test/java/com/ayaantrix/collector/CollectorApplicationTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/AccountDeliveryOperationsTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/AccountRegistrationWorkflowTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/IdentityPersistenceTests.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/PasswordRecoveryWorkflowTests.java`
+- `README.md`
+- `backend/README.md`
+- `docs/FRONTEND_BACKEND_HANDOFF.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+
+Current evidence supersedes earlier statements that T06/login/refresh/me are unimplemented or reset session invalidation is deferred. Next T06 follow-up: verify real browser and HTTPS deployment/cookie/key rollout behavior and bounded expired-session retention operations. T07 remains Not started. T05 remains In progress for resend/provider acceptance, and T04/M0 remain In progress until an actual remote CI run. Setup commit: `3655eaf`; implementation/test commit: `f7a2c9b`; documentation committed separately. No push performed.
+
 ## T02 results — 21 October 2026
 
 - Implemented strict TypeScript and React StrictMode, Vite, Tailwind v4/HeroUI v3 style imports, RouterProvider and Redux Provider, separate empty agency/client RTK Query APIs with reusable transport, and the `@/` source alias.
@@ -366,7 +434,7 @@ Milestone status: In progress
 | Task | Deliverable                                     | Acceptance                                                     | Status      |
 | ---- | ----------------------------------------------- | -------------------------------------------------------------- | ----------- |
 | T05  | Account registration, verification and recovery | Purpose-bound single-use tokens and generic recovery responses | In progress |
-| T06  | JWT access, refresh rotation, logout and CSRF   | Expiry, reuse and concurrent refresh tests pass                | Not started |
+| T06  | JWT access, refresh rotation, logout and CSRF   | Expiry, reuse and concurrent refresh tests pass                | In progress |
 | T07  | Workspace owner, membership and plan seed       | Two tenants cannot access each other's resources               | Not started |
 | T08  | Agency layout and session lifecycle             | Sign-in, workspace switch and cache clearing work              | Not started |
 

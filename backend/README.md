@@ -1,6 +1,6 @@
 # Backend foundation
 
-Java 21, Spring Boot 4.1.1 (selected 4.1 line), Maven Wrapper 3.3.4 with Maven 3.9.16, PostgreSQL 18. The Boot parent/BOM manages all library versions, including Spring Security, Hibernate, Flyway, JDBC and Testcontainers. T05 Parts 1-3 add identity persistence, registration, email verification and password recovery/reset. Login, JWT and refresh authentication are not implemented.
+Java 21, Spring Boot 4.1.1 (selected 4.1 line), Maven Wrapper 3.3.4 with Maven 3.9.16, PostgreSQL 18. The Boot parent/BOM manages all library versions, including Spring Security, Hibernate, Flyway, JDBC and Testcontainers. T05 Parts 1-3 add identity persistence, registration, email verification and password recovery/reset. T06 Parts 1-2 now add login, signed JWTs, persistent rotating refresh sessions, bootstrap, logout and reset-driven revocation; see the current section below.
 
 ## Local setup (PowerShell)
 
@@ -204,6 +204,22 @@ Read the [full operations runbook](../docs/ACCOUNT_DELIVERY_OPERATIONS.md) for s
 Verification resend is still unapproved and denied. The [handoff](../docs/FRONTEND_BACKEND_HANDOFF.md#t05-part-4-contract-review-and-resend-decision---26-october-2026) records a concrete proposal for approval; it is not silently treated as an agreed endpoint. No Flyway migration or dependency update was required; V1-V4 remain unchanged. T05/M1 remain In progress for resend/provider/end-to-end acceptance; T04/M0 remain In progress for hosted CI. T06 login/JWT/refresh and transactional session revocation are not implemented.
 
 Part 4 verification on 26 October 2026: full `.\mvnw.cmd clean verify` passed **175 tests, 0 failures, 0 errors, 0 skipped** (all previous 142 plus 21 operations/workflow PostgreSQL cases and 12 runner lifecycle/configuration cases). Flyway V1-V4, Hibernate validation, real-context restart with the same key, concurrent polling/reconciliation, rollback and executable JAR packaging passed. Frontend `npm test -- src/test/auth.test.tsx src/test/transport.test.ts --maxWorkers=1 --pool=forks` passed **46 tests in 2 files**; no frontend files changed. Live inbox/provider or browser-to-backend journeys and hosted CI were not performed. No local tool blocker remains.
+
+## T06 Parts 1-2 - secure login and rotating agency sessions
+
+The repository had no Part 1 implementation when the Part 2 request arrived. Both authorized parts are now implemented together: actual credential/JWT foundations and complete public login/refresh contracts backed by PostgreSQL sessions. No T07 workspaces or frontend screens changed.
+
+Read [the agency session architecture and setup guide](../docs/AGENCY_SESSION_ARCHITECTURE.md) for exact API contracts, PowerShell setup/startup commands, key generation/rotation, cookie attributes, CSRF lifecycle and acceptance limits. Run .\scripts\Initialize-Auth.ps1 explicitly once after Initialize-Local.ps1; it preserves existing local signing configuration and does not print secrets or generate keys at server startup. New variables are listed in .env.example. Real login requires a verified ACTIVE account and all signing/pepper settings; there are no seeded credentials.
+
+Current endpoints: POST /api/v1/auth/login -> 200 {accessToken,expiresIn:300,user} plus HttpOnly refresh cookie; POST /api/v1/auth/refresh -> 200 {accessToken,expiresIn:300} plus rotated cookie; GET /api/v1/me -> {user,memberships:[]}; GET /api/v1/me/sessions -> {data:[SessionSummary]}; DELETE /api/v1/me/sessions/{id}, POST /api/v1/auth/logout and POST /api/v1/auth/logout-all -> 204. Existing T05 routes stay available. All mutations retain CSRF, and unrelated business routes remain denied. Empty memberships reflect T07 not being implemented.
+
+RS256/issuer/audience/kid/subject/session/time checks and 30-second maximum skew use BOM-managed Spring Security 7.1.1/Nimbus 10.9.1. Access lifetime is five minutes. Refresh secrets contain 256 random bits; only keyed digests are stored. Sessions expire after 14 days or seven inactive days. Rotation is atomic. Used refresh tokens get 409 REFRESH_ALREADY_ROTATED within the two-second race window, with no cookie/credential changes; later reuse commits family revocation then returns 401. Live database checks invalidate existing JWTs on revocation/account disablement. Password reset now atomically revokes all sessions; it is no longer deferred to a future T06 step.
+
+V5 adds only agency auth_sessions/session_tokens, indexes and constraints; V1-V4 are unchanged. The disabled-mail/default worker policy and T05 resend/provider gaps are preserved. Production refresh/CSRF cookies are Secure/HttpOnly/SameSite=Lax; the loopback dev profile has an explicit local HTTP exception. A standard bearer filter is installed without granting bearer mutations a CSRF exemption or persisting bearer identity in the CSRF session.
+
+Verified 27 October 2026: full .\mvnw.cmd clean verify passed **229 tests, 0 failures, 0 errors, 0 skipped**: all previous 175 plus 33 session workflow/PostgreSQL cases, 19 JWT/hash cases and 2 cookie-policy cases. Clean V1-V5/Hibernate validation, V4 upgrade preservation, real context restart with stable keys, session concurrency/reuse/rollback, reset revocation/races, security regressions and executable JAR packaging passed. Frontend auth/transport tests passed **46 tests in 2 files** with one thread worker; an earlier fork worker failed to start and was rerun successfully, not counted as a pass. Local key generation was checked in an isolated ignored directory, with valid public JWKS and no secret output. No frontend code or original specifications changed.
+
+T06/M1 remain In progress pending live browser/TLS-cookie deployment acceptance and operational hardening/retention checks; local implementation/tests do not prove deployment acceptance. T05 remains In progress for resend/provider requirements; T04/M0 remain In progress for hosted CI (no remote configured). No local verification blocker remains.
 
 ## Official setup references (checked 21 October 2026)
 
