@@ -185,7 +185,7 @@ class AccountRegistrationWorkflowTests {
             .andExpect(content().json("{\"verified\":true}")).andExpect(jsonPath("$.accessToken").doesNotExist());
         assertThat(users.findByEmailNormalized(EMAIL).orElseThrow().getState()).isEqualTo(AccountState.ACTIVE);
         assertThat(issued().getConsumedAt()).isEqualTo(clock.instant());
-        mvc.perform(get("/api/v1/me")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
         mvc.perform(protectedPost("/api/v1/auth/verify-email",Map.of("token",raw))).andExpect(status().isGone()).andExpect(jsonPath("$.code").value("TOKEN_CONSUMED"));
     }
     @ParameterizedTest @ValueSource(strings={"EXPIRED","REVOKED","CONSUMED","WRONG_PURPOSE","DISABLED","EMAIL_CHANGED"})
@@ -246,7 +246,7 @@ class AccountRegistrationWorkflowTests {
         for(String path:List.of("register","verify-email","csrf/child","register/child","resend-verification","login","refresh","forgot-password","reset-password","logout")) {
             mvc.perform(get("/api/v1/auth/"+path)).andExpect(status().isForbidden());
         }
-        for(String path:List.of("csrf","register/child","verify-email/child","resend-verification","login","refresh","logout"))
+        for(String path:List.of("csrf","register/child","verify-email/child","resend-verification","login/child","refresh/child","logout/child"))
             mvc.perform(protectedPost("/api/v1/auth/"+path,Map.of())).andExpect(status().isForbidden());
     }
     @Test void databaseBackedRateLimitIsGenericAndResetsInNextWindow() throws Exception {
@@ -286,7 +286,7 @@ class AccountRegistrationWorkflowTests {
         String hash=context.getBean(PasswordEncoder.class).encode(PASSWORD);
         upgradeJdbc.update("insert into collector.users(email_normalized,display_name,password_hash) values (?,'Alex',?)",EMAIL,hash);
         var flyway=Flyway.configure().dataSource(source).load();flyway.migrate();assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
-        assertThat(flyway.info().applied()).hasSize(4);assertThat(upgradeJdbc.queryForObject("select password_hash from collector.users",String.class)).isEqualTo(hash);
+        assertThat(flyway.info().applied()).hasSize(5);assertThat(upgradeJdbc.queryForObject("select password_hash from collector.users",String.class)).isEqualTo(hash);
         assertThat(upgradeJdbc.queryForObject("select count(*) from collector.outbox_jobs",Long.class)).isZero();
     }
 }

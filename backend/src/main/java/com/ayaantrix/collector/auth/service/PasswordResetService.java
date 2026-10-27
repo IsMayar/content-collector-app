@@ -23,10 +23,11 @@ public class PasswordResetService {
     private final VerificationOutbox outbox;
     private final Clock clock;
     private final TransactionTemplate transactions;
+    private final AuthSessionRepository sessions;
     public PasswordResetService(UserAccountRepository users,AccountTokenRepository tokens,PasswordEncoder passwords,
-            SecureAccountTokens secrets,VerificationOutbox outbox,Clock clock,PlatformTransactionManager manager) {
+            SecureAccountTokens secrets,VerificationOutbox outbox,Clock clock,PlatformTransactionManager manager,AuthSessionRepository sessions) {
         this.users=users;this.tokens=tokens;this.passwords=passwords;this.secrets=secrets;this.outbox=outbox;
-        this.clock=clock;this.transactions=new TransactionTemplate(manager);
+        this.clock=clock;this.transactions=new TransactionTemplate(manager);this.sessions=sessions;
     }
     public void reset(PasswordResetRequest request) {
         if(request.password()==null || request.password().length()<12 || request.password().length()>128
@@ -54,7 +55,7 @@ public class PasswordResetService {
             users.saveAndFlush(user);
             tokens.revokeUnconsumedForUserAndPurpose(user.getId(),TokenPurpose.RESET_PASSWORD,now);
             outbox.discardUnusablePasswordResetJobs(user.getId(),now);
-            // T06 must revoke all real sessions in this same transaction when session tables exist.
+            sessions.revokeAll(user.getId(),now);
         });
     }
     private ApiException invalid(){return new ApiException(HttpStatus.BAD_REQUEST,"TOKEN_INVALID","This password reset link is invalid.");}

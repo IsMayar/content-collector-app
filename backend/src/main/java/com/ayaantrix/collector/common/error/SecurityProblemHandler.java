@@ -44,10 +44,9 @@ public class SecurityProblemHandler
             AuthenticationException exception
     ) throws IOException {
 
-        // Preserve T03's default-deny 403 behavior until
-        // authentication is implemented in T05.
+        // Account identity failures use 401; unrelated closed product routes retain 403.
 
-        writeProblem(request, response);
+        writeProblem(request, response, false);
     }
 
     @Override
@@ -57,27 +56,31 @@ public class SecurityProblemHandler
             AccessDeniedException exception
     ) throws IOException {
 
-        writeProblem(request, response);
+        writeProblem(request, response, true);
     }
 
     private void writeProblem(
             HttpServletRequest request,
-            HttpServletResponse response
+            HttpServletResponse response, boolean denied
     ) throws IOException {
 
         if (response.isCommitted()) {
             return;
         }
 
+        boolean accountRoute=request.getRequestURI().equals("/api/v1/me") || request.getRequestURI().startsWith("/api/v1/me/sessions") || request.getRequestURI().equals("/api/v1/auth/logout-all");
+        boolean unauthorized=!denied && (accountRoute || request.getHeader("Authorization")!=null);
         ProblemDetail problem = problemFactory.create(
-                HttpStatus.FORBIDDEN,
-                "ACCESS_DENIED",
-                "Forbidden",
-                "You do not have permission to access this resource.",
+                unauthorized?HttpStatus.UNAUTHORIZED:HttpStatus.FORBIDDEN,
+                unauthorized?"INVALID_CREDENTIALS":"ACCESS_DENIED",
+                unauthorized?"Unauthorized":"Forbidden",
+                unauthorized?"Your session is unavailable. Sign in again.":"You do not have permission to access this resource.",
                 requestTrace.getTraceId(request)
         );
 
-        response.setStatus(HttpStatus.FORBIDDEN.value());
+        response.setStatus(unauthorized?401:403);
+        if(unauthorized)response.setHeader("WWW-Authenticate","Bearer");
+        response.setHeader("Cache-Control","no-store");
 
         response.setContentType(
                 MediaType.APPLICATION_PROBLEM_JSON_VALUE

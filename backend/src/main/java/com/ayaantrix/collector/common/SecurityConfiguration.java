@@ -21,9 +21,11 @@ public class SecurityConfiguration {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             SecurityProblemHandler securityProblemHandler,
-            CsrfTokenRepository csrfTokenRepository
+            CsrfTokenRepository csrfTokenRepository,
+            org.springframework.beans.factory.ObjectProvider<com.ayaantrix.collector.auth.security.AccessTokenSecurity> accessSecurity
     ) throws Exception {
 
+        accessSecurity.ifAvailable(security -> security.configure(http,securityProblemHandler));
         return http
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(
@@ -32,7 +34,11 @@ public class SecurityConfiguration {
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST,"/api/v1/auth/register","/api/v1/auth/verify-email",
-                                "/api/v1/auth/forgot-password","/api/v1/auth/reset-password").permitAll()
+                                "/api/v1/auth/forgot-password","/api/v1/auth/reset-password",
+                                "/api/v1/auth/login","/api/v1/auth/refresh","/api/v1/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/me","/api/v1/me/sessions").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/auth/logout-all").authenticated()
+                        .requestMatchers(HttpMethod.DELETE,"/api/v1/me/sessions/*").authenticated()
                         .anyRequest().denyAll()
                 )
 

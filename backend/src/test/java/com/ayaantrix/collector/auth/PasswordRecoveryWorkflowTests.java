@@ -202,7 +202,7 @@ class PasswordRecoveryWorkflowTests {
         assertThat(passwords.matches(NEW,user.getPasswordHash())).isTrue();assertThat(passwords.matches(OLD,user.getPasswordHash())).isFalse();
         assertThat(user.getVerifiedAt()).isEqualTo(before.getVerifiedAt());assertThat(user.getState()).isEqualTo(AccountState.ACTIVE);
         assertThat(token().getConsumedAt()).isEqualTo(clock.instant());
-        mvc.perform(get("/api/v1/me")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
         assertThat(output.getAll()).doesNotContain(raw,NEW,OLD,user.getPasswordHash(),token().getTokenHash());
     }
     @ParameterizedTest @ValueSource(strings={"EXPIRED","REVOKED","CONSUMED","WRONG_PURPOSE","DISABLED","UNVERIFIED","EMAIL_CHANGED"})
@@ -293,7 +293,7 @@ class PasswordRecoveryWorkflowTests {
             mvc.perform(get("/api/v1/auth/"+path)).andExpect(status().isForbidden());
             mvc.perform(postWithCsrf("/api/v1/auth/"+path+"/child",Map.of())).andExpect(status().isForbidden());
         }
-        for(String path:List.of("login","refresh","logout","resend-verification"))
+        for(String path:List.of("login/child","refresh/child","logout/child","resend-verification"))
             mvc.perform(postWithCsrf("/api/v1/auth/"+path,Map.of())).andExpect(status().isForbidden());
     }
     @Test void resetAttemptsHaveIndependentRateLimit() throws Exception {
@@ -323,7 +323,7 @@ class PasswordRecoveryWorkflowTests {
         UUID id=UUID.randomUUID();byte[] encrypted={1,2,3,4};
         data.update("insert into collector.outbox_jobs(id,job_type,payload_json,encrypted_payload,encryption_key_id,dedupe_key,state) values (?,'VERIFY_EMAIL','{}'::jsonb,?,'test-v1','upgrade','QUEUED')",id,encrypted);
         var flyway=Flyway.configure().dataSource(source).load();flyway.migrate();assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
-        assertThat(flyway.info().applied()).hasSize(4);assertThat(data.queryForObject("select encrypted_payload from collector.outbox_jobs where id=?",byte[].class,id)).containsExactly(encrypted);
+        assertThat(flyway.info().applied()).hasSize(5);assertThat(data.queryForObject("select encrypted_payload from collector.outbox_jobs where id=?",byte[].class,id)).containsExactly(encrypted);
         data.update("insert into collector.outbox_jobs(job_type,payload_json,encrypted_payload,encryption_key_id,dedupe_key,state) values ('RESET_PASSWORD','{}'::jsonb,?,'test-v1','reset-upgrade','QUEUED')",encrypted);
     }
 }
