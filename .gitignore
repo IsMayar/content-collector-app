@@ -6,3 +6,6 @@ frontend/dist/
 !.env.example
 *.log
 backend/target/
+
+# Persistent local signing keys and refresh-token pepper.
+backend/.local/
