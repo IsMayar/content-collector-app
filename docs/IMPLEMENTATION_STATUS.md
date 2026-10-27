@@ -2,7 +2,7 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 27 October 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 remains Not started; M2–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -465,7 +465,7 @@ Milestone status: In progress
 | T05  | Account registration, verification and recovery | Purpose-bound single-use tokens and generic recovery responses | In progress |
 | T06  | JWT access, refresh rotation, logout and CSRF   | Expiry, reuse and concurrent refresh tests pass                | In progress |
 | T07  | Workspace owner, membership and plan seed       | Two tenants cannot access each other's resources               | Complete    |
-| T08  | Agency layout and session lifecycle             | Sign-in, workspace switch and cache clearing work              | Not started |
+| T08  | Agency layout and session lifecycle             | Sign-in, workspace switch and cache clearing work              | Complete    |
 
 ### Milestone M2 Projects templates and team
 
@@ -612,3 +612,14 @@ Status: **T07 Complete within its workspace foundation acceptance; M1 In progres
 - **PASS:** explicit real HTTPS Edge/Vite/Spring/PostgreSQL suite **2 tests**, zero failures/errors/skips: existing authentication lifecycle + actual registration -> encrypted outbox/test mailbox -> explicit verification -> login -> UI workspace creation -> owner/trial persistence -> list/read -> reload/bootstrap/selection -> isolation -> member navigation/owner-write denial -> disabled-membership recovery/cache clearing -> logout. MSW off, no external provider calls; second tenant/membership changes use isolated Java/SQL fixtures, not invented T13 endpoints.
 - Dashboard project endpoints remain denied (later tasks); browser acceptance does not claim implemented project/template backend or full product. Self-signed certificate trust is bypassed only in isolated browser tests; production TLS/CI/provider acceptance is not claimed.
 - No T07-scope blocker remains. T04 hosted CI, T05 resend/provider and T06 deployment/retention gaps remain; T08 and later backend tasks Not started. No push or full M1/MVP completion claim.
+
+## T08 Part 1 — backend package organization and agency session integration — 27 October 2026
+
+Status: **T08 Complete for documented agency layout/session acceptance; M1 In progress** for T05/T06. [Architecture, exact moves, visibility decisions and reproduction commands](../backend/ARCHITECTURE.md). Existing FE01–FE07 and T01–T07 history/roadmap preserved; no T09/later backend feature or full M1/MVP claim.
+
+- Audited current 63 production/21 test Java source files and dependencies. Moved 13 flat workspace classes to entity (5), repository (3), controller (1), dto (1), security (1), service (2). Updated imports, nested DTO constructor/enum JPQL references and production-required visibility. Auth/common wiring and feature-wide test packages intentionally retained. No duplicate/empty packages or migration/API/DTO/dependency changes. Future feature convention added to AGENTS.md. Refactor commit: `bdec2bc`; lifecycle/version correction commit: `242ef1c`.
+- **PASS before refactor:** fresh clean verify, 290 tests, zero failures/errors/skips, JAR. **PASS after refactor and before lifecycle work:** fresh clean verify, same 290 tests, Spring/JPA/repository/JPQL/tenant/security regressions and JAR. First refactor run exposed public primitive version accessor unboxing null; corrected to nullable Long before passing. Final review added a version-128 numeric-equality regression after reproducing the boxed-reference error; value comparison now preserves optimistic conflict behavior.
+- Two focused frontend tests reproduced valid member-route reload selecting the wrong active workspace and invalid selection needlessly clearing caches. Minimal fixes synchronize authorized route selection through the existing action and validate selection before clearing. No navigation redesign/new session subsystem or backend role claims.
+- **PASS:** all 72 frontend tests (prior 70 + two selection regressions) across 3 files. Strict TypeScript/production build, zero-warning ESLint, package formatting and real-auth runner formatting passed.
+- Extended actual HTTPS Edge/Vite/Spring/PostgreSQL checks (MSW off) to profile/no-workspace onboarding, rejected external return URL, expired workspace access, owner/member switch and reload alignment/cache separation, and two-tab UI logout clearing tokens/memberships/agency/client caches and returning both tabs to sign-in. Existing auth/refresh/reset/logout-all/session-expiry/security flows preserved. Isolated fixture tenant grants/disablement do not add T13 endpoints; project/template APIs remain denied.
+- **PASS final after numeric-version correction:** clean verify **291 tests**, zero failures/errors/skips (all baseline 290 + version-range regression; WorkspaceFoundationTests 58), clean V1–V6/Flyway/Hibernate/tenant/concurrency/auth/reset regressions and executable JAR. Artifact inspection confirms all workspace classes in new subpackages and no old flat workspace classes. **PASS:** complete explicit real HTTPS browser rerun **2 tests**, zero failures/errors/skips, MSW off. No remaining T08/local tool blocker identified. T04 hosted CI, T05 resend/provider and T06 deployment/proxy/key/retention gates remain pending; M1 remains In progress. No push.

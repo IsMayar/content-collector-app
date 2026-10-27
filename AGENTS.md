@@ -24,3 +24,5 @@ The primary guide is `docs/spec/Website_Content_Collector_MVP.md`; its PDF compa
 - Keep storage private; quarantine and scan uploads before READY. Enforce quotas transactionally. AI suggestions require explicit human acceptance and never submit or approve. Remind only when client action remains; reconcile unknown provider outcomes before retrying.
 - Keep secrets, tokens and raw customer content out of logs and version control. Never expose server secrets through VITE_ variables. Cache only public PWA assets.
 - Use provider fakes/sandboxes and keep production credentials disabled until integration. Add meaningful validation and regression tests appropriate to each change, including PostgreSQL isolation/concurrency and all three project journeys. Do not claim the full MVP before M0–M7 and release gates pass.
+
+- Backend features use controller/service/repository/entity/dto subpackages, adding security/config only when needed. Follow `backend/ARCHITECTURE.md`; preserve scoped repositories, service authorization and existing framework wiring. Do not create empty packages or unnecessary service interfaces.
