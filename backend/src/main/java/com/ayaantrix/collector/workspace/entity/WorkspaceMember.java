@@ -1,4 +1,4 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -15,8 +15,8 @@ public class WorkspaceMember {
     @Column(name="created_at",nullable=false,updatable=false) private Instant createdAt;
     @Column(name="updated_at",nullable=false) private Instant updatedAt;
     protected WorkspaceMember(){}
-    WorkspaceMember(UUID workspaceId,UUID userId,WorkspaceRole role,Instant now){
+    public WorkspaceMember(UUID workspaceId,UUID userId,WorkspaceRole role,Instant now){
         id=UUID.randomUUID();this.workspaceId=workspaceId;this.userId=userId;this.role=role;state=State.ACTIVE;createdAt=now;updatedAt=now;
     }
-    UUID id(){return id;} WorkspaceRole role(){return role;} State state(){return state;}
+    UUID id(){return id;} public WorkspaceRole role(){return role;} public State state(){return state;}
 }

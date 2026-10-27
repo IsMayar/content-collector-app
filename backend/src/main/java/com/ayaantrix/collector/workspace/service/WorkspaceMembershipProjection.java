@@ -1,4 +1,5 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.service;
+import com.ayaantrix.collector.workspace.repository.WorkspaceRepository;
 
 import com.ayaantrix.collector.auth.dto.SessionResponses;
 import com.ayaantrix.collector.auth.service.AccountMemberships;

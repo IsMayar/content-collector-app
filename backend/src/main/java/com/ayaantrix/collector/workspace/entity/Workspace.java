@@ -1,4 +1,4 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.entity;
 
 import jakarta.persistence.*;
 import java.time.Instant;
@@ -19,14 +19,14 @@ public class Workspace {
     @Column(name="created_at",nullable=false,updatable=false) private Instant createdAt;
     @Column(name="updated_at",nullable=false) private Instant updatedAt;
     protected Workspace(){}
-    Workspace(String name,String timezone,Instant now){
+    public Workspace(String name,String timezone,Instant now){
         id=UUID.randomUUID();this.name=name;this.timezone=timezone;state=State.ACTIVE;
         storageLimitBytes=PlanKey.STORAGE_BYTES;createdAt=now;updatedAt=now;
     }
-    void update(String name,String timezone,Instant now){
+    public void update(String name,String timezone,Instant now){
         if(now.isBefore(updatedAt))throw new IllegalStateException("Invalid workspace update time.");
         if(name!=null)this.name=name;if(timezone!=null)this.timezone=timezone;updatedAt=now;
     }
-    UUID id(){return id;} String name(){return name;} String timezone(){return timezone;}
-    State state(){return state;} long version(){return version;} long storageLimit(){return storageLimitBytes;}
+    public UUID id(){return id;} public String name(){return name;} public String timezone(){return timezone;}
+    public State state(){return state;} public Long version(){return version;} public long storageLimit(){return storageLimitBytes;}
 }

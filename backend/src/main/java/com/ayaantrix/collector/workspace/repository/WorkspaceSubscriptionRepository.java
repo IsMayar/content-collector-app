@@ -1,7 +1,8 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.repository;
+import com.ayaantrix.collector.workspace.entity.WorkspaceSubscription;
 import org.springframework.data.repository.Repository;
 import java.util.*;
-interface WorkspaceSubscriptionRepository extends Repository<WorkspaceSubscription,UUID> {
+public interface WorkspaceSubscriptionRepository extends Repository<WorkspaceSubscription,UUID> {
     WorkspaceSubscription saveAndFlush(WorkspaceSubscription subscription);
     Optional<WorkspaceSubscription> findByWorkspaceId(UUID workspaceId);
 }

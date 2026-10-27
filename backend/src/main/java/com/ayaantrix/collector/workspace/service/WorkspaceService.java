@@ -1,4 +1,14 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.service;
+import com.ayaantrix.collector.workspace.dto.WorkspaceDtos;
+import com.ayaantrix.collector.workspace.entity.PlanKey;
+import com.ayaantrix.collector.workspace.entity.Workspace;
+import com.ayaantrix.collector.workspace.entity.WorkspaceMember;
+import com.ayaantrix.collector.workspace.entity.WorkspaceRole;
+import com.ayaantrix.collector.workspace.entity.WorkspaceSubscription;
+import com.ayaantrix.collector.workspace.repository.WorkspaceMemberRepository;
+import com.ayaantrix.collector.workspace.repository.WorkspaceRepository;
+import com.ayaantrix.collector.workspace.repository.WorkspaceSubscriptionRepository;
+import com.ayaantrix.collector.workspace.security.WorkspaceAuthorization;
 
 import com.ayaantrix.collector.common.error.ApiException;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,8 +56,8 @@ public class WorkspaceService {
         if(subscription.isEmpty())return new WorkspaceDtos.Entitlements(PlanKey.SOLO,0,0,false,0,0,false,false,false);
         var s=subscription.get();var p=s.plan();boolean writable=w.state()==Workspace.State.ACTIVE && s.writable(clock.instant());
         // No AI/SMS provider is activated by a plan selection, even with an allowance.
-        return new WorkspaceDtos.Entitlements(p,p.seats,Math.min(w.storageLimit(),PlanKey.STORAGE_BYTES),true,
-            s.trial()?trialAi:p.aiDrafts,s.trial()?trialSms:p.smsSegments,writable,false,false);
+        return new WorkspaceDtos.Entitlements(p,p.seats(),Math.min(w.storageLimit(),PlanKey.STORAGE_BYTES),true,
+            s.trial()?trialAi:p.aiDrafts(),s.trial()?trialSms:p.smsSegments(),writable,false,false);
     }
     private static String name(String value){
         if(value==null || value.strip().isEmpty() || value.length()>150)throw invalid();return value.strip();

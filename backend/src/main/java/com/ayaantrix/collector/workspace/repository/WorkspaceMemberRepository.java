@@ -1,4 +1,6 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.repository;
+import com.ayaantrix.collector.workspace.entity.WorkspaceMember;
+import com.ayaantrix.collector.workspace.entity.WorkspaceRole;
 
 import org.springframework.data.repository.Repository;
 import org.springframework.data.jpa.repository.*;
@@ -6,7 +8,7 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import java.util.*;
 
-interface WorkspaceMemberRepository extends Repository<WorkspaceMember,UUID> {
+public interface WorkspaceMemberRepository extends Repository<WorkspaceMember,UUID> {
     WorkspaceMember saveAndFlush(WorkspaceMember member);
     boolean existsByUserIdAndRoleAndState(UUID userId,WorkspaceRole role,WorkspaceMember.State state);
     @Lock(LockModeType.PESSIMISTIC_READ)

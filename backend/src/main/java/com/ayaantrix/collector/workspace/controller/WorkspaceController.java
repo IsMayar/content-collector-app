@@ -1,4 +1,6 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.controller;
+import com.ayaantrix.collector.workspace.dto.WorkspaceDtos;
+import com.ayaantrix.collector.workspace.service.WorkspaceService;
 
 import jakarta.validation.Valid;
 import org.springframework.http.*;

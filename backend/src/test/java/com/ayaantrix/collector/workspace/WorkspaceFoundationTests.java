@@ -1,4 +1,8 @@
 package com.ayaantrix.collector.workspace;
+import com.ayaantrix.collector.workspace.entity.*;
+import com.ayaantrix.collector.workspace.dto.*;
+import com.ayaantrix.collector.workspace.repository.*;
+import com.ayaantrix.collector.workspace.service.*;
 
 import com.ayaantrix.collector.CollectorApplication;
 import com.ayaantrix.collector.auth.entity.UserAccount;
@@ -114,8 +118,8 @@ class WorkspaceFoundationTests {
             .andExpect(jsonPath("$.entitlements.storageLimitBytes").value(50_000_000_000L)).andExpect(jsonPath("$.entitlements.canWrite").value(true))
             .andExpect(jsonPath("$.entitlements.aiDraftAllowance").value(0)).andExpect(jsonPath("$.entitlements.aiEnabled").value(false))
             .andExpect(jsonPath("$.entitlements.smsEnabled").value(false));
-        assertThat(PlanKey.SOLO.aiDrafts).isEqualTo(100);assertThat(PlanKey.AGENCY.aiDrafts).isEqualTo(300);
-        assertThat(PlanKey.SOLO.smsSegments).isEqualTo(25);assertThat(PlanKey.AGENCY.smsSegments).isEqualTo(100);
+        assertThat(PlanKey.SOLO.aiDrafts()).isEqualTo(100);assertThat(PlanKey.AGENCY.aiDrafts()).isEqualTo(300);
+        assertThat(PlanKey.SOLO.smsSegments()).isEqualTo(25);assertThat(PlanKey.AGENCY.smsSegments()).isEqualTo(100);
     }
     @Test void omittedPlanAndTimezoneUseSafeSpecificationDefaults() throws Exception {
         var owner=actor("owner@example.test");mvc.perform(write("POST",ROOT,Map.of("name","Studio"),owner)).andExpect(status().isCreated()).andExpect(jsonPath("$.workspace.timezone").value("America/Chicago"));

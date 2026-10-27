@@ -1,4 +1,4 @@
-package com.ayaantrix.collector.workspace;
+package com.ayaantrix.collector.workspace.entity;
 
 import jakarta.persistence.*;
 import java.time.*;
@@ -20,12 +20,12 @@ public class WorkspaceSubscription {
     @Column(name="created_at",nullable=false,updatable=false) private Instant createdAt;
     @Column(name="updated_at",nullable=false) private Instant updatedAt;
     protected WorkspaceSubscription(){}
-    WorkspaceSubscription(UUID workspaceId,PlanKey planKey,Instant now){
+    public WorkspaceSubscription(UUID workspaceId,PlanKey planKey,Instant now){
         id=UUID.randomUUID();this.workspaceId=workspaceId;this.planKey=planKey;state=State.TRIALING;
         currentPeriodStart=now;currentPeriodEnd=now.plus(Duration.ofDays(14));createdAt=now;updatedAt=now;
     }
-    PlanKey plan(){return planKey;}
-    boolean writable(Instant now){
+    public PlanKey plan(){return planKey;}
+    public boolean writable(Instant now){
         if(now.isBefore(currentPeriodStart))return false;
         return switch(state){
             case TRIALING,ACTIVE -> now.isBefore(currentPeriodEnd);
@@ -33,5 +33,5 @@ public class WorkspaceSubscription {
             default -> false;
         };
     }
-    boolean trial(){return state==State.TRIALING;}
+    public boolean trial(){return state==State.TRIALING;}
 }
