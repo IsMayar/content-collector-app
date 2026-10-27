@@ -10,13 +10,13 @@ All paths below are relative to /api/v1. JSON POST requests use Content-Type app
 | --- | --- | --- |
 | POST auth/login | {email,password} | 200 {accessToken,expiresIn:300,user:{id,email,displayName,verified}} and refresh cookie |
 | POST auth/refresh | {} and refresh cookie | 200 {accessToken,expiresIn:300} and rotated cookie |
-| GET me | Bearer access token | 200 {user,memberships:[]} |
+| GET me | Bearer access token | 200 {user,memberships:MembershipSummary[]} |
 | GET me/sessions | Bearer access token | 200 {data:[{id,createdAt,lastSeenAt,expiresAt,current,label}]} |
 | DELETE me/sessions/{sessionId} | Bearer and CSRF | 204; only own sessions; cross-user identifiers return 404 |
 | POST auth/logout | {} and refresh cookie, or valid bearer if the cookie is absent or unusable; CSRF | 204; revoke current session and clear cookie; repeated logout is idempotent |
 | POST auth/logout-all | {} with valid bearer and CSRF | 204; revoke every session of that user and clear cookie |
 
-The empty membership array is deliberate: no workspace/membership tables exist until T07. No workspace is fabricated or seeded. Business routes remain denied even with a valid JWT. The full frontend onboarding/product journey still needs its backend tasks. Existing frontend login/refresh/me DTOs and request paths are unchanged. Session listing follows the original catalog's data envelope and label field, with a generic Browser session label; no raw User-Agent, IP/device fingerprint or invented location is collected. Listing is bounded to 100 recent active sessions.
+T07 Parts 1–2 now provide real workspace tables and live active membership projection; no workspace is fabricated or seeded by authentication. Business routes remain denied even with a valid JWT. The full frontend onboarding/product journey still needs its backend tasks. Existing frontend login/refresh/me DTOs and request paths are unchanged. Session listing follows the original catalog's data envelope and label field, with a generic Browser session label; no raw User-Agent, IP/device fingerprint or invented location is collected. Listing is bounded to 100 recent active sessions.
 
 Unknown email, wrong password and disabled accounts use identical 401 INVALID_CREDENTIALS login errors. Password matching performs Argon2id work for unknown accounts using an in-memory random dummy hash. EMAIL_NOT_VERIFIED is disclosed only after a correct password matches an unverified account, as the frontend contract expects. Login accepts a required, untrimmed password up to 128 characters/512 UTF-8 bytes and does not impose new-registration composition/minimum rules on credential matching. The stored hash/state are rechecked under the account lock before session issuance, preventing reset/login races. Email uses existing canonical normalization. DTO/malformed JSON errors remain safe 400 problems.
 
@@ -99,3 +99,9 @@ Official references checked for this change: [Boot BOM/build system](https://doc
 Backend clean verify passed 233 tests (all previous 229 plus four); the separate actual Edge/Vite/Spring/PostgreSQL HTTPS lifecycle passed one test with MSW off. Frontend auth/transport passed 47 tests; TypeScript/production build, lint and formatting passed. Tests include safe 409 without credentials, exact two-second reuse revocation, post-restart revocation and cross-user JWT/session binding. Browser evidence includes Secure cookie/deletion, CSRF rejection, untrusted-origin rejection, bootstrap, expired writes/concurrent refresh, reset invalidation and multi-device logout-all.
 
 The isolated browser trusts its generated local test certificate only; public deployment TLS/proxy/key rollout and retention acceptance remain pending. T06 stays In progress. T05 provider/resend and T04 hosted CI gaps remain unchanged.
+
+## T07 Part 2 identity projection integration — 27 October 2026
+
+GET `/api/v1/me` preserves user fields and now returns current ACTIVE memberships with memberId/workspaceId/workspaceName/OWNER-or-MEMBER role through one scoped database join. No JWT role claims, inactive memberships or unrelated tenant data are added. AgencySessions locks/revalidates the trusted account/session before projection; password reset/disablement/revocation still reject access immediately on subsequent requests. There is no `/auth/me` alias. Existing frontend bootstrap/login/onboarding consumes the same DTO; private caches clear on changed membership identity. See [workspace acceptance and exact manifest](WORKSPACE_FOUNDATION.md).
+
+Current evidence: 290 backend tests; 70 frontend tests; 2 separate real HTTPS browser lifecycles passed. The new browser lifecycle uses UI registration, isolated encrypted-outbox delivery fake, verification, login and actual workspace onboarding with MSW off. T07 Complete; T06's deployment TLS/proxy/key/abuse/retention and T05/T04 gates remain pending. No T08 or full M1/MVP completion implied.

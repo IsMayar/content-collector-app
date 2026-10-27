@@ -2,7 +2,7 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 27 October 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. M1/T05, T06 and T07 are In progress for the authorized account/session/workspace implementation; M2–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 remains Not started; M2–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -464,7 +464,7 @@ Milestone status: In progress
 | ---- | ----------------------------------------------- | -------------------------------------------------------------- | ----------- |
 | T05  | Account registration, verification and recovery | Purpose-bound single-use tokens and generic recovery responses | In progress |
 | T06  | JWT access, refresh rotation, logout and CSRF   | Expiry, reuse and concurrent refresh tests pass                | In progress |
-| T07  | Workspace owner, membership and plan seed       | Two tenants cannot access each other's resources               | In progress |
+| T07  | Workspace owner, membership and plan seed       | Two tenants cannot access each other's resources               | Complete    |
 | T08  | Agency layout and session lifecycle             | Sign-in, workspace switch and cache clearing work              | Not started |
 
 ### Milestone M2 Projects templates and team
@@ -600,3 +600,15 @@ Status: **T07/M1 In progress**. Code/test commit: `c3cff0d`. Explicit backend au
 - **PASS:** separate real HTTPS authentication browser regression **1 test**, MSW off; new workspace UI onboarding was not tested. Final strengthened lock-wait concurrency rerun **2 cases passed**.
 - **PASS:** frontend auth/transport/product contract regression **69 tests in 3 files**, using existing mocks; frontend code unchanged. This is not new live workspace browser acceptance. Focused initial test-fixture SQL issues/status expectation were corrected before passing; no security protection weakened.
 - Remaining: live `/me` projection and complete real verified-owner onboarding acceptance; T13 management/transfer/project permissions and T32/T33 billing/usage are later work. T04 hosted CI, T05 resend/provider and T06 deployment/retention limitations remain. No local tool blocker or full MVP claim. No push.
+
+## T07 Part 2 — live memberships and real workspace onboarding — 27 October 2026
+
+Status: **T07 Complete within its workspace foundation acceptance; M1 In progress** for T05/T06/T08. Code/test commit: `0414c15`. [Detailed contract, acceptance evidence and exact files](WORKSPACE_FOUNDATION.md#t07-part-2--live-membershipsession-projection-and-real-onboarding--27-october-2026). Part 2 supersedes Part 1's remaining `/me`/onboarding gaps; original roadmap/history preserved.
+
+- GET `/api/v1/me` now projects live ACTIVE memberships from PostgreSQL into the unchanged user + MembershipSummary contract (memberId, workspaceId, workspaceName, OWNER/MEMBER role). DISABLED/removed memberships excluded; trusted JWT/session/account validation retained. No `/auth/me` duplicate endpoint, inactive status exposure, entities or workspace-role JWT cache. One scoped constructor join avoids N+1 queries; an internal projection port avoids circular service dependencies. Membership changes appear on the next request without reissuing JWT.
+- Existing frontend login/onboarding/reload bootstrap and selection now consume real memberships. Added only an identity-change listener to clear both private API caches when existing memberships/user change, plus its regression. No dashboard/navigation redesign, new polling or T08 work. Tokens stay memory-only. Backend authorization remains authoritative.
+- **PASS:** backend clean verify **290 tests, zero failures/errors/skips** (all previous 278 + 12 membership cases); WorkspaceFoundationTests now 57. Flyway V1–V6/Hibernate/upgrade/restart, JWT/session/password-reset regressions, transactional trial/concurrency/tenant constraints and executable JAR all pass. No migrations/dependencies/specifications changed.
+- **PASS:** frontend **70 tests across all 3 files** (previous 69 + cache/navigation regression), strict TypeScript/production build, zero-warning lint and formatting including real-auth runner.
+- **PASS:** explicit real HTTPS Edge/Vite/Spring/PostgreSQL suite **2 tests**, zero failures/errors/skips: existing authentication lifecycle + actual registration -> encrypted outbox/test mailbox -> explicit verification -> login -> UI workspace creation -> owner/trial persistence -> list/read -> reload/bootstrap/selection -> isolation -> member navigation/owner-write denial -> disabled-membership recovery/cache clearing -> logout. MSW off, no external provider calls; second tenant/membership changes use isolated Java/SQL fixtures, not invented T13 endpoints.
+- Dashboard project endpoints remain denied (later tasks); browser acceptance does not claim implemented project/template backend or full product. Self-signed certificate trust is bypassed only in isolated browser tests; production TLS/CI/provider acceptance is not claimed.
+- No T07-scope blocker remains. T04 hosted CI, T05 resend/provider and T06 deployment/retention gaps remain; T08 and later backend tasks Not started. No push or full M1/MVP completion claim.

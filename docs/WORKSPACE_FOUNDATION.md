@@ -1,6 +1,6 @@
-# Workspace foundation — T07 Part 1 — 27 October 2026
+# Workspace foundation — T07 Parts 1–2 — 27 October 2026
 
-Implements the workspace database/domain foundation and the four existing catalog routes. Code/test commit: `c3cff0d`. T07/M1 remain **In progress**, not full onboarding or product acceptance. T08 frontend session lifecycle, T09 templates, T10 projects, T13 invitation/member administration and T32 billing are outside this change. No frontend source, original specification or V1–V5 migration changed. No dependency added.
+Current status: **T07 Complete; M1 In progress** after the Part 2 evidence below. Part 1 established the workspace database/domain foundation and four existing catalog routes (code/test commit `c3cff0d`). T08 frontend session lifecycle, T09 templates, T10 projects, T13 invitation/member administration and T32 billing are outside this change. Original specifications and V1–V6 migrations remain unchanged. Part 2 adds only the minimal frontend cache correction described below. No dependency added.
 
 ## Schema and ownership
 
@@ -43,7 +43,7 @@ All routes are relative to `/api/v1`, use real bearer authentication and no-stor
 
 These envelopes follow api_catalog/api_contracts and existing frontend product DTOs. Optional planKey is the existing product handoff's documented onboarding extension, now accepted for initial trial choice. The original catalog name/timezone request remains valid; supplied references are unchanged. A duplicate owned workspace returns 409 WORKSPACE_ALREADY_OWNED. Blank/invalid settings return safe 400; read-only entitlement blocks PATCH with 403 WORKSPACE_READ_ONLY. No JPA/internal account, password, JWT or plan-provider state is serialized.
 
-GET `/me` still returns the existing empty membership projection in this Part 1; GET `/workspaces` is the verified discovery endpoint. Wiring live membership summaries into `/me` and accepting real browser onboarding is remaining T07 backend integration, without redesigning T08 frontend session lifecycle. Do not claim the current frontend bootstrap automatically discovers a newly created real workspace yet.
+Historical Part 1 boundary (superseded by Part 2 below): GET `/me` returned an empty membership projection; GET `/workspaces` is the verified discovery endpoint. Wiring live membership summaries into `/me` and accepting real browser onboarding is remaining T07 backend integration, without redesigning T08 frontend session lifecycle. Do not claim the current frontend bootstrap automatically discovers a newly created real workspace yet.
 
 ## Actual verification
 
@@ -71,7 +71,7 @@ The explicit authentication browser regression additionally needs Node/frontend 
 
 ## Remaining acceptance and limitations
 
-T07/M1 stay In progress for the remaining live `/me` membership projection and full verified-owner backend/browser onboarding acceptance. T13 owns invitation acceptance/reserved seats/member administration/reauthenticated transfer and audit; T08 owns frontend workspace switching/cache/session lifecycle; T32/T33 own actual billing and complete entitlement enforcement. No project-level isolation claim is made before those tables/services exist; future routes remain denied.
+At the end of Part 1, T07/M1 stayed In progress for live `/me` projection and real onboarding; those T07 gaps are resolved by Part 2 below. T13 owns invitation acceptance/reserved seats/member administration/reauthenticated transfer and audit; T08 owns frontend workspace switching/cache/session lifecycle; T32/T33 own actual billing and complete entitlement enforcement. No project-level isolation claim is made before those tables/services exist; future routes remain denied.
 
 T04/M0 hosted CI remains pending (no remote configured). T05 resend/provider/operational acceptance remains pending. T06 deployment TLS/proxy/key rollout/abuse controls/retention checks remain pending. No local tool blocker, production credential, destructive migration or push. No full MVP completion claim.
 
@@ -112,3 +112,90 @@ Modified:
 - `backend/README.md`
 - `docs/IMPLEMENTATION_STATUS.md`
 - `docs/FRONTEND_BACKEND_HANDOFF.md`
+
+## T07 Part 2 — live membership/session projection and real onboarding — 27 October 2026
+
+**T07 Complete for its documented workspace foundation acceptance. M1 remains In progress.** Part 2 code/test commit: `0414c15`. This section supersedes Part 1's pending live projection/onboarding statements; original implementation and verification history is preserved. T08/frontend lifecycle redesign, T09 templates, T10 projects, T13 management and billing remain outside this change.
+
+### Identity and contract
+
+The existing identity endpoint is **GET `/api/v1/me`**, as defined in the supplied catalog and frontend authApi. The task's `/api/v1/auth/me` spelling is a discrepancy, not an additional endpoint. No alias is added; it remains denied. The existing `user` fields are preserved. MembershipSummary has exactly memberId, workspaceId, workspaceName and role OWNER/MEMBER:
+
+```json
+{
+  "user": { "id": "UUID", "email": "owner@example.test", "displayName": "Owner", "verified": true },
+  "memberships": [
+    { "memberId": "UUID", "workspaceId": "UUID", "workspaceName": "My studio", "role": "OWNER" }
+  ]
+}
+```
+
+No membership-status/permission fields are required by the agreed frontend schema. Only ACTIVE memberships are projected; DISABLED or removed records are excluded. can_review/can_export remain future project-assignment permissions and are not fabricated as workspace privileges. No roles/workspace IDs are embedded in access JWTs.
+
+AgencySessions validates the trusted controller JWT subject, locks the account and rechecks live account/session eligibility inside its transaction before requesting membership data. A small internal AccountMemberships projection port avoids a circular service dependency. WorkspaceMembershipProjection reuses the existing single scoped workspace/member DTO join, ordered deterministically, with no per-workspace entity traversal or N+1 queries. It accepts an internal authenticated user ID, never a request-supplied identity. No entities, unrelated member IDs or entitlement internals are returned. No membership cache is introduced: a committed creation, rename, role change, disablement or removal appears on the next authenticated `/me`, without a new access JWT. A request already executing observes its query-time state; no push/streaming update claim is made.
+
+The other existing workspace contracts remain unchanged: GET workspaces -> `{data:MembershipSummary[]}`, POST -> 201 `{workspace}`, GET workspace -> `{workspace,entitlements}`, PATCH -> `{workspace}` with expectedVersion. A new workspace still gets its ACTIVE OWNER plus a local 14-day TRIALING plan atomically; optional SOLO/AGENCY trial choice is not paid activation. Defaults and conservative AI/SMS budgets from Part 1 remain unchanged. Problem JSON, correlation, no-store, Secure/HttpOnly cookies, CSRF and default-deny routes remain enforced. V1–V6, supplied specifications and dependencies are unchanged.
+
+### Minimal frontend integration correction
+
+Existing sign-in already fetches `/me`, onboarding already bootstraps identity after creating a workspace, and reload bootstrap already refreshes the cookie session and fetches `/me`. The live projection makes those existing flows work with actual persisted memberships. Existing selection/role navigation and invalid-workspace recovery are reused, not redesigned.
+
+Added one identity-change listener: when an existing user's membership projection or user ID changes, clear both private agency/client RTK Query caches. This prevents cached tenant data surviving a membership refresh/demotion/removal. Existing identityReceived chooses a remaining authorized workspace or null; inaccessible route handling removes the old workspace UI. Normal logout/expired-session cache clearing is preserved. Tokens remain memory-only, no storage/role cache added. Membership changes are reflected when identity is refreshed through the existing flow; no new polling, cross-tab workspace policy or T08 feature was implemented.
+
+### Actual verification
+
+- Backend `.\mvnw.cmd clean verify`: **290 tests, 0 failures, 0 errors, 0 skipped**. All previous 278 retained; 12 new membership cases bring WorkspaceFoundationTests from 45 to 57. Clean V1–V6/Flyway validation, Hibernate mappings, V5 upgrade preservation, actual application restart, all authentication/registration/reset regressions, transactional trial creation/concurrency and executable JAR packaging pass.
+- New PostgreSQL/MockMvc coverage: no/one/multiple memberships; exact OWNER/MEMBER DTOs; active-only filtering; same-JWT creation/role/name changes; refresh with no workspace claims; disablement/removal; revoked session/disabled account; forged user query/header; restart projection; password-reset invalidation of `/me` and workspace access; no-store and request correlation. Existing two-tenant read/write/plan, owner-action, CSRF/CORS, rollback and concurrent-change tests remain passing.
+- Frontend **70 tests in all 3 test files passed**: all previous 69 plus one cache/navigation regression after membership revocation. Production build and strict TypeScript, zero-warning ESLint, package Prettier check and explicit real-auth runner formatting check pass. No dependency installation/lockfile change.
+- Separate actual HTTPS Edge integration **2 tests, 0 failures/errors/skips**: previous authentication lifecycle and new workspace onboarding lifecycle. Real Vite/Spring/PostgreSQL with MSW disabled and no network interception. New owner uses actual UI registration, encrypted durable outbox, explicit worker dispatch to a test-only in-memory mailbox, explicit UI verification, login, actual UI workspace creation, owner membership, AGENCY local trial, workspace list/details, reload bootstrap, selection, owner navigation and logout/storage cleanup. Trial duration/state/key are also checked against PostgreSQL.
+- A second unrelated verified owner/workspace is an isolated Java fixture, not a new admin/test-control API. Browser A gets 404 for B and forged IDs, including PATCH; after an explicit fixture membership grant, it sees MEMBER navigation/read access and gets 403 for owner PATCH. Fixture disablement appears after bootstrap, removes B from navigation/caches, and backend access returns 404. These fixture changes test T07 live enforcement without implementing T13 invitation/transfer endpoints.
+- Browser dashboard project requests remain 403 because project/template backend tasks are not implemented; no mocks or stub product endpoints were added to conceal that. Workspace metadata, creation and role navigation acceptance pass; full dashboard/product acceptance is not claimed.
+
+Exact reproduction (existing Java 21, Docker Desktop Linux engine, Node/frontend dependencies and Edge required):
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test
+if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS lifecycle verification failed.' }
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
+npm test -- src/test/auth.test.tsx src/test/transport.test.ts src/test/product.test.ts --maxWorkers=1 --pool=threads
+if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed.' }
+npm run build
+if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
+npm run lint
+if ($LASTEXITCODE -ne 0) { throw 'Frontend lint failed.' }
+npm run format:check
+if ($LASTEXITCODE -ne 0) { throw 'Frontend formatting failed.' }
+npx prettier --check real-auth/browser-check.mjs
+if ($LASTEXITCODE -ne 0) { throw 'Browser runner formatting failed.' }
+```
+
+The explicit browser class remains outside default backend-only Surefire naming, not skipped/disabled; run both Maven commands. Certificates, keys, accounts and databases are disposable fixtures. Trust bypass is confined to the generated self-signed certificate in isolated browser contexts, not a production TLS claim. Tokens/passwords/mail links are never written to logs or browser storage; no trace/HAR/screenshot captures are created. No real mail/payment/AI/SMS provider is used.
+
+### Acceptance decision and outstanding work
+
+T07's workspace ownership, membership, local trial, live projection, two-tenant isolation and real onboarding acceptance now pass. **T07 Complete; M1 In progress.** No local tool blocker or remaining T07-scope acceptance gap identified. T04/M0 hosted CI remains pending; T05 approved resend/provider/operational acceptance remains pending; T06 deployment TLS/proxy/key rollout/abuse controls/retention acceptance remains pending. T08 remains Not started, as do later backend product tasks. Those independent gates do not turn this into full M1/MVP or public production acceptance.
+
+### Exact Part 2 change manifest
+
+Created:
+
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/AccountMemberships.java`
+- `backend/src/main/java/com/ayaantrix/collector/workspace/WorkspaceMembershipProjection.java`
+
+Modified:
+
+- `backend/src/main/java/com/ayaantrix/collector/auth/dto/SessionResponses.java`
+- `backend/src/main/java/com/ayaantrix/collector/auth/service/AgencySessions.java`
+- `backend/src/test/java/com/ayaantrix/collector/auth/RealAuthenticationBrowserCheck.java`
+- `backend/src/test/java/com/ayaantrix/collector/workspace/WorkspaceFoundationTests.java`
+- `frontend/real-auth/browser-check.mjs`
+- `frontend/src/app/store.ts`
+- `frontend/src/test/auth.test.tsx`
+- `docs/IMPLEMENTATION_STATUS.md`
+- `docs/WORKSPACE_FOUNDATION.md`
+- `docs/FRONTEND_BACKEND_HANDOFF.md`
+- `docs/AGENCY_SESSION_ARCHITECTURE.md`
+- `backend/README.md`
