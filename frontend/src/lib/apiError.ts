@@ -8,6 +8,7 @@ const problemSchema = z.object({
   code: z.string().optional(),
   detail: z.string().optional(),
   traceId: z.string().optional(),
+  currentVersion: z.number().int().nonnegative().optional(),
   errors: z
     .array(z.object({ fieldPath: z.string(), message: z.string() }))
     .optional(),
@@ -39,6 +40,12 @@ export function errorMessage(error: unknown): string {
   if (problem.status === 429)
     return 'Too many attempts. Please wait before trying again.'
   if (problem.status === 403) return 'You do not have permission to do that.'
+  if (problem.code === 'STRUCTURE_CONFLICT')
+    return 'The project structure changed. Refresh the latest version, review your changes, and retry.'
+  if (problem.code === 'REOPEN_REQUIRED')
+    return 'This item contains collected work. Reopen it through the review workflow before changing its structure.'
+  if (problem.status === 422 && problem.code === 'VALIDATION_FAILED')
+    return 'This structure change is invalid. Check the field configuration and visibility dependencies.'
   if (problem.status === 409) return 'Your session changed. Please try again.'
   return 'We could not complete that request. Check your connection and try again.'
 }

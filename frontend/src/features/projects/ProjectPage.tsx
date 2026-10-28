@@ -743,6 +743,14 @@ function ItemEditor({
                   }),
               }
             : {}),
+          ...(type === 'URL' &&
+          !(item?.type === type && item.validation.allowedSchemes)
+            ? { allowedSchemes: ['https', 'http'] }
+            : {}),
+          ...(type === 'MULTI_SELECT' &&
+          !(item?.type === type && item.validation.maxOptions)
+            ? { maxOptions: options.split('\n').filter(Boolean).length }
+            : {}),
           ...(['IMAGE', 'FILE'].includes(type)
             ? { maxFiles: Number(v.maxFiles) || 10 }
             : {}),
@@ -763,7 +771,12 @@ function ItemEditor({
             }
           : {}),
         ...(type === 'LONG_TEXT'
-          ? { ai: { enabled: v.ai === 'on', targetWords: 150 } }
+          ? {
+              ai: {
+                enabled: v.ai === 'on',
+                targetWords: item?.ai?.targetWords ?? 150,
+              },
+            }
           : {}),
       }
       const result = await command.run(

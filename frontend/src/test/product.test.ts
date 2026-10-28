@@ -704,3 +704,29 @@ describe('administration reference boards', () => {
     ).toBe(403)
   })
 })
+
+describe('structure error recovery contract', () => {
+  it('retains the safe current structure version and uses structure-specific guidance', async () => {
+    const { apiProblem, errorMessage } = await import('@/lib/apiError')
+    const failure = {
+      status: 409,
+      data: {
+        code: 'STRUCTURE_CONFLICT',
+        currentVersion: 129,
+        detail: 'Untrusted response content',
+      },
+    }
+    expect(apiProblem(failure).currentVersion).toBe(129)
+    expect(errorMessage(failure)).toContain('Refresh the latest version')
+    expect(errorMessage(failure)).not.toContain('Untrusted')
+  })
+  it('explains invalid structure and collected-work protection without claiming a network failure', async () => {
+    const { errorMessage } = await import('@/lib/apiError')
+    expect(
+      errorMessage({ status: 422, data: { code: 'VALIDATION_FAILED' } }),
+    ).toContain('visibility dependencies')
+    expect(
+      errorMessage({ status: 409, data: { code: 'REOPEN_REQUIRED' } }),
+    ).toContain('review workflow')
+  })
+})

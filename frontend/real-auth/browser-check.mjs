@@ -88,6 +88,7 @@ async function run(args, target = page) {
     return {
       status: result.error?.status || result.meta?.response?.status,
       code: result.error?.data?.code,
+      data: result.data,
     }
   }, args)
 }
@@ -448,6 +449,287 @@ async function command(input) {
         ).toBeVisible()
       }
       assert.ok(!serviceWorkerResponse, 'MSW intercepted project acceptance')
+      break
+    }
+    case 'workspace-structure': {
+      phase = 'structure-open'
+      const projects = (
+        await run('workspaces/' + settings.workspace + '/projects')
+      ).data.data
+      const project = projects.find((p) => p.projectType === 'WEBSITE')
+      const path =
+        'workspaces/' + settings.workspace + '/projects/' + project.id
+      const url =
+        origin + '/app/w/' + settings.workspace + '/projects/' + project.id
+      await page.goto(url)
+      await expect(
+        page.getByRole('heading', { name: 'Project content', exact: true }),
+      ).toBeVisible()
+      const responseFor = (method, suffix) =>
+        page.waitForResponse(
+          (res) =>
+            new URL(res.url()).pathname === '/api/v1/' + path + suffix &&
+            res.request().method() === method,
+        )
+      await page.locator('summary').filter({ hasText: 'Add section' }).click()
+      await page
+        .getByLabel('Section title', { exact: true })
+        .fill('Browser structure')
+      let result = responseFor('POST', '/sections')
+      await page
+        .getByRole('button', { name: 'Add section', exact: true })
+        .click()
+      let response = await result
+      assert.equal(response.status(), 201)
+      const section = (await response.json()).section
+      await page
+        .getByRole('navigation', { name: 'Content sections' })
+        .getByRole('button', { name: /Browser structure/ })
+        .click()
+      await page
+        .locator('summary')
+        .filter({ hasText: 'Edit section name' })
+        .click()
+      await page
+        .getByLabel('Section name', { exact: true })
+        .fill('Browser edited section')
+      result = responseFor('PATCH', '/sections/' + section.id)
+      await page
+        .getByRole('button', { name: 'Save section name', exact: true })
+        .click()
+      assert.equal((await result).status(), 200)
+      await expect(
+        page.getByRole('heading', {
+          name: 'Browser edited section',
+          exact: true,
+        }),
+      ).toBeVisible()
+      const dialog = page.getByRole('dialog', { name: 'Item settings' })
+      const created = []
+      for (const type of [
+        'SHORT_TEXT',
+        'LONG_TEXT',
+        'URL',
+        'SINGLE_SELECT',
+        'MULTI_SELECT',
+        'IMAGE',
+        'FILE',
+        'REPEATER',
+      ]) {
+        phase = 'structure-create-' + type
+        await page
+          .getByRole('button', { name: 'Add item', exact: true })
+          .click()
+        await dialog
+          .getByLabel('Label', { exact: true })
+          .fill('Browser ' + type)
+        await dialog
+          .getByLabel('Stable key', { exact: true })
+          .fill('browser_' + type.toLowerCase())
+        await dialog
+          .getByLabel('Field type', { exact: true })
+          .selectOption(type)
+        if (type === 'REPEATER') {
+          await dialog
+            .getByLabel('Entry field label', { exact: true })
+            .first()
+            .fill('Name')
+          await dialog
+            .getByLabel('Entry field key', { exact: true })
+            .first()
+            .fill('name')
+          await dialog.getByLabel('Maximum rows', { exact: true }).fill('7')
+        }
+        if (type === 'LONG_TEXT')
+          await dialog
+            .getByLabel('Instructions', { exact: true })
+            .fill('Preserved instructions')
+        result = responseFor('POST', '/sections/' + section.id + '/items')
+        await dialog
+          .getByRole('button', { name: 'Save item', exact: true })
+          .click()
+        response = await result
+        assert.equal(
+          response.status(),
+          201,
+          'Real item creation failed: ' + type,
+        )
+        created.push((await response.json()).item)
+        await expect(dialog).not.toBeVisible()
+        await expect(
+          page.getByRole('button', {
+            name: 'Edit Browser ' + type,
+            exact: true,
+          }),
+        ).toBeVisible()
+      }
+      phase = 'structure-conditional'
+      const dependent = created.find((i) => i.type === 'MULTI_SELECT')
+      const control = created.find((i) => i.type === 'SINGLE_SELECT')
+      await page
+        .getByRole('button', { name: 'Edit Browser MULTI_SELECT', exact: true })
+        .click()
+      await dialog
+        .getByLabel('Show when an earlier single select equals', {
+          exact: true,
+        })
+        .selectOption(control.key)
+      result = responseFor('PATCH', '/items/' + dependent.id + '/schema')
+      await dialog
+        .getByRole('button', { name: 'Save item', exact: true })
+        .click()
+      assert.equal((await result).status(), 200)
+      await expect(dialog).not.toBeVisible()
+      let detail = (await run(path)).data
+      assert.equal(
+        detail.structure
+          .find((s) => s.id === section.id)
+          .items.find((i) => i.id === dependent.id).visible,
+        false,
+      )
+      phase = 'structure-keyboard-reorder'
+      for (const label of [
+        'Move Browser edited section section up',
+        'Move Browser URL up',
+      ]) {
+        result = responseFor('POST', '/structure/reorder')
+        await page.getByRole('button', { name: label, exact: true }).focus()
+        await page.keyboard.press('Enter')
+        assert.equal((await result).status(), 200)
+        // Wait for the new version to arrive before another mutation.
+        detail = (await run(path)).data
+        await expect
+          .poll(async () =>
+            page.evaluate(
+              async ({ path }) => {
+                const queries = (
+                  await import('/src/app/store.ts')
+                ).store.getState().agencyApi.queries
+                return Object.values(queries).find(
+                  (q) => q.originalArgs === path,
+                )?.data?.project?.structureVersion
+              },
+              { path },
+            ),
+          )
+          .toBe(detail.project.structureVersion)
+      }
+      result = responseFor('POST', '/structure/reorder')
+      await page
+        .getByRole('button', {
+          name: 'Move Browser MULTI_SELECT up',
+          exact: true,
+        })
+        .click()
+      assert.equal((await result).status(), 422)
+      phase = 'structure-two-tabs'
+      const second = await context.newPage()
+      observe(second)
+      await second.goto(url)
+      await waitState('authenticated', second)
+      await expect(
+        second.getByRole('heading', { name: 'Project content', exact: true }),
+      ).toBeVisible()
+      const text = created.find((i) => i.type === 'LONG_TEXT')
+      await page
+        .getByRole('button', { name: 'Edit Browser LONG_TEXT', exact: true })
+        .click()
+      await dialog
+        .getByLabel('Label', { exact: true })
+        .fill('My retained draft')
+      detail = (await run(path, second)).data
+      assert.equal(
+        (
+          await run(
+            {
+              url: path + '/sections/' + section.id,
+              method: 'PATCH',
+              body: {
+                title: 'Concurrent section edit',
+                expectedStructureVersion: detail.project.structureVersion,
+              },
+            },
+            second,
+          )
+        ).status,
+        200,
+      )
+      result = responseFor('PATCH', '/items/' + text.id + '/schema')
+      await dialog
+        .getByRole('button', { name: 'Save item', exact: true })
+        .click()
+      response = await result
+      assert.equal(response.status(), 409)
+      const conflict = await response.json()
+      assert.equal(conflict.code, 'STRUCTURE_CONFLICT')
+      assert.equal(conflict.currentVersion, detail.project.structureVersion + 1)
+      await expect(dialog.getByLabel('Label', { exact: true })).toHaveValue(
+        'My retained draft',
+      )
+      const refreshed = page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/v1/' + path &&
+          res.request().method() === 'GET',
+      )
+      await dialog
+        .getByRole('button', {
+          name: 'Refresh latest structure; keep my input',
+          exact: true,
+        })
+        .click()
+      assert.equal((await refreshed).status(), 200)
+      await expect(dialog.getByLabel('Label', { exact: true })).toHaveValue(
+        'My retained draft',
+      )
+      await expect(
+        page.getByRole('heading', {
+          name: 'Concurrent section edit',
+          exact: true,
+        }),
+      ).toBeVisible()
+      result = responseFor('PATCH', '/items/' + text.id + '/schema')
+      await dialog
+        .getByRole('button', { name: 'Save item', exact: true })
+        .click()
+      assert.equal((await result).status(), 200)
+      await expect(dialog).not.toBeVisible()
+      await second.close()
+      phase = 'structure-disable-reload'
+      for (const label of ['Disable', 'Enable']) {
+        result = responseFor('PATCH', '/sections/' + section.id)
+        await page.getByRole('button', { name: label, exact: true }).click()
+        assert.equal((await result).status(), 200)
+        await expect(
+          page.getByRole('button', {
+            name: label === 'Disable' ? 'Enable' : 'Disable',
+            exact: true,
+          }),
+        ).toBeVisible()
+      }
+      await page.reload()
+      await waitState('authenticated')
+      await page
+        .getByRole('navigation', { name: 'Content sections' })
+        .getByRole('button', { name: /Concurrent section edit/ })
+        .click()
+      await expect(
+        page.getByRole('button', {
+          name: 'Edit My retained draft',
+          exact: true,
+        }),
+      ).toBeVisible()
+      detail = (await run(path)).data
+      const persisted = detail.structure.find((s) => s.id === section.id)
+      assert.equal(persisted.items.length, 8)
+      assert.equal(
+        persisted.items.find((i) => i.type === 'REPEATER').validation.maxRows,
+        7,
+      )
+      assert.equal(
+        persisted.items.find((i) => i.id === text.id).instructions,
+        'Preserved instructions',
+      )
+      assert.ok(!serviceWorkerResponse, 'MSW intercepted structure acceptance')
       break
     }
     case 'workspace-reload': {

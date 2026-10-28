@@ -90,6 +90,11 @@ class RealAuthenticationBrowserCheck {
                     assertThat(jdbc.queryForObject("select count(*) from collector.projects where workspace_id=?",Integer.class,workspace)).isEqualTo(3);
                     assertThat(jdbc.queryForObject("select count(*) from collector.project_snapshots where workspace_id=?",Integer.class,workspace)).isEqualTo(3);
                     assertThat(jdbc.queryForList("select distinct project_type from collector.projects where workspace_id=?",String.class,workspace)).containsExactlyInAnyOrder("WEBSITE","WEB_APP","MOBILE_APP");
+                    var initialSnapshots=jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace);
+                    io.step(Map.of("action","workspace-structure"));
+                    assertThat(jdbc.queryForObject("select count(*) from collector.audit_logs where workspace_id=?",Integer.class,workspace)).isEqualTo(17);
+                    assertThat(jdbc.queryForObject("select structure_version from collector.projects where workspace_id=? and project_type='WEBSITE'",Long.class,workspace)).isEqualTo(18);
+                    assertThat(jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace)).isEqualTo(initialSnapshots);
                     io.step(Map.of("action","workspace-reload"));
                     clock.advance(331);io.step(Map.of("action","workspace-expired-access"));
                     // Isolated second tenant fixture; no T13 management/test-control HTTP endpoint is introduced.

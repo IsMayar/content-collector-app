@@ -28,6 +28,7 @@ export type TokenResponse = z.infer<typeof tokenSchema>
 export type LoginCommand = { email: string; password: string }
 export type Message = { message: string }
 export interface Problem {
+  currentVersion?: number
   type: string
   title: string
   status: number
