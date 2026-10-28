@@ -2,3 +2,6 @@
 docs/spec/** -text
 *.pdf binary
 *.png binary
+
+# Keep the packaged original template resource identical to its specification source.
+backend/src/main/resources/templates/starter_templates.json -text
