@@ -263,7 +263,7 @@ class ProjectStructureTests {
         mvc.perform(write(t,p,"PATCH","/items/"+id(foreign.at("/items/0"))+"/schema",new ItemPatch(definition(foreign.at("/items/0")),1L,false))).andExpect(status().isNotFound());
         mvc.perform(post(t.root()+"/projects/"+UUID.randomUUID()+"/sections").with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content("{\"title\":\"Missing\",\"expectedStructureVersion\":1}")).andExpect(status().isNotFound());assertThat(count(t,"audit_logs")).isZero();
     }
-    @ParameterizedTest @ValueSource(strings={"{\",\"{}","{\"title\":\" \"}","{\"title\":\"A\",\"expectedStructureVersion\":-1}","{\"title\":\"A\",\"expectedStructureVersion\":null}"})
+    @ParameterizedTest @ValueSource(strings={"{","{}","{\"title\":\" \"}","{\"title\":\"A\",\"expectedStructureVersion\":-1}","{\"title\":\"A\",\"expectedStructureVersion\":null}"})
     void malformedBodiesUseStandard400(String raw) throws Exception {
         var t=tenant();var p=create(t,ProjectType.WEBSITE);mvc.perform(write(t,p,"POST","/sections",Map.of()).content(raw)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors").isArray());assertThat(count(t,"audit_logs")).isZero();
     }
