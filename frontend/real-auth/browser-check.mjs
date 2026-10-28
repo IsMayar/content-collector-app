@@ -336,6 +336,120 @@ async function command(input) {
       )
       break
     }
+    case 'workspace-projects': {
+      const cards = await page.evaluate(async (workspace) => {
+        const { store } = await import('/src/app/store.ts')
+        const response = await fetch(
+          '/api/v1/workspaces/' + workspace + '/templates',
+          {
+            credentials: 'include',
+            headers: {
+              Authorization: 'Bearer ' + store.getState().auth.accessToken,
+            },
+          },
+        )
+        if (response.status !== 200) throw new Error('Catalog unavailable')
+        return (await response.json()).data.map(
+          ({ versionId, projectType }) => ({ versionId, projectType }),
+        )
+      }, settings.workspace)
+      for (const [index, type] of [
+        'WEBSITE',
+        'WEB_APP',
+        'MOBILE_APP',
+      ].entries()) {
+        const template = cards.find((card) => card.projectType === type)
+        assert.ok(template, 'Missing published template')
+        await page.goto(
+          origin +
+            '/app/w/' +
+            settings.workspace +
+            '/projects/new?template=' +
+            template.versionId +
+            '&type=' +
+            type,
+        )
+        await page
+          .getByLabel('Project name', { exact: true })
+          .fill('Browser ' + type)
+        await page.getByLabel('Due date', { exact: true }).fill('2026-12-20')
+        await page.getByLabel('Timezone', { exact: true }).fill('UTC')
+        if (index === 0) {
+          await page.getByRole('radio', { name: /Add a new customer/ }).check()
+          await page
+            .getByLabel('Business name', { exact: true })
+            .fill('Browser project customer')
+          await page
+            .getByLabel('Contact name', { exact: true })
+            .fill('Synthetic contact')
+          await page
+            .getByLabel('Customer email', { exact: true })
+            .fill('project-browser@example.test')
+        } else {
+          await expect(
+            page
+              .getByLabel('Customer', { exact: true })
+              .locator('option', { hasText: 'Browser project customer' }),
+          ).toHaveCount(1)
+          await page
+            .getByLabel('Customer', { exact: true })
+            .selectOption({ label: 'Browser project customer' })
+        }
+        await page
+          .getByRole('button', { name: 'Continue to review', exact: true })
+          .click()
+        const created = page.waitForResponse(
+          (res) =>
+            new URL(res.url()).pathname ===
+              '/api/v1/workspaces/' + settings.workspace + '/projects' &&
+            res.request().method() === 'POST',
+        )
+        await page
+          .getByRole('button', { name: 'Save as draft', exact: true })
+          .click()
+        const response = await created
+        assert.equal(response.status(), 201, 'Real project creation failed')
+        const { project } = await response.json()
+        assert.equal(project.projectType, type)
+        assert.equal(project.state, 'DRAFT')
+        assert.equal(project.version, 1)
+        assert.equal(project.aiEnabled, false)
+        await expect(
+          page.getByRole('heading', { name: 'Browser ' + type, exact: true }),
+        ).toBeVisible()
+        const compatible = await page.evaluate(
+          async ({ workspace, id }) => {
+            const { store } = await import('/src/app/store.ts')
+            const { validateProductRead } =
+              await import('/src/api/productSchemas.ts')
+            const path = 'workspaces/' + workspace + '/projects/' + id
+            const response = await fetch('/api/v1/' + path, {
+              credentials: 'include',
+              headers: {
+                Authorization: 'Bearer ' + store.getState().auth.accessToken,
+              },
+            })
+            if (response.status !== 200) return false
+            const data = await response.json()
+            return (
+              validateProductRead(path, data).success &&
+              data.structure.length > 0 &&
+              data.progress.submittedRequired === 0 &&
+              data.progress.approvedRequired === 0
+            )
+          },
+          { workspace: settings.workspace, id: project.id },
+        )
+        assert.ok(compatible, 'Real project detail violates frontend contract')
+        await page.reload()
+        await waitState('authenticated')
+        await expect(
+          page.getByRole('heading', { name: 'Browser ' + type, exact: true }),
+        ).toBeVisible()
+      }
+      assert.ok(!serviceWorkerResponse, 'MSW intercepted project acceptance')
+      break
+    }
     case 'workspace-reload': {
       await page.reload()
       await waitState('authenticated')

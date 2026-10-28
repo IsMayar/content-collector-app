@@ -86,6 +86,10 @@ class RealAuthenticationBrowserCheck {
                     assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("TRIALING");
                     assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("AGENCY");
                     assertThat(jdbc.queryForObject("select current_period_end-current_period_start=interval '14 days' from collector.subscriptions where workspace_id=?",Boolean.class,workspace)).isTrue();
+                    io.step(Map.of("action","workspace-projects"));
+                    assertThat(jdbc.queryForObject("select count(*) from collector.projects where workspace_id=?",Integer.class,workspace)).isEqualTo(3);
+                    assertThat(jdbc.queryForObject("select count(*) from collector.project_snapshots where workspace_id=?",Integer.class,workspace)).isEqualTo(3);
+                    assertThat(jdbc.queryForList("select distinct project_type from collector.projects where workspace_id=?",String.class,workspace)).containsExactlyInAnyOrder("WEBSITE","WEB_APP","MOBILE_APP");
                     io.step(Map.of("action","workspace-reload"));
                     clock.advance(331);io.step(Map.of("action","workspace-expired-access"));
                     // Isolated second tenant fixture; no T13 management/test-control HTTP endpoint is introduced.
