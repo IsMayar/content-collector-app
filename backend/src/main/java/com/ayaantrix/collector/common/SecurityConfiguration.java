@@ -40,6 +40,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST,"/api/v1/auth/logout-all").authenticated()
                         .requestMatchers(HttpMethod.DELETE,"/api/v1/me/sessions/*").authenticated()
                         .requestMatchers(HttpMethod.GET,"/api/v1/workspaces","/api/v1/workspaces/*").authenticated()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/templates","/api/v1/workspaces/*/template-versions/*").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/workspaces").authenticated()
                         .requestMatchers(HttpMethod.PATCH,"/api/v1/workspaces/*").authenticated()
                         .anyRequest().denyAll()

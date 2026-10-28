@@ -1,0 +1,3698 @@
+{
+  "catalogVersion": 1,
+  "templates": [
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.plumber",
+      "projectType": "WEBSITE",
+      "industry": "PLUMBER",
+      "title": "Plumber website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "about",
+          "title": "About",
+          "items": [
+            {
+              "key": "about.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "services",
+          "title": "Services",
+          "items": [
+            {
+              "key": "services.overview",
+              "label": "Services overview",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate services overview.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "services.list",
+              "label": "Services list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate services list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "services.priority",
+              "label": "Most important service or feature",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most important service or feature.",
+              "example": "Enter the one to highlight.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "service_areas",
+          "title": "Service areas",
+          "items": [
+            {
+              "key": "service_areas.locations",
+              "label": "Areas served",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate areas served.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "area",
+                    "label": "Area",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "notes",
+                    "label": "Service notes",
+                    "type": "LONG_TEXT",
+                    "required": false
+                  }
+                ]
+              }
+            },
+            {
+              "key": "service_areas.availability",
+              "label": "Availability and coverage limitations",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate availability and coverage limitations.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "service_areas.contact",
+              "label": "Contact for coverage questions",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate contact for coverage questions.",
+              "example": "Call our office.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "faq",
+          "title": "FAQ",
+          "items": [
+            {
+              "key": "faq.topic",
+              "label": "Most common question topic",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most common question topic.",
+              "example": "How appointments work.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "faq.questions",
+              "label": "Questions and answers",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate questions and answers.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "question",
+                    "label": "Question",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "answer",
+                    "label": "Answer",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "faq.help",
+              "label": "Where to ask another question",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate where to ask another question.",
+              "example": "Contact our office.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "contact",
+          "title": "Contact",
+          "items": [
+            {
+              "key": "contact.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "contact.address",
+              "label": "Business address",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate business address.",
+              "example": "123 Example Street, Austin, TX",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.electrician",
+      "projectType": "WEBSITE",
+      "industry": "ELECTRICIAN",
+      "title": "Electrician website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "about",
+          "title": "About",
+          "items": [
+            {
+              "key": "about.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "services",
+          "title": "Services",
+          "items": [
+            {
+              "key": "services.overview",
+              "label": "Services overview",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate services overview.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "services.list",
+              "label": "Services list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate services list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "services.priority",
+              "label": "Most important service or feature",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most important service or feature.",
+              "example": "Enter the one to highlight.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "projects",
+          "title": "Projects",
+          "items": [
+            {
+              "key": "projects.images",
+              "label": "Approved project or business photos",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate approved project or business photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "projects.captions",
+              "label": "Photo captions and context",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate photo captions and context.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "projects.permission",
+              "label": "Photo usage permission note",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate photo usage permission note.",
+              "example": "Confirm you have permission to publish the photos.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "faq",
+          "title": "FAQ",
+          "items": [
+            {
+              "key": "faq.topic",
+              "label": "Most common question topic",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most common question topic.",
+              "example": "How appointments work.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "faq.questions",
+              "label": "Questions and answers",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate questions and answers.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "question",
+                    "label": "Question",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "answer",
+                    "label": "Answer",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "faq.help",
+              "label": "Where to ask another question",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate where to ask another question.",
+              "example": "Contact our office.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "contact",
+          "title": "Contact",
+          "items": [
+            {
+              "key": "contact.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "contact.address",
+              "label": "Business address",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate business address.",
+              "example": "123 Example Street, Austin, TX",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.dentist",
+      "projectType": "WEBSITE",
+      "industry": "DENTIST",
+      "title": "Dentist website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "practice",
+          "title": "Practice",
+          "items": [
+            {
+              "key": "practice.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "practice.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "practice.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "services",
+          "title": "Services",
+          "items": [
+            {
+              "key": "services.overview",
+              "label": "Services overview",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate services overview.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "services.list",
+              "label": "Services list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate services list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "services.priority",
+              "label": "Most important service or feature",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most important service or feature.",
+              "example": "Enter the one to highlight.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "providers",
+          "title": "Providers",
+          "items": [
+            {
+              "key": "providers.intro",
+              "label": "Team introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate team introduction.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "providers.bios",
+              "label": "Team biographies",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate team biographies.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "role",
+                    "label": "Role",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "bio",
+                    "label": "Biography",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "providers.photos",
+              "label": "Approved team portraits",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate approved team portraits.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "patient_information",
+          "title": "Patient information",
+          "items": [
+            {
+              "key": "patient_information.new_patients",
+              "label": "New patient information",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate new patient information.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "patient_information.insurance",
+              "label": "Insurance accepted as confirmed by the practice",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate insurance accepted as confirmed by the practice.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "provider",
+                    "label": "Provider",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "notes",
+                    "label": "Limitations",
+                    "type": "LONG_TEXT",
+                    "required": false
+                  }
+                ]
+              }
+            },
+            {
+              "key": "patient_information.forms",
+              "label": "Public patient forms",
+              "type": "FILE",
+              "required": false,
+              "instructions": "Provide accurate public patient forms.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "contact",
+          "title": "Contact",
+          "items": [
+            {
+              "key": "contact.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "contact.address",
+              "label": "Business address",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate business address.",
+              "example": "123 Example Street, Austin, TX",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.restaurant",
+      "projectType": "WEBSITE",
+      "industry": "RESTAURANT",
+      "title": "Restaurant website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "story",
+          "title": "Story",
+          "items": [
+            {
+              "key": "story.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "story.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "story.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "menu",
+          "title": "Menu",
+          "items": [
+            {
+              "key": "menu.intro",
+              "label": "Menu introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate menu introduction.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "menu.items",
+              "label": "Menu items",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate menu items.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "category",
+                    "label": "Category",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "name",
+                    "label": "Dish",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "price",
+                    "label": "Price",
+                    "type": "NUMBER",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "menu.price_note",
+              "label": "Price and availability note",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate price and availability note.",
+              "example": "Confirm the currency and whether prices include tax.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "gallery",
+          "title": "Gallery",
+          "items": [
+            {
+              "key": "gallery.images",
+              "label": "Approved project or business photos",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate approved project or business photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "gallery.captions",
+              "label": "Photo captions and context",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate photo captions and context.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "gallery.permission",
+              "label": "Photo usage permission note",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate photo usage permission note.",
+              "example": "Confirm you have permission to publish the photos.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "visit",
+          "title": "Visit",
+          "items": [
+            {
+              "key": "visit.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "visit.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "visit.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "visit.address",
+              "label": "Business address",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate business address.",
+              "example": "123 Example Street, Austin, TX",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "faq",
+          "title": "FAQ",
+          "items": [
+            {
+              "key": "faq.topic",
+              "label": "Most common question topic",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most common question topic.",
+              "example": "How appointments work.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "faq.questions",
+              "label": "Questions and answers",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate questions and answers.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "question",
+                    "label": "Question",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "answer",
+                    "label": "Answer",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "faq.help",
+              "label": "Where to ask another question",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate where to ask another question.",
+              "example": "Contact our office.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.law-firm",
+      "projectType": "WEBSITE",
+      "industry": "LAW_FIRM",
+      "title": "Law firm website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "firm",
+          "title": "Firm",
+          "items": [
+            {
+              "key": "firm.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "firm.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "firm.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "practice_areas",
+          "title": "Practice areas",
+          "items": [
+            {
+              "key": "practice_areas.overview",
+              "label": "Practice areas overview",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate practice areas overview.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "practice_areas.list",
+              "label": "Practice areas list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate practice areas list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "practice_areas.priority",
+              "label": "Most important service or feature",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most important service or feature.",
+              "example": "Enter the one to highlight.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "team",
+          "title": "Team",
+          "items": [
+            {
+              "key": "team.intro",
+              "label": "Team introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate team introduction.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "team.bios",
+              "label": "Team biographies",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate team biographies.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "role",
+                    "label": "Role",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "bio",
+                    "label": "Biography",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "team.photos",
+              "label": "Approved team portraits",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate approved team portraits.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "faq",
+          "title": "FAQ",
+          "items": [
+            {
+              "key": "faq.topic",
+              "label": "Most common question topic",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most common question topic.",
+              "example": "How appointments work.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "faq.questions",
+              "label": "Questions and answers",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate questions and answers.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "question",
+                    "label": "Question",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "answer",
+                    "label": "Answer",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "faq.help",
+              "label": "Where to ask another question",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate where to ask another question.",
+              "example": "Contact our office.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "contact",
+          "title": "Contact",
+          "items": [
+            {
+              "key": "contact.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "contact.address",
+              "label": "Business address",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate business address.",
+              "example": "123 Example Street, Austin, TX",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.real-estate",
+      "projectType": "WEBSITE",
+      "industry": "REAL_ESTATE",
+      "title": "Real estate website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "about",
+          "title": "About",
+          "items": [
+            {
+              "key": "about.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "services",
+          "title": "Services",
+          "items": [
+            {
+              "key": "services.overview",
+              "label": "Services overview",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate services overview.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "services.list",
+              "label": "Services list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate services list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "services.priority",
+              "label": "Most important service or feature",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most important service or feature.",
+              "example": "Enter the one to highlight.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "areas",
+          "title": "Areas",
+          "items": [
+            {
+              "key": "areas.locations",
+              "label": "Areas served",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate areas served.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "area",
+                    "label": "Area",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "notes",
+                    "label": "Service notes",
+                    "type": "LONG_TEXT",
+                    "required": false
+                  }
+                ]
+              }
+            },
+            {
+              "key": "areas.availability",
+              "label": "Availability and coverage limitations",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate availability and coverage limitations.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "areas.contact",
+              "label": "Contact for coverage questions",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate contact for coverage questions.",
+              "example": "Call our office.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "testimonials",
+          "title": "Testimonials",
+          "items": [
+            {
+              "key": "testimonials.quotes",
+              "label": "Permissioned testimonials",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate permissioned testimonials.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "quote",
+                    "label": "Exact approved quote",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "attribution",
+                    "label": "Approved attribution",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "testimonials.permission",
+              "label": "Permission confirmation",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate permission confirmation.",
+              "example": "Only include testimonials approved for publication.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "testimonials.source",
+              "label": "Source notes",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate source notes.",
+              "example": "Website or review source.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "contact",
+          "title": "Contact",
+          "items": [
+            {
+              "key": "contact.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "contact.address",
+              "label": "Business address",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate business address.",
+              "example": "123 Example Street, Austin, TX",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.salon",
+      "projectType": "WEBSITE",
+      "industry": "SALON",
+      "title": "Salon website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "about",
+          "title": "About",
+          "items": [
+            {
+              "key": "about.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "about.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "services",
+          "title": "Services",
+          "items": [
+            {
+              "key": "services.overview",
+              "label": "Services overview",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate services overview.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "services.list",
+              "label": "Services list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate services list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "services.priority",
+              "label": "Most important service or feature",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most important service or feature.",
+              "example": "Enter the one to highlight.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "team",
+          "title": "Team",
+          "items": [
+            {
+              "key": "team.intro",
+              "label": "Team introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate team introduction.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "team.bios",
+              "label": "Team biographies",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate team biographies.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "role",
+                    "label": "Role",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "bio",
+                    "label": "Biography",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "team.photos",
+              "label": "Approved team portraits",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate approved team portraits.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "gallery",
+          "title": "Gallery",
+          "items": [
+            {
+              "key": "gallery.images",
+              "label": "Approved project or business photos",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate approved project or business photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "gallery.captions",
+              "label": "Photo captions and context",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate photo captions and context.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "gallery.permission",
+              "label": "Photo usage permission note",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate photo usage permission note.",
+              "example": "Confirm you have permission to publish the photos.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "booking_information",
+          "title": "Booking information",
+          "items": [
+            {
+              "key": "booking_information.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "booking_information.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "booking_information.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "booking_information.booking",
+              "label": "Booking URL",
+              "type": "URL",
+              "required": false,
+              "instructions": "Provide accurate booking url.",
+              "example": "https://example.com/book",
+              "validation": {
+                "allowedSchemes": [
+                  "https",
+                  "http"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "website.saas-startup",
+      "projectType": "WEBSITE",
+      "industry": "SAAS_STARTUP",
+      "title": "SaaS startup website",
+      "sections": [
+        {
+          "key": "home",
+          "title": "Home",
+          "items": [
+            {
+              "key": "home.headline",
+              "label": "Main headline",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate main headline.",
+              "example": "Practical services for local customers.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "home.intro",
+              "label": "Short introduction",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate short introduction.",
+              "example": "We help local customers with the services listed below.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "home.hero",
+              "label": "Hero photo",
+              "type": "IMAGE",
+              "required": true,
+              "instructions": "Provide accurate hero photo.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "home.cta",
+              "label": "Primary action label",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate primary action label.",
+              "example": "Request an appointment",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "product",
+          "title": "Product",
+          "items": [
+            {
+              "key": "product.story",
+              "label": "Business or product story",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate business or product story.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "product.difference",
+              "label": "What should customers understand about you?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should customers understand about you?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "product.image",
+              "label": "Supporting photo or image",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate supporting photo or image.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "features",
+          "title": "Features",
+          "items": [
+            {
+              "key": "features.overview",
+              "label": "Features overview",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate features overview.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "features.list",
+              "label": "Features list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate features list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "description",
+                    "label": "Description",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "features.priority",
+              "label": "Most important service or feature",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most important service or feature.",
+              "example": "Enter the one to highlight.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "pricing",
+          "title": "Pricing",
+          "items": [
+            {
+              "key": "pricing.plans",
+              "label": "Plans and prices",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate plans and prices.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "plan",
+                    "label": "Plan name",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "price",
+                    "label": "Price as supplied",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "features",
+                    "label": "Included features",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "pricing.terms",
+              "label": "Billing and trial information",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate billing and trial information.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "pricing.currency",
+              "label": "Currency and billing period",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate currency and billing period.",
+              "example": "USD per month",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "faq",
+          "title": "FAQ",
+          "items": [
+            {
+              "key": "faq.topic",
+              "label": "Most common question topic",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate most common question topic.",
+              "example": "How appointments work.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "faq.questions",
+              "label": "Questions and answers",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate questions and answers.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "question",
+                    "label": "Question",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "answer",
+                    "label": "Answer",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "faq.help",
+              "label": "Where to ask another question",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate where to ask another question.",
+              "example": "Contact our office.",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "contact",
+          "title": "Contact",
+          "items": [
+            {
+              "key": "contact.email",
+              "label": "Public contact email",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public contact email.",
+              "example": "hello@example.com",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.phone",
+              "label": "Public phone number",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate public phone number.",
+              "example": "(512) 555-0100",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "contact.hours",
+              "label": "Opening or service hours",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate opening or service hours.",
+              "example": "Monday through Friday, 9 am to 5 pm.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "contact.address",
+              "label": "Business address",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate business address.",
+              "example": "123 Example Street, Austin, TX",
+              "validation": {
+                "maxLength": 200
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_assets",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand_assets.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxFiles": 3,
+                "allowedExtensions": [
+                  "svg",
+                  "png",
+                  "pdf"
+                ]
+              }
+            },
+            {
+              "key": "brand_assets.colors",
+              "label": "Brand colors",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate brand colors.",
+              "example": "Navy #0A1A2F and blue #2563EB",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand_assets.photos",
+              "label": "Additional approved photos",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate additional approved photos.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "web_app.starter",
+      "projectType": "WEB_APP",
+      "industry": "GENERAL",
+      "title": "Web application content and requirements",
+      "sections": [
+        {
+          "key": "product",
+          "title": "Product summary",
+          "items": [
+            {
+              "key": "product.problem",
+              "label": "What problem should this application solve?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what problem should this application solve?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "product.audience",
+              "label": "Who will use it?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate who will use it?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "product.success",
+              "label": "What would a successful first release do?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what would a successful first release do?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            }
+          ]
+        },
+        {
+          "key": "users",
+          "title": "Users and permissions",
+          "items": [
+            {
+              "key": "users.roles",
+              "label": "User roles",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate user roles.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "role",
+                    "label": "Role",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "goals",
+                    "label": "Main goals",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "permissions",
+                    "label": "Allowed actions",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "users.access",
+              "label": "How should people get access?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate how should people get access?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "users.restrictions",
+              "label": "What should each role be prevented from doing?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should each role be prevented from doing?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            }
+          ]
+        },
+        {
+          "key": "features",
+          "title": "Features and business rules",
+          "items": [
+            {
+              "key": "features.list",
+              "label": "Feature list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate feature list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Feature",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "goal",
+                    "label": "User goal",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "behavior",
+                    "label": "Expected behavior",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "exceptions",
+                    "label": "Exceptions",
+                    "type": "LONG_TEXT",
+                    "required": false
+                  }
+                ]
+              }
+            },
+            {
+              "key": "features.priority",
+              "label": "Which features are essential for launch?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate which features are essential for launch?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "features.references",
+              "label": "Supporting examples or sample documents",
+              "type": "FILE",
+              "required": false,
+              "instructions": "Provide accurate supporting examples or sample documents.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "screens",
+          "title": "Screens and text",
+          "items": [
+            {
+              "key": "screens.list",
+              "label": "Screens",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate screens.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "name",
+                    "label": "Screen",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "purpose",
+                    "label": "Purpose",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "labels",
+                    "label": "Important text",
+                    "type": "LONG_TEXT",
+                    "required": false
+                  }
+                ]
+              }
+            },
+            {
+              "key": "screens.empty",
+              "label": "Empty-state and help text",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate empty-state and help text.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "screens.mockups",
+              "label": "Screen mockups",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate screen mockups.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand",
+          "title": "Brand assets",
+          "items": [
+            {
+              "key": "brand.logo",
+              "label": "Logo source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate logo source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "brand.colors",
+              "label": "Colors and fonts",
+              "type": "SHORT_TEXT",
+              "required": false,
+              "instructions": "Provide accurate colors and fonts.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "brand.references",
+              "label": "Design references",
+              "type": "FILE",
+              "required": false,
+              "instructions": "Provide accurate design references.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "launch",
+          "title": "Launch and support",
+          "items": [
+            {
+              "key": "launch.support",
+              "label": "Support contact",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate support contact.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "launch.policy",
+              "label": "Privacy policy URL",
+              "type": "URL",
+              "required": false,
+              "instructions": "Provide accurate privacy policy url.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "allowedSchemes": [
+                  "https",
+                  "http"
+                ]
+              }
+            },
+            {
+              "key": "launch.acceptance",
+              "label": "What must be checked before launch?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what must be checked before launch?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "version": 1,
+      "key": "mobile_app.starter",
+      "projectType": "MOBILE_APP",
+      "industry": "GENERAL",
+      "title": "Mobile application content and requirements",
+      "sections": [
+        {
+          "key": "product",
+          "title": "Product summary",
+          "items": [
+            {
+              "key": "product.purpose",
+              "label": "What should the app help people do?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what should the app help people do?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "product.audience",
+              "label": "Who is the intended audience?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate who is the intended audience?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "product.success",
+              "label": "What defines a useful first release?",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate what defines a useful first release?.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            }
+          ]
+        },
+        {
+          "key": "platforms",
+          "title": "Platforms and devices",
+          "items": [
+            {
+              "key": "platforms.target",
+              "label": "Target platforms",
+              "type": "MULTI_SELECT",
+              "required": true,
+              "instructions": "Provide accurate target platforms.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "options": [
+                  {
+                    "key": "ios",
+                    "label": "iOS"
+                  },
+                  {
+                    "key": "android",
+                    "label": "Android"
+                  }
+                ],
+                "minOptions": 1,
+                "maxOptions": 2
+              }
+            },
+            {
+              "key": "platforms.devices",
+              "label": "Device and screen assumptions",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate device and screen assumptions.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            },
+            {
+              "key": "platforms.constraints",
+              "label": "Important connectivity or accessibility needs",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate important connectivity or accessibility needs.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            }
+          ]
+        },
+        {
+          "key": "screens",
+          "title": "Screens and onboarding",
+          "items": [
+            {
+              "key": "screens.list",
+              "label": "Screen list",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate screen list.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "screen",
+                    "label": "Screen",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "purpose",
+                    "label": "Purpose",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "copy",
+                    "label": "Screen text",
+                    "type": "LONG_TEXT",
+                    "required": false
+                  }
+                ]
+              }
+            },
+            {
+              "key": "screens.welcome",
+              "label": "Welcome and onboarding copy",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate welcome and onboarding copy.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "screens.designs",
+              "label": "Design screenshots",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate design screenshots.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "permissions",
+          "title": "Permissions and notifications",
+          "items": [
+            {
+              "key": "permissions.list",
+              "label": "Requested device permissions",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate requested device permissions.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "permission",
+                    "label": "Permission",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "reason",
+                    "label": "Reason",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            },
+            {
+              "key": "permissions.explanation",
+              "label": "Permission explanation text",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate permission explanation text.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "permissions.notifications",
+              "label": "Notification copy",
+              "type": "REPEATER",
+              "required": true,
+              "instructions": "Provide accurate notification copy.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxRows": 20,
+                "columns": [
+                  {
+                    "key": "trigger",
+                    "label": "Trigger",
+                    "type": "SHORT_TEXT",
+                    "required": true
+                  },
+                  {
+                    "key": "message",
+                    "label": "Message",
+                    "type": "LONG_TEXT",
+                    "required": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "key": "brand_store",
+          "title": "Brand and store materials",
+          "items": [
+            {
+              "key": "brand_store.icon",
+              "label": "App icon source",
+              "type": "FILE",
+              "required": true,
+              "instructions": "Provide accurate app icon source.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 1,
+                "maxFiles": 10
+              }
+            },
+            {
+              "key": "brand_store.description",
+              "label": "App-store description",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate app-store description.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              },
+              "ai": {
+                "enabled": true,
+                "targetWords": 150
+              }
+            },
+            {
+              "key": "brand_store.screenshots",
+              "label": "Store screenshot drafts",
+              "type": "IMAGE",
+              "required": false,
+              "instructions": "Provide accurate store screenshot drafts.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "minFiles": 0,
+                "maxFiles": 10
+              }
+            }
+          ]
+        },
+        {
+          "key": "launch",
+          "title": "Testing and launch",
+          "items": [
+            {
+              "key": "launch.support",
+              "label": "Support contact",
+              "type": "SHORT_TEXT",
+              "required": true,
+              "instructions": "Provide accurate support contact.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 200
+              }
+            },
+            {
+              "key": "launch.privacy",
+              "label": "Privacy policy URL",
+              "type": "URL",
+              "required": false,
+              "instructions": "Provide accurate privacy policy url.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "allowedSchemes": [
+                  "https",
+                  "http"
+                ]
+              }
+            },
+            {
+              "key": "launch.acceptance",
+              "label": "Launch acceptance notes",
+              "type": "LONG_TEXT",
+              "required": true,
+              "instructions": "Provide accurate launch acceptance notes.",
+              "example": "Example only. Replace with your own verified information.",
+              "validation": {
+                "maxLength": 3000,
+                "minLength": 20
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
