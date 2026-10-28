@@ -18,5 +18,6 @@ public class WorkspaceMember {
     public WorkspaceMember(UUID workspaceId,UUID userId,WorkspaceRole role,Instant now){
         id=UUID.randomUUID();this.workspaceId=workspaceId;this.userId=userId;this.role=role;state=State.ACTIVE;createdAt=now;updatedAt=now;
     }
+    public UUID userId(){return userId;}
     UUID id(){return id;} public WorkspaceRole role(){return role;} public State state(){return state;}
 }

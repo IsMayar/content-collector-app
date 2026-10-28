@@ -286,7 +286,7 @@ class AccountRegistrationWorkflowTests {
         String hash=context.getBean(PasswordEncoder.class).encode(PASSWORD);
         upgradeJdbc.update("insert into collector.users(email_normalized,display_name,password_hash) values (?,'Alex',?)",EMAIL,hash);
         var flyway=Flyway.configure().dataSource(source).load();flyway.migrate();assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
-        assertThat(flyway.info().applied()).hasSize(7);assertThat(upgradeJdbc.queryForObject("select password_hash from collector.users",String.class)).isEqualTo(hash);
+        assertThat(flyway.info().applied()).hasSize(8);assertThat(upgradeJdbc.queryForObject("select password_hash from collector.users",String.class)).isEqualTo(hash);
         assertThat(upgradeJdbc.queryForObject("select count(*) from collector.outbox_jobs",Long.class)).isZero();
     }
 }

@@ -74,7 +74,9 @@ public class SecurityProblemHandler
             || (path.matches("/api/v1/workspaces/[^/]+") && java.util.List.of("GET","PATCH").contains(method));
         boolean catalogRoute=method.equals("GET") && (path.matches("/api/v1/workspaces/[^/]+/templates")
             || path.matches("/api/v1/workspaces/[^/]+/template-versions/[^/]+"));
-        boolean unauthorized=!denied && (accountRoute || workspaceRoute || catalogRoute || request.getHeader("Authorization")!=null);
+        boolean projectRoute=(java.util.List.of("GET","POST").contains(method) && path.matches("/api/v1/workspaces/[^/]+/(projects|clients)"))
+            || (method.equals("GET") && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+"));
+        boolean unauthorized=!denied && (accountRoute || workspaceRoute || catalogRoute || projectRoute || request.getHeader("Authorization")!=null);
         ProblemDetail problem = problemFactory.create(
                 unauthorized?HttpStatus.UNAUTHORIZED:HttpStatus.FORBIDDEN,
                 unauthorized?"INVALID_CREDENTIALS":"ACCESS_DENIED",

@@ -95,7 +95,7 @@ class TemplateCatalogTests {
 
     @Test void cleanMigrationHibernateAndAllStoredDefinitionsMatchOriginals() {
         assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(7);
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(8);
         assertThat(context.getBean(Flyway.class).info().pending()).isEmpty();
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(count("templates")).isEqualTo(10);assertThat(count("template_versions")).isEqualTo(10);
@@ -177,7 +177,7 @@ class TemplateCatalogTests {
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
     @Test void unsupportedDescendantsProjectRoutesAndCrossOriginRemainClosed() throws Exception {
-        var t=tenant();for(String suffix:List.of("/templates/other","/templates/other/versions","/projects","/template-versions/"+VERSION+"/extra"))
+        var t=tenant();for(String suffix:List.of("/templates/other","/templates/other/versions","/projects/closed/sections","/template-versions/"+VERSION+"/extra"))
             mvc.perform(get(t.root()+suffix).header("Authorization",bearer(t))).andExpect(status().isForbidden());
         mvc.perform(options(t.root()+"/templates").header("Origin","https://untrusted.example").header("Access-Control-Request-Method","GET"))
             .andExpect(status().isForbidden()).andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
@@ -277,7 +277,7 @@ class TemplateCatalogTests {
         data.update("insert into collector.workspaces(id,name,timezone) values (?,'Preserved workspace','UTC')",workspace);
         data.update("insert into collector.workspace_members(workspace_id,user_id,role) values (?,?,'OWNER')",workspace,user);
         try(var upgraded=start(url)){
-            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(7);
+            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(8);
             assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(data.queryForObject("select name from collector.workspaces where id=?",String.class,workspace)).isEqualTo("Preserved workspace");
             assertThat(data.queryForObject("select count(*) from collector.workspace_members where workspace_id=? and user_id=?",Integer.class,workspace,user)).isEqualTo(1);

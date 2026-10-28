@@ -38,7 +38,7 @@ class CollectorApplicationTests {
     void cleanDatabaseMigratesAndRestartPreservesDataAndHealthSecurity() throws Exception {
         try (var first = start()) {
             var jdbc = first.getBean(JdbcTemplate.class);
-            assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector'", Integer.class)).isEqualTo(11);
+            assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector'", Integer.class)).isEqualTo(17);
             assertThat(first.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(first.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
             // Test-only probe, never a product migration or table.
@@ -49,7 +49,7 @@ class CollectorApplicationTests {
         try (var second = start()) {
             var jdbc = second.getBean(JdbcTemplate.class);
             assertThat(jdbc.queryForObject("select value from collector.restart_probe where id=1", String.class)).isEqualTo("preserved");
-            assertThat(jdbc.queryForObject("select count(*) from public.flyway_schema_history where success", Integer.class)).isEqualTo(7);
+            assertThat(jdbc.queryForObject("select count(*) from public.flyway_schema_history where success", Integer.class)).isEqualTo(8);
             assertThat(second.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(second.getBean(Flyway.class).info().pending()).isEmpty();
             assertHealthAndSecurity(second);

@@ -261,7 +261,7 @@ class WorkspaceFoundationTests {
         mvc.perform(patch(ROOT+"/"+w.id()).header("Authorization","Bearer "+owner.access()).contentType("application/json").content("{}")) .andExpect(status().isForbidden());
         mvc.perform(options(ROOT).header("Origin","https://untrusted.example").header("Access-Control-Request-Method","POST"))
             .andExpect(status().isForbidden()).andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
-        for(String suffix:List.of("/members","/projects","/ownership-transfer"))
+        for(String suffix:List.of("/members","/projects/closed/sections","/ownership-transfer"))
             mvc.perform(get(ROOT+"/"+w.id()+suffix).header("Authorization","Bearer "+owner.access())).andExpect(status().isForbidden());
         var result=mvc.perform(get(ROOT+"/"+UUID.randomUUID()).header("Authorization","Bearer "+owner.access()).header("X-Request-ID","tenant-safe"))
             .andExpect(status().isNotFound()).andExpect(header().string("X-Request-ID","tenant-safe")).andExpect(jsonPath("$.traceId").value("tenant-safe")).andReturn();
@@ -306,7 +306,7 @@ class WorkspaceFoundationTests {
     }
     @Test void cleanMigrationsHibernateValidationAndRestartPreserveTenantState(){
         var owner=actor("owner@example.test");var w=create(owner);context.close();open();
-        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(7);
+        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(8);
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(as(owner,()->service.read(w.id())).workspace().id()).isEqualTo(w.id());assertThat(count("workspace_members")).isEqualTo(1);
     }
