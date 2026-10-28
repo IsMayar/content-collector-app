@@ -279,3 +279,75 @@ Verified 27 October 2026: `.\mvnw.cmd clean verify` passed **290 tests**, preser
 Existing agency session features were reused. Minimal frontend fixes align the active workspace with its authorized direct/reloaded URL and ignore unknown/already-selected switch requests before clearing caches. Server JWT/session/membership checks remain authoritative; no role JWT cache or UI redesign. Actual HTTPS checks include no-workspace onboarding/profile, OWNER/MEMBER selection/reload, expired access, membership/session expiry, safe redirects and UI cross-tab logout with both tabs' private caches cleared. Project/template backend routes stay denied.
 
 Baseline and refactor-only clean verify both passed 290 tests before lifecycle extension. Final clean verify passed **291 tests**, preserving baseline 290 plus the version-range regression; zero failures/errors/skips. JAR/Flyway V1–V6/Hibernate/upgrade/restart/security/tenant regressions pass. JAR inspection confirms no stale flat workspace classes. **72 frontend tests**, strict TypeScript/production build, zero-warning lint and format checks passed. Full final real HTTPS rerun passed **2 tests**, zero failures/errors/skips. **T08 Complete; M1 In progress**. No T08/local tool blocker remains; [implementation status](../docs/IMPLEMENTATION_STATUS.md) preserves independent pending gates. Browser checks run explicitly with `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test`, using real PostgreSQL/Edge/Vite/Spring, MSW off, isolated test mail/certificates and no production providers. T04 hosted CI, T05 resend/provider and T06 deployment/retention gates remain pending; no full M1/MVP claim.
+
+
+## T09 Part 1 — validated template catalog (28 October 2026)
+
+T09 adds catalog reads only. There is no project creation, cloning persistence, template editing/publishing endpoint, billing change or frontend UI change. Dependencies remain on the existing Boot BOM/Jackson 3 stack, with no dependency additions. See [package responsibilities](ARCHITECTURE.md) and [current acceptance results](../docs/IMPLEMENTATION_STATUS.md).
+
+### Original source and schema boundary
+
+`src/main/resources/templates/starter_templates.json` is a **byte-identical copy** of `../docs/spec/starter_templates.json`, not a regenerated fixture. SHA-256 of both: `75f33a836337b5de3f0b122c955e1e8c24ffe7fa85c50a27ac95369c23e44cef`. The supplied reference remains unchanged. An explicit -text Git attribute protects the packaged copy on fresh Windows checkouts. Tests compare the bytes and every stored/retrieved definition, not just row counts.
+
+Catalog version 1 contains **10 definitions, 68 sections, 220 items**: `website.plumber`, `website.electrician`, `website.dentist`, `website.restaurant`, `website.law-firm`, `website.real-estate`, `website.salon`, `website.saas-startup`, `web_app.starter`, `mobile_app.starter`. All have schemaVersion 1 and source version 1. Eight are WEBSITE, one WEB_APP and one MOBILE_APP. Source keys, titles, industry, instructions, examples, required flags, validation, AI metadata and array order remain intact. The actual source contains MULTI_SELECT and NUMBER repeater columns; it contains no SINGLE_SELECT items, visibility conditions or default values. Synthetic validator tests cover supported select/visibility configurations and their failures; they do not replace any original definition. Undocumented default-value properties are rejected rather than discarded.
+
+`TemplateSchemaValidator` uses the installed Jackson 3 parser with duplicate-property and trailing-token rejection. It returns a fresh independent tree, or a safe `InvalidTemplate` diagnostic containing an index-based fieldPath and fixed code, without rejected values/parser causes. No public validation endpoint is added.
+
+- Schema version exactly 1; optional definition version is a positive integer (the supplied schema example omits it). Every built-in seed explicitly requires version 1. Required top-level key/projectType/industry/title/sections; exact JSON types and schema vocabulary. Unknown properties, invalid/null metadata, unsafe key shapes and unsupported types fail without normalization. Template key/title lengths follow the reference's 160-character columns; industry 80, section key/title 160/200 and item key/label 200/250.
+- 1–30 sections, 1–50 items per section and at most 300 items overall. Section keys are unique per definition, item keys across the definition, column keys within their repeater, option keys within their select. Array position is the source's order; no sortOrder/id/default field is invented. Forward references caused by reordering are rejected.
+- SHORT_TEXT up to 200 characters, LONG_TEXT up to 10,000, nonnegative minima no greater than maxima, optional SHORT_TEXT email format. URL schemes are a nonempty unique subset of http/https. Selects require unique keyed/labeled options; MULTI_SELECT bounds must fit its option set. IMAGE/FILE count bounds are consistent, and extension lists are nonempty, unique plain extension tokens.
+- REPEATER maxRows 1–20, 1–8 unique columns, exact column types SHORT_TEXT/LONG_TEXT/URL/NUMBER/SINGLE_SELECT/IMAGE, required flags and select options when applicable. Nested repeaters and irrelevant constraints are rejected. AI metadata has boolean enabled and a positive targetWords on LONG_TEXT only; this neither calls AI nor modifies/submits an answer.
+- A visibleWhen rule has exactly dependsOnItemKey/operator/optionKey; EQUALS only, referring to an earlier SINGLE_SELECT in the same section and an existing option. This ordering excludes self, forward, cross-section and circular dependencies.
+- Implementation guardrails bound definition JSON to 1 MiB, text instructions/examples to 10,000 characters each, select/extension lists to 100 entries, option keys/labels to 160/250, file selections to 50 and AI targetWords to 10,000. These bounds reject oversized schema configuration; they do not invent customer values.
+
+This validates **schema configuration**, not client answers. Later tasks enforce answer text/URL/email values, finite decimal NUMBER values, selected option uniqueness, actual row/file counts, asset ownership/READY state, visibility evaluation/retention of hidden answers, project permissions, concurrency and immutable submissions. Examples are illustrative metadata, never default customer answers.
+
+### Storage, startup and immutable snapshots
+
+Additive `V7__create_template_catalog.sql` creates only collector.templates and collector.template_versions, using the reference column names and nullable workspace scope. It adds built-in/workspace key uniqueness, project-type/scope/version/JSON checks, a catalog filter index, version identity uniqueness and a trigger rejecting UPDATE or DELETE of published versions. JPA mappings are read-only; there are no repository save/delete commands. Flyway remains the sole schema owner and Hibernate still validates. V1–V6 are untouched.
+
+After Flyway/Hibernate initialization, the ApplicationRunner validates the whole immutable classpath catalog before starting one seed transaction. A PostgreSQL transaction advisory lock serializes seeding across application instances. Database IDs use UUID.nameUUIDFromBytes over UTF-8 `com.ayaantrix.collector:builtin:template:<key>` and `com.ayaantrix.collector:builtin:version:<key>:<version>`. Original developer keys are separate and unchanged; synthetic frontend fixture UUIDs are not production IDs.
+
+INSERT ON CONFLICT DO NOTHING is followed by exact identity/metadata/schema/version/JSONB equality checks. A conflict **fails startup and rolls back the complete seed transaction**; it never overwrites a published definition or silently accepts conflicting content. Repeated/concurrent starts leave existing IDs, definitions and timestamps intact. Workspace entries and later published versions are not removed or overwritten. A future built-in update must be an explicit new immutable version; replacing the packaged v1 content is rejected. JSONB preserves semantic object data and array order, not original whitespace/object property order. The exact original bytes remain in the packaged resource.
+
+Consumers receive fresh definition trees, never mutable managed entities or a shared cached JSON tree. Catalog summaries identify both template and selected immutable version. Existing version reads stay stable even after a later version is present. T10 must copy that definition into independent project section/item identities; T09 creates no project/snapshot tables.
+
+### Exact catalog HTTP contracts
+
+Both routes require a valid agency JWT, live account/session eligibility and current ACTIVE membership in the URL workspace. An active MEMBER can read the workspace catalog without project access; this grants no project, review or export permission. Cross-tenant/missing workspace and foreign/missing version IDs return indistinguishable 404s. No client/public catalog is opened. Read-only workspace access remains readable.
+
+| Method/path (prefix /api/v1) | Response |
+| --- | --- |
+| GET /workspaces/{workspaceId}/templates?projectType=WEBSITE&industry=PLUMBER | `{data:[{id,title,projectType,industry,isBuiltin,version,versionId}]}` |
+| GET /workspaces/{workspaceId}/template-versions/{versionId} | `{definition:TemplateDefinition}` |
+
+Filters are optional and combined, industry matches exactly; unknown industries yield an empty list. Listing includes built-ins plus that workspace's published versions only, takes the latest immutable version per identity and orders by stable template key. It never exposes drafts or another tenant's template. `versionId` is the existing frontend handoff extension to the original summary contract. Detail uses exactly the original inventory's `{definition}` envelope.
+
+Responses use Cache-Control no-store. Unknown projectType/invalid UUID input produces the existing safe 400 problem response; invalid industry bounds produce 400 VALIDATION_FAILED. Missing identity is 401. Unsupported write methods and unimplemented descendants stay **403 default-denied**, including with valid identity/CSRF, rather than opening mutation mappings solely to return 405. Existing problem JSON, X-Request-ID, restricted CORS and CSRF protections remain. Only these two exact GET path patterns are newly authenticated; no /api/v1/** permit rule.
+
+### Reproduce verification and startup
+
+With Java 21 and Docker Desktop Linux engine running:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
+npm test -- --maxWorkers=1 --pool=threads
+if ($LASTEXITCODE -ne 0) { throw 'Frontend verification failed.' }
+```
+
+Normal startup reuses the existing backend .env and signing-key configuration; no new environment variable or external provider is required:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\scripts\Initialize-Local.ps1
+docker compose up -d --wait
+if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL startup failed.' }
+.\mvnw.cmd '-Dspring-boot.run.profiles=dev' spring-boot:run
+```
+
+After signing in and obtaining a workspace with the existing account/workspace flows, the frontend's existing Templates requests can use the real catalog with mocks disabled. New project submission and workspace-template modification remain unavailable until their later tasks; catalog completion does not imply those features or full-stack project acceptance. Existing T04/T05/T06 deployment/provider/hosted CI gates remain independent. Final test counts and blockers are recorded in IMPLEMENTATION_STATUS.md.
+
+Final local result: **406 backend tests, 0 failures/errors/skips**, executable JAR packaged with the original resource and V7; **72 frontend tests across 3 files passed**. T09 Complete for validator/catalog-seed acceptance and this Part 1 scope, M2 In progress. No local T09 blocker; T10 remains Not started.

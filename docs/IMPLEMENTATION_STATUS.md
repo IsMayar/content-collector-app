@@ -1,8 +1,8 @@
 # Implementation status
 
-Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 27 October 2026.
+Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 28 October 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 is In progress and M3–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -469,11 +469,11 @@ Milestone status: In progress
 
 ### Milestone M2 Projects templates and team
 
-Milestone status: Not started
+Milestone status: In progress
 
 | Task | Deliverable                                  | Acceptance                                          | Status      |
 | ---- | -------------------------------------------- | --------------------------------------------------- | ----------- |
-| T09  | Template JSON validator and catalog seed     | All ten built-ins validate                          | Not started |
+| T09  | Template JSON validator and catalog seed     | All ten built-ins validate                          | Complete    |
 | T10  | Project creation for all three types         | Template snapshot remains independent               | Not started |
 | T11  | Section and item editor and reorder          | Keyboard reorder and structure conflicts work       | Not started |
 | T12  | Client contacts and read-only client preview | Preview exposes no live client session              | Not started |
@@ -623,3 +623,20 @@ Status: **T08 Complete for documented agency layout/session acceptance; M1 In pr
 - **PASS:** all 72 frontend tests (prior 70 + two selection regressions) across 3 files. Strict TypeScript/production build, zero-warning ESLint, package formatting and real-auth runner formatting passed.
 - Extended actual HTTPS Edge/Vite/Spring/PostgreSQL checks (MSW off) to profile/no-workspace onboarding, rejected external return URL, expired workspace access, owner/member switch and reload alignment/cache separation, and two-tab UI logout clearing tokens/memberships/agency/client caches and returning both tabs to sign-in. Existing auth/refresh/reset/logout-all/session-expiry/security flows preserved. Isolated fixture tenant grants/disablement do not add T13 endpoints; project/template APIs remain denied.
 - **PASS final after numeric-version correction:** clean verify **291 tests**, zero failures/errors/skips (all baseline 290 + version-range regression; WorkspaceFoundationTests 58), clean V1–V6/Flyway/Hibernate/tenant/concurrency/auth/reset regressions and executable JAR. Artifact inspection confirms all workspace classes in new subpackages and no old flat workspace classes. **PASS:** complete explicit real HTTPS browser rerun **2 tests**, zero failures/errors/skips, MSW off. No remaining T08/local tool blocker identified. T04 hosted CI, T05 resend/provider and T06 deployment/proxy/key/retention gates remain pending; M1 remains In progress. No push.
+
+
+## T09 Part 1 — original template catalog and strict validation — 28 October 2026
+
+M2 is In progress; T10 and all later task rows remain unchanged. [Package tree/responsibilities](../backend/ARCHITECTURE.md#t09-part-1--template-feature-addition), [original source, validation boundary, seeding, endpoints and reproduction](../backend/README.md#t09-part-1--validated-template-catalog-28-october-2026), [real frontend contract handoff](FRONTEND_PRODUCT_HANDOFF.md#t09-part-1--real-template-catalog-backend-28-october-2026).
+
+- Inspected the original ten JSON definitions and their 68 sections/220 items, guide Sections 1–8 and relevant backend/schema/API/testing sections, original API/catalog/schema, handoffs, existing feature/security/error/session/workspace code, migrations, tests and dependency setup. No invented templates or original-specification edits. Packaged source is byte-identical, SHA-256 `75f33a836337b5de3f0b122c955e1e8c24ffe7fa85c50a27ac95369c23e44cef`.
+- Eight production classes under controller/service/repository/entity/dto/validation/seed. No duplicate/empty packages, new dependencies, frontend UI/source, project controllers/entities, billing changes or publish endpoints. Exact existing catalog DTOs include the already-documented summary versionId extension.
+- Additive V7 creates templates/template_versions only (11 current collector tables, 7 migrations), constraints/indexes and published version UPDATE/DELETE rejection. V1–V6 remain unchanged. JPA validates and treats catalog entities as immutable.
+- Complete-batch validation, deterministic source-key/version UUIDs, classpath-only source, one advisory-locked transaction and insert/equality checks. Existing v1 conflicts fail startup and roll back all new seed inserts. Original content, user-created catalog rows, later versions and timestamps survive seeding/restart. Independent definition reads prepare T10 without implementing it.
+- Exact authenticated GET list/filter and immutable version-detail routes reuse live WorkspaceAuthorization; current membership plus account/session checks, scoped repositories, no-store, safe problems and correlation preserved. MEMBER catalog reads do not grant project/action access. All unsupported routes/mutations stay denied; no CSRF/CORS bypass.
+- Added 88 schema tests and 27 PostgreSQL/catalog integration tests (115 new cases); all original 291 backend cases remain enabled. Existing schema assertions advance to V7/11 tables; catalog permission cases replace the old route's default-denial expectation. No assertions/tests disabled.
+- Early runs were not acceptance passes: a Jackson-3 test fixture class name needed StringNode; the blank-industry fixture used an encoded literal instead of a real blank parameter; the failed-startup test expected a nested cause although Spring returns the IllegalStateException directly. Corrected the tests and reran; no production validation/security relaxation. The first full run passed all 291 existing cases but had the old blank-parameter fixture failure.
+- Frontend final full suite: **72 tests across 3 files passed** with `npm test -- --maxWorkers=1 --pool=threads`. The initial run passed 44 tests but had an auth worker startup timeout, so was not counted as a full pass. Clean isolated rerun passed without changing test isolation/configuration or dependencies. No frontend UI change; no additional browser/visual/deployment acceptance claim.
+- **PASS final:** `backend\mvnw.cmd clean verify`: **406 tests, 0 failures, 0 errors, 0 skipped** (all original 291 plus 88 validator and 27 catalog cases). Clean V1–V7/Flyway checksum validation, Hibernate schema validation, V6 upgrade preservation, deterministic seed equality, database constraints/immutability, concurrent seed runs, failed-startup whole-batch rollback, future version preservation, restart/live session and tenant/security regression checks passed. Executable Spring Boot JAR built. **T09 Complete for its validator/catalog-seed acceptance and this Part 1 scope; M2 remains In progress.** No local T09 blocker remains; no T10 implementation. Explicit real-browser/visual/deployment suites were not rerun for this backend-only change. Existing T04 hosted CI, T05 resend/provider and T06 deployment/proxy/key/retention gates remain pending; M1/full MVP are not declared complete. No push.
+
+Artifact audit confirmed V7 and all template classes in the executable JAR and a byte-identical original resource. An explicit .gitattributes -text rule prevents the packaged copy changing under Windows autocrlf on checkout. Implementation/test commit: `5c513c1`; checkout-byte preservation commit: `f7ccb98`.

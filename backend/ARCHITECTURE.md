@@ -126,3 +126,75 @@ Created: `backend/ARCHITECTURE.md` (this file). Files updated, including this fi
 - `docs/FRONTEND_BACKEND_HANDOFF.md`
 
 No auth/common production file, dependency manifest, lockfile, migration or supplied specification changed. Existing T04 hosted CI, T05 provider/resend and T06 deployment/retention gates remain independent; M1 cannot be marked complete while those remain. No T09/later feature or full MVP claim.
+
+
+## T09 Part 1 — template feature addition
+
+The T08 sections above are historical evidence. T09 adds this feature under the same application root; auth/workspace packages and their responsibilities remain intact:
+
+```text
+template/
+  controller/TemplateCatalogController.java
+  service/TemplateCatalogService.java
+  repository/TemplateCatalogRepository.java
+  entity/Template.java
+  entity/TemplateVersion.java
+  dto/TemplateCatalogDtos.java
+  validation/TemplateSchemaValidator.java
+  seed/BuiltInTemplateSeeder.java
+```
+
+No empty packages or service interfaces. Controller maps the two existing catalog GET routes and no-store DTO responses. Service owns the transaction, first resolves the actor through WorkspaceAuthorization, then rechecks URL-workspace membership before any scoped catalog read. It intentionally uses a regular transaction because the shared live authorization helper takes pessimistic account/workspace/member locks. Repository is a narrow Spring Data Repository port: scoped catalog/definition queries only, with no global findAll/findById or mutation operations. Read-only entities map the two reference catalog tables; public responses are records and independent JSON trees. Latest-version listing and exact historical-version retrieval are separate queries. No project feature dependency has been introduced.
+
+The standalone validator is reusable by later publishing and snapshot orchestration; it knows schema semantics but no HTTP or tenant identity. Its bounded index paths/fixed diagnostics do not echo raw JSON. It uses Jackson 3 already in the application, without another JSON framework. Unknown properties are rejected rather than dropped. [Full vocabulary, limits and schema/answer boundary](README.md#original-source-and-schema-boundary).
+
+Seeder alone has a narrow administrative JDBC path to global built-in identities; it cannot be invoked through HTTP and accepts no caller-supplied definitions. It reads the immutable classpath copy, validates all ten before writing, serializes instances with a database advisory lock and performs insert/check in one transaction. Existing mismatches fail startup, including rollback of earlier inserts. Published version UPDATE/DELETE is independently prohibited by V7's trigger. Current JPA entities expose no mutation path; future workspace publishing must introduce explicitly authorized validation/version operations rather than reusing global seed authority. New versions never alter existing definitions. [Source, IDs, concurrency and snapshot contract](README.md#storage-startup-and-immutable-snapshots).
+
+Changes to existing production wiring are limited to two exact authenticated GET patterns in common.SecurityConfiguration and corresponding anonymous-401 classification in SecurityProblemHandler. All other routes remain default-denied, CORS/CSRF/tracing/error handling unchanged. Existing regression tests retain their cases and assertions, updating only latest schema expectations (7 migrations, 11 tables) and removing the now-implemented /templates entry from the closed-route loop; new catalog tests directly cover its positive and negative permissions.
+
+Tests: template/TemplateSchemaValidatorTests covers original bytes/definitions and valid/invalid schemas; template/TemplateCatalogTests covers actual PostgreSQL/JPA/Flyway/HTTP/authorization/tenant isolation, independent reads, constraints, concurrency, failed startup rollback, later version preservation, V6 upgrade and restart. Existing 291 cases stay enabled. No frontend source/UI change or new dependency. Current final evidence and task status are in docs/IMPLEMENTATION_STATUS.md; T10 and later features are out of scope.
+
+
+### T09 exact file manifest
+
+Created (paths relative to backend/):
+
+```text
+src/main/java/com/ayaantrix/collector/template/controller/TemplateCatalogController.java
+src/main/java/com/ayaantrix/collector/template/service/TemplateCatalogService.java
+src/main/java/com/ayaantrix/collector/template/repository/TemplateCatalogRepository.java
+src/main/java/com/ayaantrix/collector/template/entity/Template.java
+src/main/java/com/ayaantrix/collector/template/entity/TemplateVersion.java
+src/main/java/com/ayaantrix/collector/template/dto/TemplateCatalogDtos.java
+src/main/java/com/ayaantrix/collector/template/validation/TemplateSchemaValidator.java
+src/main/java/com/ayaantrix/collector/template/seed/BuiltInTemplateSeeder.java
+src/main/resources/db/migration/V7__create_template_catalog.sql
+src/main/resources/templates/starter_templates.json
+src/test/java/com/ayaantrix/collector/template/TemplateSchemaValidatorTests.java
+src/test/java/com/ayaantrix/collector/template/TemplateCatalogTests.java
+```
+
+Modified (paths relative to the project root):
+
+```text
+.gitattributes
+backend/src/main/java/com/ayaantrix/collector/common/SecurityConfiguration.java
+backend/src/main/java/com/ayaantrix/collector/common/error/SecurityProblemHandler.java
+backend/src/test/java/com/ayaantrix/collector/CollectorApplicationTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/AccountDeliveryOperationsTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/AccountRegistrationWorkflowTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/AgencySessionWorkflowTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/IdentityPersistenceTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/PasswordRecoveryWorkflowTests.java
+backend/src/test/java/com/ayaantrix/collector/workspace/WorkspaceFoundationTests.java
+backend/README.md
+backend/ARCHITECTURE.md
+docs/FRONTEND_PRODUCT_HANDOFF.md
+docs/IMPLEMENTATION_STATUS.md
+```
+
+All 26 files belong to T09's foundation, verification and integration documentation. Supplied specs, V1–V6, dependency manifests, lockfiles, application configuration and frontend implementation remain unchanged. The original roadmap is preserved with evidence-based T09/M2 status updates. Ignored command logs are local evidence, not source artifacts.
+
+Final local verification: backend clean verify **406 tests, zero failures/errors/skips** (291 prior + 115 template cases), executable JAR; frontend **72 tests in 3 files** passed. T09 Complete for validator/catalog-seed acceptance and this Part 1 scope; M2 In progress. No local T09 blocker. T04 hosted CI, T05 resend/provider and T06 deployment/retention gates remain independent. Browser/visual/deployment checks were not rerun for this backend-only change. No T10 implementation or push.
+
+The packaged JSON has an explicit -text attribute, matching the supplied specification source, so Git autocrlf cannot change its bytes on a fresh Windows checkout.

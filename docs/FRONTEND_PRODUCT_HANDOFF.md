@@ -102,3 +102,10 @@ The production service worker caches only a fixed public asset allowlist (offlin
 ## Dependency references
 
 Pinned lucide-react icons use documented standalone, tree-shakable React components ([official guide](https://lucide.dev/guide/react/)). Mock ZIPs use the documented fflate API ([official zipSync reference](https://github.com/101arrowz/fflate/blob/master/docs/functions/zipSync.md)). The lockfile records the resolved versions. Existing React/Vite/HeroUI/RTK setup references remain in the frontend README.
+
+
+## T09 Part 1 — real template catalog backend (28 October 2026)
+
+The two existing GET catalog operations are now implemented: `workspaces/:w/templates` returns `{data: TemplateCardData[]}` including versionId, and `workspaces/:w/template-versions/:v` returns `{definition}`. They use the ordinary bearer transport and live URL-workspace membership checks, including MEMBER reads and immediate membership/session revocation. Optional projectType/industry filters combine on the server. Listing returns built-ins plus only the current workspace's published entries, latest immutable version per identity; drafts stay private. Definitions/array ordering and original developer keys are unchanged. Production IDs are deterministic source-key/version UUIDs; the synthetic 4444/5555 mock IDs are not production identifiers. Use IDs from each actual response.
+
+No new frontend API path, UI, source fixture or contract type is required. The original summary's version field remains the selected version number; versionId is the already-documented frontend extension. Unknown/missing/inaccessible resources use safe 404 problem responses; anonymous reads use 401. Unsupported writes remain 403 default-denied. Catalog availability does not implement project creation, customer lookup, template copy/edit/publish or the rest of the mock-backed product. Those calls remain closed until their tasks. T10 must copy a version definition into independent structure; it must never use mutable catalog state as live project structure. See backend/README.md for schema validation boundaries and current status evidence.
