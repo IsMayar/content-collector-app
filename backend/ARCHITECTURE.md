@@ -280,3 +280,14 @@ frontend/real-auth/browser-check.mjs
 Final verification: clean verify **470 tests, zero failures/errors/skips** (all original 406 + 64 project cases), executable JAR; frontend **72 tests/3 files**, explicit real HTTPS **2 tests**, zero failures/errors/skips. The onboarding HTTPS case now additionally creates/reloads all three project types through the existing UI, including real customer creation/selection and frontend runtime response schemas, with MSW off. T10 Complete for creation/independent-snapshot acceptance; M2 In progress. T11/T12/T13 workflows remain deferred. No local T10 blocker, production provider/deployment acceptance or push.
 
 T10 implementation/regression commit: `0e14422`. Real HTTPS all-type wizard acceptance commit: `35f0c41`. No push.
+
+
+## T11 Part 1 — project structure editing
+
+The existing project feature gains controller/ProjectStructureController, dto/ProjectStructureDtos, service/ProjectStructureService and service/ProjectStructureValidationService. Existing entity/Project and repository/ProjectRepository own edit-state/version behavior and scoped pessimistic project locking. ProjectStructureRepository retains scoped JDBC section/item persistence, adds differential writes/auditing, and includes parent section state in initial visibility. No duplicate entity, repository, root-package type or empty package was introduced.
+
+The service validates the complete candidate before persistence using a definition-only projection into the shared TemplateSchemaValidator; only its project-editing entry point allows temporary empty sections. Strict catalog publishing/seeding remains unchanged. Existing transaction and lock order is account, workspace/membership, subscription, project, children. Deferred V8 sort constraints allow atomic swaps; project flush and V9 audit insert are in the same transaction. Returned DTOs are detached JSON values, not JPA entities. No initial snapshot/catalog rewrite occurs.
+
+[Exact package tree, API inventory, transaction/security semantics, remaining submitted-content reopening boundary and file manifest](../docs/T11_STRUCTURE_EDITOR.md). T11 In progress pending that deferred revision integration; M2 In progress. T12/T13 and production acceptance gates remain separate.
+
+Final verification: **554 backend tests** (all original 470 + 84 T11 cases), **74 frontend tests/3 files**, and **2 explicit real HTTPS browser tests**, all zero failures/errors/skips. Strict TypeScript, production build, lint, formatting, Flyway V1–V9/Hibernate/restart/upgrade and executable JAR checks passed. Original specifications, V1–V8, catalog bytes and dependency lockfiles are unchanged. Full mocked visual/PWA/deployment/provider suites were not rerun. Implementation/regression commit `995728c`; frontend/HTTPS integration commit `2ca9345`. No push. Detailed verification and corrections are recorded in docs/T11_STRUCTURE_EDITOR.md.

@@ -475,7 +475,7 @@ Milestone status: In progress
 | ---- | -------------------------------------------- | --------------------------------------------------- | ----------- |
 | T09  | Template JSON validator and catalog seed     | All ten built-ins validate                          | Complete    |
 | T10  | Project creation for all three types         | Template snapshot remains independent               | Complete    |
-| T11  | Section and item editor and reorder          | Keyboard reorder and structure conflicts work       | Not started |
+| T11  | Section and item editor and reorder          | Keyboard reorder and structure conflicts work       | In progress |
 | T12  | Client contacts and read-only client preview | Preview exposes no live client session              | Not started |
 | T13  | Team invitations and project assignments     | Seat reservation and reviewer/export flags enforced | Not started |
 
@@ -662,3 +662,14 @@ M2 In progress. T11/T12/T13 and later task rows/history unchanged. [Exact archit
 - **T10 Complete** for the roadmap creation/independent-snapshot acceptance and this Part 1 scope. **M2 In progress.** No remaining local T10 blocker. Structure editing/general overrides (T11), preview/grants (T12), assignments/invitations/member project reads (T13) and response/submission/lifecycle features remain closed/deferred; no later task is claimed complete. Existing T04/T05/T06 gates remain independent.
 
 T10 implementation/regression commit: `0e14422`. Real HTTPS all-type wizard acceptance commit: `35f0c41`. No push.
+
+
+## T11 Part 1 — independent project structure editing — 28 October 2026
+
+M2 remains In progress. [Exact contracts, package tree, migration, validation, commands and file manifest](T11_STRUCTURE_EDITOR.md). Implemented section/item creation, metadata/schema editing, soft disable/re-enable, exact scoped reorder and full-result validation using the existing catalog validator. Eight field types and all agreed repeater/visibility settings are preserved. V9 adds safe transactional structure audit records; V1–V8, supplied specs, original catalog definitions, initial snapshots and dependency locks are unchanged.
+
+Project-row database locking, expectedStructureVersion/currentVersion conflicts, transactional rollback, current account/session/member/plan checks and owner-only least privilege are enforced. DRAFT/ACTIVE/PAUSED permit edits; closed states reject. Tiny frontend contract fixes supply new URL/multi-select defaults, preserve AI settings and support conflict recovery; no redesign. T12 preview, T13 grants/assignments, client submission/review/lifecycle commands remain outside scope.
+
+T11 remains In progress for the guide's submitted-content reopen/schema-revalidation integration: Part 1 fails closed with REOPEN_REQUIRED instead of faking revisions when collected work exists. Existing roadmap and FE01–FE07 mock-only evidence, T01–T10 history and T04 hosted CI/T05 resend-provider/T06 deployment gates remain unchanged. No push.
+
+Final verification: **554 backend tests** (all original 470 + 84 T11 cases), **74 frontend tests/3 files**, and **2 explicit real HTTPS browser tests**, all zero failures/errors/skips. Strict TypeScript, production build, lint, formatting, Flyway V1–V9/Hibernate/restart/upgrade and executable JAR checks passed. Original specifications, V1–V8, catalog bytes and dependency lockfiles are unchanged. Full mocked visual/PWA/deployment/provider suites were not rerun. Implementation/regression commit `995728c`; frontend/HTTPS integration commit `2ca9345`. No push. Detailed verification and corrections are recorded in docs/T11_STRUCTURE_EDITOR.md.
