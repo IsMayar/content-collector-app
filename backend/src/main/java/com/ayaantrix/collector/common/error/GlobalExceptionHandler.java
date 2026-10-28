@@ -39,6 +39,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         // ApiException messages are deliberately authored, client-safe messages.
         var problem = problemFactory.create(status, exception.getCode(), title(status),
                 exception.getMessage(), requestTrace.getTraceId(request));
+        if(exception.getCurrentVersion()!=null)problem.setProperty("currentVersion",exception.getCurrentVersion());
         var headers = new HttpHeaders();
         if (status.value() == 429 && "RATE_LIMITED".equals(exception.getCode())) {
             headers.set(HttpHeaders.RETRY_AFTER, "60");

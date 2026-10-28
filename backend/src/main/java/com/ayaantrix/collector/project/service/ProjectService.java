@@ -78,7 +78,7 @@ public class ProjectService {
     }
     private Progress progress(UUID workspace,UUID id){return structure.progress(workspace,List.of(id)).getOrDefault(id,emptyProgress());}
     private static Progress emptyProgress(){return new Progress(0,0,0,0,0);}
-    private static View view(Project p,String customer,Progress progress,boolean writable){return new View(p.id(),p.workspaceId(),p.title(),customer,p.projectType(),p.state(),p.dueDate(),p.timezone(),progress,p.updatedAt(),p.clientId(),p.version(),p.structureVersion(),p.aiEnabled(),new Permissions(writable,writable,true,writable));}
+    private static View view(Project p,String customer,Progress progress,boolean writable){return new View(p.id(),p.workspaceId(),p.title(),customer,p.projectType(),p.state(),p.dueDate(),p.timezone(),progress,p.updatedAt(),p.clientId(),p.version(),p.structureVersion(),p.aiEnabled(),new Permissions(writable && p.structureEditable(),writable,true,writable));}
     private static Customer customer(ProjectCustomer c){return new Customer(c.id(),c.businessName(),c.contactName(),c.email(),c.version());}
     private void valid(Object value){if(value==null || !validator.validate(value).isEmpty())throw invalid();}
     private static void pagination(int page,int size){if(page<0 || size<1 || size>100)throw invalid();}

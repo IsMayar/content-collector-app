@@ -28,7 +28,10 @@ public class TemplateSchemaValidator {
         catch (RuntimeException invalid) { throw new InvalidTemplate("$", "MALFORMED_JSON"); }
     }
     public JsonNode validate(String source) { return validate(parse(source)); }
-    public JsonNode validate(JsonNode root) {
+    public JsonNode validate(JsonNode root) { return validate(root, false); }
+    /** Projects may contain empty sections while being edited; catalog publishing stays strict. */
+    public JsonNode validateProjectStructure(JsonNode root) { return validate(root, true); }
+    private JsonNode validate(JsonNode root, boolean editing) {
         object(root, "$", "schemaVersion version key projectType industry title sections");
         if (root.toString().getBytes(StandardCharsets.UTF_8).length > 1_048_576) fail("$", "JSON_SIZE");
         integer(root, "schemaVersion", "$", 1, 1, true);
@@ -36,13 +39,13 @@ public class TemplateSchemaValidator {
         key(root, "$", 160); text(root, "title", "$", 160, true);
         text(root, "industry", "$", 80, true);
         choice(root, "projectType", "$", Set.of("WEBSITE", "WEB_APP", "MOBILE_APP"));
-        var sections = array(root, "sections", "$", 1, 30);
+        var sections = array(root, "sections", "$", editing ? 0 : 1, 30);
         var sectionKeys = new HashSet<String>(); var itemKeys = new HashSet<String>(); int total = 0;
         for (int si = 0; si < sections.size(); si++) {
             String path = "$.sections[" + si + "]"; var section = sections.get(si);
             object(section, path, "key title items"); unique(sectionKeys, key(section, path, 160), path + ".key");
             text(section, "title", path, 200, true);
-            var items = array(section, "items", path, 1, 50); total += items.size();
+            var items = array(section, "items", path, editing ? 0 : 1, 50); total += items.size();
             if (total > 300) fail("$.sections", "ITEM_LIMIT");
             var earlier = new HashMap<String, JsonNode>();
             for (int ii = 0; ii < items.size(); ii++) {

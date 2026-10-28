@@ -27,6 +27,8 @@ public class Project {
     }
     // The existing frontend project/item contracts are one-based. Keep nullable newness detection until persist.
     @PrePersist void initialVersion(){if(version==null)version=1L;}
+    public void structureChanged(Instant now){structureVersion++;updatedAt=now;}
+    public boolean structureEditable(){return state==ProjectState.DRAFT || state==ProjectState.ACTIVE || state==ProjectState.PAUSED;}
     public UUID id(){return id;} public UUID workspaceId(){return workspaceId;} public UUID clientId(){return clientId;}
     public UUID sourceTemplateVersionId(){return sourceTemplateVersionId;}
     public String title(){return title;} public ProjectType projectType(){return projectType;} public ProjectState state(){return state;}

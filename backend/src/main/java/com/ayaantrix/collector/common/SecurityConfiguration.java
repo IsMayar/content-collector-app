@@ -43,6 +43,10 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/templates","/api/v1/workspaces/*/template-versions/*").authenticated()
                         .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/projects","/api/v1/workspaces/*/projects/*","/api/v1/workspaces/*/clients").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects","/api/v1/workspaces/*/clients").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects/*/sections",
+                                "/api/v1/workspaces/*/projects/*/sections/*/items","/api/v1/workspaces/*/projects/*/structure/reorder").authenticated()
+                        .requestMatchers(HttpMethod.PATCH,"/api/v1/workspaces/*/projects/*/sections/*",
+                                "/api/v1/workspaces/*/projects/*/items/*/schema").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/workspaces").authenticated()
                         .requestMatchers(HttpMethod.PATCH,"/api/v1/workspaces/*").authenticated()
                         .anyRequest().denyAll()

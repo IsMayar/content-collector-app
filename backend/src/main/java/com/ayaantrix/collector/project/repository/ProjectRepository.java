@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.*;
 import java.util.*;
 public interface ProjectRepository extends Repository<Project,UUID> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Project p where p.workspaceId=:workspace and p.id=:id")
+    Optional<Project> lockForStructure(UUID workspace,UUID id);
     Project saveAndFlush(Project project);
     Optional<Project> findByWorkspaceIdAndId(UUID workspaceId,UUID id);
     @Query("""
