@@ -351,3 +351,65 @@ if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL startup failed.' }
 After signing in and obtaining a workspace with the existing account/workspace flows, the frontend's existing Templates requests can use the real catalog with mocks disabled. New project submission and workspace-template modification remain unavailable until their later tasks; catalog completion does not imply those features or full-stack project acceptance. Existing T04/T05/T06 deployment/provider/hosted CI gates remain independent. Final test counts and blockers are recorded in IMPLEMENTATION_STATUS.md.
 
 Final local result: **406 backend tests, 0 failures/errors/skips**, executable JAR packaged with the original resource and V7; **72 frontend tests across 3 files passed**. T09 Complete for validator/catalog-seed acceptance and this Part 1 scope, M2 In progress. No local T09 blocker; T10 remains Not started.
+
+
+## T10 Part 1 — project creation and independent initial snapshots
+
+This section supersedes earlier statements that all project/customer routes are closed. Only the five routes below are added. T11 structure edits, T12 preview/grants, T13 assignments/invitations, lifecycle transitions, answers/submissions and provider/billing operations remain closed. There is no frontend application/UI change or dependency change; the existing explicit HTTPS test runner is extended for the real wizard flow.
+
+### Contracts and prerequisites
+
+All paths are prefixed `/api/v1`; responses have Cache-Control no-store. New customer records are the guide's `clients` business-customer prerequisite, not project contact grants or agency accounts. The wizard can create one or select an existing same-workspace customer.
+
+| Method/path | Request/query | Response |
+| --- | --- | --- |
+| POST /workspaces/{w}/clients | `{businessName,contactName?,email?}` plus existing CSRF | 201 `{client:{id,businessName,contactName,email,version}}` |
+| GET /workspaces/{w}/clients | page=0, size=12 (max 100) | 200 `{data:Client[],page:{page,size,totalElements}}` |
+| POST /workspaces/{w}/projects | `{clientId,title,projectType,dueDate,timezone,templateVersionId}`; required Idempotency-Key and CSRF | 201 `{project:Project}` |
+| GET /workspaces/{w}/projects | search, projectType, state, sort=updatedAt/title/dueDate, page=0, size=12 (max 100) | 200 `{data:ProjectSummary[],page:{page,size,totalElements}}` |
+| GET /workspaces/{w}/projects/{p} | None | 200 `{project:Project,progress:Progress,structure:Section[]}` |
+
+Title is required, nonblank and at most 200 characters, with surrounding whitespace removed. Types reuse the existing catalog enum WEBSITE/WEB_APP/MOBILE_APP; no duplicate Java ProjectType enum. dueDate is an ISO date with year 1–9999 (historical dates are allowed); timezone must be an exact supported IANA ID. Client and published version are mandatory, must be visible under this workspace and must have compatible projectType. For **this explicit-version T10 path**, the optional version in the original broad inventory is required by the current task; no implicit/latest-template fallback or unagreed override field is invented. Owner-defined schema overrides remain for the structure/editor contract. UUID source fields are resolved server-side; request owner/user/workspace fields never confer authority.
+
+Project has the original ProjectSummary fields plus clientId/version/structureVersion/aiEnabled/permissions, using the existing frontend contract. Summaries contain exactly the summary fields. Sections/items have independent UUIDs, developer keys, zero-based sortOrder, enabled/state/version/currentRevisionId/visible and the complete item metadata/validation. New projects are DRAFT; project/item/structure wire versions start at **1** as required by existing frontend schemas (customer optimistic version starts at 0). JPA keeps a nullable new project version until @PrePersist assigns 1; there is no boxed-reference version comparison or explicit entity serialization. No update/version-conflict endpoint is added; unsupported PATCH and lifecycle routes remain 403 default-denied.
+
+Listing searches title/customer name case-insensitively with a 200-character bound. SQL wildcard characters are escaped and treated literally. Type/state combine with search; title/dueDate sort ascending, updatedAt descending, with stable UUID tie-breaks. Invalid sort/type/state/page/size returns the existing safe 400 problem. Default size 12 matches the agreed product handoff; maximum 100 follows the guide. No undocumented deadline-range parameter is introduced; the documented dueDate sort is supported. Lists batch-load customer names and aggregate item counts without querying the source template. API row limits affect pagination, never a commercial project-count cap.
+
+### Persistence and snapshot independence
+
+Additive V8 creates exactly six required tables: clients, projects, project_snapshots, sections, items and the reference idempotency_records. It creates no answers, submissions, project contacts, project members or later provider tables. V1–V7 remain unchanged; Flyway owns schema and Hibernate continues ddl-auto=validate for the JPA mappings. Schema now has 17 collector tables and 8 migrations.
+
+This is a documented **hybrid** of the guide's relational section/item structure and JSONB template-snapshot allowance: project_snapshots retains the complete immutable initial definition, while sections/items are the independent operational copy with their own identities and sort orders for future T11. Snapshot identity/source version/structure version/time are stored separately from project identity. Full item definitions are retained in schema_json, including repeater columns, AI metadata, optional enabled flags and visibleWhen keys. T11 must update operational columns/schema together and increment structureVersion; it must never rewrite the initial snapshot. Snapshot UPDATE/DELETE is rejected by PostgreSQL and the JPA mapping is immutable.
+
+One transaction locks the live actor/account, workspace/member and subscription; resolves the scoped customer and published version; validates exact template shape/type; inserts project, initial snapshot, ordered sections/items and idempotency result. A failure at any stage rolls everything back. No original template, other project structure or provider usage row is updated. Reads use the project's stored rows, not a live catalog lookup. A newer catalog publication affects only projects explicitly choosing that version. Returned JSON trees are independent between reads and consumers.
+
+Composite foreign keys enforce workspace/customer, snapshot/project/source-version, section/project and item/section/project relationships. A database trigger additionally rejects a source version from another workspace or of a different project type; global built-ins remain usable. UUID/key/order uniqueness and positive versions/state/type checks guard persistence. Creator is the trusted authenticated membership user, with a users FK for historical attribution. No client-provided creator IDs or global project-ID repository shortcut.
+
+Creation idempotency follows the reference: bounded opaque Idempotency-Key, trusted actor + URL-workspace route scope, canonical normalized request SHA-256, 24-hour result retention. A retry with identical input returns the exact original 201 DTO, not another project; different input returns 409 IDEMPOTENCY_KEY_REUSED. Expired records for this actor/route are removed transactionally before reuse. Access/ownership/write policy is rechecked before replay. Existing database workspace/account locks and uniqueness serialize same-key concurrent creation across processes; there is no JVM/global in-memory lock. No raw request/content is logged. Periodic general idempotency retention operations beyond the route's expiry cleanup are not introduced in this foundation.
+
+### Authorization, plans and initial progress
+
+Existing WorkspaceAuthorization resolves JWT subject, rechecks live account/session eligibility, then locks/rechecks current membership. Owner-only customer/project creation also uses the existing WorkspaceSubscription.writable(serverClock) policy with a pessimistic subscription read lock, and requires ACTIVE workspace state. Missing/expired plan, cancelled grace or read-only/suspended workspace rejects new writes with 403 WORKSPACE_READ_ONLY. Concurrent membership disablement/demotion or workspace/plan change while creation waits is rechecked before any insert. No purchased plan, usage allowance, AI/SMS activation or project cap is invented.
+
+Owner reads stay available under the existing read policy when writes are disabled, with mutation permission flags false. A MEMBER is not implicitly assigned to every project: until T13 introduces assignment persistence/commands, member project/customer lists are empty and guessed detail IDs return 404. Member creation is 403; unrelated workspace/inactive membership is 404; missing/revoked agency identity is 401. No owner preview/client identity is created. Later T13 must add live scoped assignment lookup before enabling assigned-member reads; this task does not claim that deferred workflow.
+
+Required total and remaining client-action count are calculated from actual copied, enabled, initially visible required items; submitted/approved counts are genuinely zero without submissions. All items start NOT_STARTED; examples are metadata and never client answers. A conditional item is initially hidden because there are no answers to its earlier SINGLE_SELECT dependency. T15's answer-aware shared visibility evaluator must replace that initial-only observation when answer persistence exists. No fabricated activity, submission statistics, revision IDs or provider use. AI stays disabled.
+
+### Verification and reproduction
+
+Focused project tests cover all ten source copies (68 sections/220 items), all three creation types, exact DTOs, validation, independent versions/IDs/order/configuration, visibleWhen/repeaters, tenant/owner/member/session isolation, idempotency/reuse/expiry, concurrency with actual observed PostgreSQL lock waiters, rollback at snapshot/section/item/idempotency stages, constraints, V7 upgrade and restart. Final clean/full and HTTPS/frontend results are recorded in IMPLEMENTATION_STATUS.md. Existing 406 cases remain enabled; only latest schema counts and the newly opened project-list route's obsolete denial expectation change.
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test
+if ($LASTEXITCODE -ne 0) { throw 'HTTPS acceptance failed.' }
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
+npm test -- --maxWorkers=1 --pool=threads
+if ($LASTEXITCODE -ne 0) { throw 'Frontend regression failed.' }
+```
+
+Existing backend .env, Java 21, Docker Desktop Linux engine, local signing keys and startup commands above are reused. HTTPS checks additionally require existing frontend dependencies, Node, Edge and keytool. They use disposable PostgreSQL, isolated self-signed test certificates and synthetic accounts, with no production email/provider credentials. Start the normal backend with `.\mvnw.cmd '-Dspring-boot.run.profiles=dev' spring-boot:run`; run the existing frontend with mocks off. Choose a template and Save as draft. Publishing/inviting/editing remains unavailable until its later task.
+
+Final local acceptance: **470 backend tests** (prior 406 + 64 project cases), **72 frontend tests/3 files**, and **2 explicit real HTTPS browser tests** passed, all with zero failures/errors/skips. The extended onboarding browser test creates/reloads all three project types through the real wizard/customer/catalog/API and validates frontend response schemas. Executable JAR verified. T10 Complete for creation/independent-snapshot acceptance; M2 In progress, no local T10 blocker. No later feature or production deployment acceptance claimed.

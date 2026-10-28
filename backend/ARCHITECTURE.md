@@ -198,3 +198,85 @@ All 26 files belong to T09's foundation, verification and integration documentat
 Final local verification: backend clean verify **406 tests, zero failures/errors/skips** (291 prior + 115 template cases), executable JAR; frontend **72 tests in 3 files** passed. T09 Complete for validator/catalog-seed acceptance and this Part 1 scope; M2 In progress. No local T09 blocker. T04 hosted CI, T05 resend/provider and T06 deployment/retention gates remain independent. Browser/visual/deployment checks were not rerun for this backend-only change. No T10 implementation or push.
 
 The packaged JSON has an explicit -text attribute, matching the supplied specification source, so Git autocrlf cannot change its bytes on a fresh Windows checkout.
+
+
+## T10 Part 1 — project foundation
+
+The earlier T08/T09 sections are historical evidence. New feature files follow the same convention:
+
+```text
+com.ayaantrix.collector.project/
+  controller/ProjectController.java
+  dto/ProjectDtos.java
+  entity/Project.java
+  entity/ProjectCustomer.java
+  entity/ProjectSnapshot.java
+  entity/ProjectState.java
+  repository/ProjectCreationRequests.java
+  repository/ProjectCustomerRepository.java
+  repository/ProjectRepository.java
+  repository/ProjectSnapshotRepository.java
+  repository/ProjectStructureRepository.java
+  security/ProjectAuthorization.java
+  service/ProjectService.java
+  service/ProjectSnapshotService.java
+```
+
+Controller owns exactly the five agreed project/customer HTTP mappings and DTO envelopes. ProjectService owns live authorization, plan gating, validation, tenant-scoped source selection, transactions, idempotency and response assembly. ProjectSnapshotService is a transaction-mandatory internal copy collaborator; it validates a separate tree, stores the immutable initial snapshot and delegates ordered operational inserts. ProjectAuthorization reuses WorkspaceAuthorization and the existing subscription writable predicate; it does not add JWT roles or client impersonation. The existing WorkspaceMember exposes its trusted user ID for creator/idempotency scope, and WorkspaceSubscriptionRepository adds a scoped pessimistic read of the existing plan row. Global HTTP wiring adds only exact GET/POST route patterns and matching anonymous-401 classification.
+
+Project, ProjectCustomer and ProjectSnapshot have JPA mappings and safe public DTOs. ProjectState follows the guide's state vocabulary; ProjectType reuses the template enum. Narrow Spring Data repositories take workspace IDs for every consumer read. ProjectStructureRepository uses bound JDBC for the relational operational copy and batched scope-filtered counts; it never reads the source catalog during project retrieval. ProjectCreationRequests implements only creation's reference 24-hour idempotency persistence under the existing transaction/workspace lock. JDBC timestamps use the established explicit Timestamp conversion, not unsupported raw Instant binding. No unnecessary service interfaces, empty packages or global findById/findAll APIs.
+
+V8 is additive: customer, project, immutable initial snapshot, relational section/item and idempotency tables only. The snapshot table is justified by the requested independent initial identity/provenance and the guide's JSONB snapshot allowance; relational rows preserve the reference structure for T11. Immutable snapshot data and mutable future structure have distinct lifecycles. There are no answer/submission/assignment/contact tables and no lifecycle/update/preview commands. [Exact schema, API and authorization boundaries](README.md#t10-part-1--project-creation-and-independent-initial-snapshots).
+
+M2 remains In progress. T10 acceptance is recorded with actual evidence in IMPLEMENTATION_STATUS.md. Assigned-member reads await T13 assignment persistence; until then members see no project/customer data. General template overrides/structure modifications await the editor contract. No supplied specification, old migration, dependency or frontend UI source is modified. The existing HTTPS test runner is extended to exercise real save-as-draft creation and detail/reload for all three types; it changes test tooling only.
+
+
+### T10 exact file manifest
+
+Created (16):
+
+```text
+backend/src/main/java/com/ayaantrix/collector/project/controller/ProjectController.java
+backend/src/main/java/com/ayaantrix/collector/project/dto/ProjectDtos.java
+backend/src/main/java/com/ayaantrix/collector/project/entity/Project.java
+backend/src/main/java/com/ayaantrix/collector/project/entity/ProjectCustomer.java
+backend/src/main/java/com/ayaantrix/collector/project/entity/ProjectSnapshot.java
+backend/src/main/java/com/ayaantrix/collector/project/entity/ProjectState.java
+backend/src/main/java/com/ayaantrix/collector/project/repository/ProjectCreationRequests.java
+backend/src/main/java/com/ayaantrix/collector/project/repository/ProjectCustomerRepository.java
+backend/src/main/java/com/ayaantrix/collector/project/repository/ProjectRepository.java
+backend/src/main/java/com/ayaantrix/collector/project/repository/ProjectSnapshotRepository.java
+backend/src/main/java/com/ayaantrix/collector/project/repository/ProjectStructureRepository.java
+backend/src/main/java/com/ayaantrix/collector/project/security/ProjectAuthorization.java
+backend/src/main/java/com/ayaantrix/collector/project/service/ProjectService.java
+backend/src/main/java/com/ayaantrix/collector/project/service/ProjectSnapshotService.java
+backend/src/main/resources/db/migration/V8__create_project_foundation.sql
+backend/src/test/java/com/ayaantrix/collector/project/ProjectFoundationTests.java
+```
+
+Modified (18):
+
+```text
+backend/ARCHITECTURE.md
+backend/README.md
+backend/src/main/java/com/ayaantrix/collector/common/SecurityConfiguration.java
+backend/src/main/java/com/ayaantrix/collector/common/error/SecurityProblemHandler.java
+backend/src/main/java/com/ayaantrix/collector/workspace/entity/WorkspaceMember.java
+backend/src/main/java/com/ayaantrix/collector/workspace/repository/WorkspaceSubscriptionRepository.java
+backend/src/test/java/com/ayaantrix/collector/CollectorApplicationTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/AccountDeliveryOperationsTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/AccountRegistrationWorkflowTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/AgencySessionWorkflowTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/IdentityPersistenceTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/PasswordRecoveryWorkflowTests.java
+backend/src/test/java/com/ayaantrix/collector/auth/RealAuthenticationBrowserCheck.java
+backend/src/test/java/com/ayaantrix/collector/template/TemplateCatalogTests.java
+backend/src/test/java/com/ayaantrix/collector/workspace/WorkspaceFoundationTests.java
+docs/FRONTEND_PRODUCT_HANDOFF.md
+docs/IMPLEMENTATION_STATUS.md
+frontend/real-auth/browser-check.mjs
+```
+
+Final verification: clean verify **470 tests, zero failures/errors/skips** (all original 406 + 64 project cases), executable JAR; frontend **72 tests/3 files**, explicit real HTTPS **2 tests**, zero failures/errors/skips. The onboarding HTTPS case now additionally creates/reloads all three project types through the existing UI, including real customer creation/selection and frontend runtime response schemas, with MSW off. T10 Complete for creation/independent-snapshot acceptance; M2 In progress. T11/T12/T13 workflows remain deferred. No local T10 blocker, production provider/deployment acceptance or push.
+
+T10 implementation/regression commit: `0e14422`. Real HTTPS all-type wizard acceptance commit: `35f0c41`. No push.
