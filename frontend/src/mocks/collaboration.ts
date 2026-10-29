@@ -308,39 +308,57 @@ registerProductResolver((request, path, _search, body) => {
     touch(r, `Project ${action}`)
     return response({ project: r.project })
   }
-  if (action === 'client-preview' && method === 'GET')
-    return response({
-      project: {
-        id: p.id,
-        title: p.title,
-        projectType: p.projectType,
-        state: p.state,
-        dueDate: p.dueDate,
-        structureVersion: p.structureVersion,
-        agencyDisplayName: ctx.workspace.workspace.name,
-        aiEnabled: p.aiEnabled,
-      },
-      sections: r.structure
-        .filter((s) => s.enabled)
-        .map((s) => ({
-          id: s.id,
-          key: s.key,
-          title: s.title,
-          items: visibleItems([s], r.answers).map((i) => ({
-            id: i.id,
-            label: i.label,
-            type: i.type,
-            required: i.required,
-            instructions: i.instructions,
-            example: i.example,
-            state: i.state,
-            validation: i.validation,
+  if (action === 'client-preview' && method === 'GET') {
+    requireRule(
+      ctx.membership.role === 'OWNER',
+      403,
+      'FORBIDDEN',
+      'Owner preview only.',
+    )
+    const sections = r.structure
+      .filter((s) => s.enabled)
+      .map((s) => ({
+        id: s.id,
+        key: s.key,
+        title: s.title,
+        items: s.items
+          .filter((i) => i.enabled !== false && !i.visibleWhen)
+          .map((i) => ({
+            ...i,
+            state: 'NOT_STARTED',
+            visible: true,
             canEdit: false,
+            answer: null,
+            assets: [],
+            comments: [],
           })),
-        })),
-      progress: p.progress,
-      readOnly: true,
+      }))
+    const count = sections
+      .flatMap((s) => s.items)
+      .filter((i) => i.required).length
+    return response({
+      preview: {
+        project: {
+          id: p.id,
+          title: p.title,
+          projectType: p.projectType,
+          state: p.state,
+          dueDate: p.dueDate,
+          structureVersion: p.structureVersion,
+          agencyDisplayName: ctx.workspace.workspace.name,
+          aiEnabled: false,
+        },
+        sections,
+        progress: {
+          requiredTotal: count,
+          submittedRequired: 0,
+          approvedRequired: 0,
+          clientActionRequired: count,
+          optionalApproved: 0,
+        },
+      },
     })
+  }
   if (action === 'progress' && method === 'GET')
     return response({ progress: p.progress })
   if (action === 'activity' && method === 'GET')
@@ -537,6 +555,21 @@ registerProductResolver((request, path, _search, body) => {
     )
     if (!aid && method === 'POST') {
       requireRule(
+        body.clientId === p.clientId,
+        404,
+        'NOT_FOUND',
+        'The customer is unavailable for this project.',
+      )
+      const normalizedEmail = String(body.email || '')
+        .trim()
+        .toLowerCase()
+      requireRule(
+        !r.contacts.some((c) => c.email.toLowerCase() === normalizedEmail),
+        409,
+        'CONTACT_EXISTS',
+        'This project already has a contact with that email address.',
+      )
+      requireRule(
         body.name &&
           String(body.email).includes('@') &&
           new Date(String(body.accessExpiresAt)).getTime() > Date.now(),
@@ -547,7 +580,7 @@ registerProductResolver((request, path, _search, body) => {
       const c = {
         id: uid(),
         name: String(body.name),
-        email: String(body.email),
+        email: normalizedEmail,
         state: 'ACTIVE' as const,
         timezone: null,
         accessExpiresAt: String(body.accessExpiresAt),

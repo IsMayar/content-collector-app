@@ -95,6 +95,12 @@ class RealAuthenticationBrowserCheck {
                     assertThat(jdbc.queryForObject("select count(*) from collector.audit_logs where workspace_id=?",Integer.class,workspace)).isEqualTo(17);
                     assertThat(jdbc.queryForObject("select structure_version from collector.projects where workspace_id=? and project_type='WEBSITE'",Long.class,workspace)).isEqualTo(18);
                     assertThat(jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace)).isEqualTo(initialSnapshots);
+                    var beforePreview=jdbc.queryForList("select id,structure_version,version,state from collector.projects where workspace_id=? order by id",workspace);
+                    io.step(Map.of("action","workspace-contacts-preview"));
+                    assertThat(jdbc.queryForObject("select count(*) from collector.project_contacts where workspace_id=?",Integer.class,workspace)).isEqualTo(1);
+                    assertThat(jdbc.queryForList("select id,structure_version,version,state from collector.projects where workspace_id=? order by id",workspace)).isEqualTo(beforePreview);
+                    assertThat(jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace)).isEqualTo(initialSnapshots);
+                    assertThat(jdbc.queryForObject("select count(*) from collector.audit_logs where workspace_id=?",Integer.class,workspace)).isEqualTo(17);
                     io.step(Map.of("action","workspace-reload"));
                     clock.advance(331);io.step(Map.of("action","workspace-expired-access"));
                     // Isolated second tenant fixture; no T13 management/test-control HTTP endpoint is introduced.

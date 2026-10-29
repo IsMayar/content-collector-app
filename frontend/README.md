@@ -77,3 +77,7 @@ Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
 Real HTTPS acceptance is launched by the existing backend test, which now resolves `tests/integration/real-auth/browser-check.mjs`. From backend, run `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test`.
 
 Keep `.gitignore`, `.prettierrc.json`, package.json/package-lock.json, index.html and the Vite/TypeScript/ESLint/Playwright configuration files at the frontend root. They are active tooling inputs. `node_modules` and `dist` are generated dependency/build directories. Old root-level audit logs are disposable; current logs and TypeScript caches belong under ignored `.artifacts/`. Never move `.env.local` into source or commit it. See [ARCHITECTURE.md](ARCHITECTURE.md) for ownership and organization rules.
+
+## T12 customer/contact and preview integration
+
+Open a project’s Client access tab to list/create workspace customers, edit a business name with its current version, and save project contacts. Project creation already associates the selected customer. The Client preview tool is an authenticated, read-only owner view of the independent project structure; it sends no client answer, upload or submission writes. Real invitation/session workflows are deferred, with explanatory disabled controls. No new dependencies or runtime setup. [Architecture](ARCHITECTURE.md) and [exact acceptance/contracts](../docs/T12_CLIENT_CONTACTS_AND_PREVIEW.md).

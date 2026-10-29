@@ -760,3 +760,60 @@ test('settings owns billing and selected templates open project details directly
     ).toBeVisible()
   }
 })
+
+test('T12 customers, explicit project contacts and preview keep their boundaries', async ({
+  page,
+}) => {
+  await signIn(page)
+  await nav(page, 'Projects')
+  await page
+    .getByRole('link', { name: 'Lamar Dental website', exact: true })
+    .click()
+  await mainReady(page)
+  await agencyReadsReady(page)
+  await page.getByRole('link', { name: 'Client access', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Edit Lamar Dental', exact: true })
+    .click()
+  await page
+    .getByLabel('Business name', { exact: true })
+    .fill('Lamar Dental updated')
+  const changed = page.waitForResponse(
+    (r) =>
+      r.request().method() === 'PATCH' &&
+      new URL(r.url()).pathname.includes('/clients/'),
+  )
+  await page
+    .getByRole('button', { name: 'Save customer name', exact: true })
+    .click()
+  expect((await changed).status()).toBe(200)
+  await expect(
+    page.getByText('Customer updated.', { exact: true }),
+  ).toBeVisible()
+  await agencyReadsReady(page)
+  await page.getByRole('link', { name: 'Client preview', exact: true }).click()
+  await expect(page.getByText(/Read-only owner preview/)).toBeVisible()
+  await expect(page.locator('.preview-item').first()).toBeVisible()
+  const writes: string[] = []
+  page.on('request', (request) => {
+    if (
+      new URL(request.url()).pathname.startsWith('/api/') &&
+      request.method() !== 'GET'
+    )
+      writes.push(request.method())
+  })
+  for (const button of await page
+    .getByRole('navigation', { name: 'Preview sections', exact: true })
+    .getByRole('button')
+    .all()) {
+    await button.click()
+    for (const field of await page
+      .locator(
+        '.preview-item input,.preview-item textarea,.preview-item select',
+      )
+      .all())
+      await expect(field).toBeDisabled()
+  }
+  expect(writes).toEqual([])
+  await noOverflow(page)
+})

@@ -1,6 +1,7 @@
 import { AnalyticsPanel } from '@/features/analytics/components/AnalyticsPanel'
 import { useProjectDetail } from '@/features/projects/api/projectsApi'
-import { ContactsPanel } from '@/features/projects/components/AccessPanels'
+import { CustomerPanel } from '@/features/clients/components/CustomerPanel'
+import { ContactsPanel } from '@/features/clients/components/ProjectContactsPanel'
 import { AssignmentsPanel } from '@/features/projects/components/AssignmentsPanel'
 import {
   CompletionPanel,
@@ -119,7 +120,7 @@ export function ProjectPage() {
             </nav>
             <nav className="project-tools" aria-label="Project tools">
               {[
-                ['preview', 'Client preview'],
+                ...(owner ? [['preview', 'Client preview']] : []),
                 ...(owner
                   ? [
                       ['assignments', 'Team'],
@@ -178,6 +179,7 @@ export function ProjectPage() {
           ].includes(tab) ||
             ([
               'access',
+              'preview',
               'assignments',
               'reminders',
               'completion',
@@ -208,8 +210,13 @@ export function ProjectPage() {
           {tab === 'completion' && owner && (
             <CompletionPanel root={root} project={p} />
           )}
-          {tab === 'preview' && <PreviewPanel root={root} />}
-          {tab === 'access' && owner && <ContactsPanel root={root} />}
+          {tab === 'preview' && owner && <PreviewPanel root={root} />}
+          {tab === 'access' && owner && (
+            <>
+              <CustomerPanel workspaceId={id} clientId={p.clientId} />
+              <ContactsPanel root={root} clientId={p.clientId} />
+            </>
+          )}
           {tab === 'assignments' && owner && <AssignmentsPanel root={root} />}
           {tab === 'reminders' && owner && <RemindersPanel root={root} />}
           {tab === 'review' && p.permissions.canReview && (

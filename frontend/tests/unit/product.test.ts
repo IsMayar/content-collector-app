@@ -54,6 +54,32 @@ async function enterClient() {
   return json('client-access/exchange', 'POST', { token: 'client-demo' }, false)
 }
 describe('tenant-scoped project foundations', () => {
+  it('preview treats omitted enabled flags as enabled and returns only safe schema data', async () => {
+    login()
+    const record = productDb.projects[demoProjectId]
+    const item = record.structure[0].items[0]
+    delete item.enabled
+    const data = await json<{
+      preview: {
+        sections: {
+          items: {
+            id: string
+            answer: null
+            canEdit: boolean
+            comments: unknown[]
+          }[]
+        }[]
+      }
+    }>(`${projectRoot}/client-preview`)
+    const projected = data.preview.sections
+      .flatMap((s) => s.items)
+      .find((i) => i.id === item.id)
+    expect(projected).toBeDefined()
+    expect(projected?.answer).toBeNull()
+    expect(projected?.canEdit).toBe(false)
+    expect(projected?.comments).toEqual([])
+  })
+
   it('initializes a new workspace without inheriting another tenant’s usage or logo', async () => {
     login('unverified@studio.example')
     mockState.accounts['unverified@studio.example'].user.verified = true

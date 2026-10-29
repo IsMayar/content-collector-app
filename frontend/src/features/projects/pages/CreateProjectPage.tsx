@@ -1,3 +1,4 @@
+import { env } from '@/config/env'
 import { Steps } from '@/features/projects/components/ProjectSteps'
 import type { Client, Project } from '@/features/projects/types/project.types'
 import { projectTypes } from '@/features/projects/types/projectOptions'
@@ -122,6 +123,7 @@ export function CreateProjectPage() {
         const contact = await command.run<{ contact: { id: string } }>(
           `${root}/contacts`,
           {
+            clientId: project.clientId,
             name: newClient
               ? values.contactName || values.businessName
               : customer?.contactName || customer?.businessName,
@@ -529,14 +531,15 @@ export function CreateProjectPage() {
                 <input
                   type="checkbox"
                   checked={invite}
-                  disabled={!email}
+                  disabled={!env.mocksEnabled || !email}
                   onChange={(e) => setInvite(e.target.checked)}
                 />
                 Send client invitation after creating project
               </label>
               <p className="subtle">
-                Sending an invitation publishes the project. Client access
-                expires after 30 days and can be managed in project access.
+                {env.mocksEnabled
+                  ? 'Sending an invitation publishes the demo project. Client access expires after 30 days.'
+                  : 'Save a draft to continue. Invitation sending and real client sessions are not enabled yet.'}
               </p>
             </Panel>
           </div>

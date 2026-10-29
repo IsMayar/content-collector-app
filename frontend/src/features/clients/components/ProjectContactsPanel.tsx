@@ -1,5 +1,10 @@
+import { env } from '@/config/env'
+import {
+  useProjectContacts,
+  useClientCommands,
+} from '@/features/clients/api/clientsApi'
+import { contactCreateSchema } from '@/features/clients/schemas/clientSchema'
 import type { ProjectContact } from '@/features/projects/types/project.types'
-import { useData } from '@/services/api/resourceApi'
 import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
 import { Modal } from '@/shared/components/Modal'
 import {
@@ -9,13 +14,18 @@ import {
   Panel,
   QueryState,
 } from '@/shared/components/ProductUI'
-import { useCommand } from '@/shared/hooks/useCommand'
 import { useState } from 'react'
 import { Link } from 'react-router'
 
-export function ContactsPanel({ root }: { root: string }) {
-  const q = useData<{ data: ProjectContact[] }>(`${root}/contacts`),
-    command = useCommand()
+export function ContactsPanel({
+  root,
+  clientId,
+}: {
+  root: string
+  clientId: string
+}) {
+  const q = useProjectContacts(root),
+    command = useClientCommands()
   const [open, setOpen] = useState(false),
     [link, setLink] = useState(''),
     [name, setName] = useState(''),
@@ -43,9 +53,15 @@ export function ContactsPanel({ root }: { root: string }) {
           client’s organisation.
         </p>
         <button className="primary-button" onClick={() => setOpen(true)}>
-          Invite client ＋
+          {env.mocksEnabled ? 'Invite client ＋' : 'Add project contact'}
         </button>
       </div>
+      {!env.mocksEnabled && (
+        <Notice>
+          Contact records do not issue a client session. Invitation sending and
+          access revocation require the later access workflow.
+        </Notice>
+      )}
       <QueryState query={q}>
         <div className="reference-table-wrap">
           <table className="reference-table">
@@ -80,14 +96,22 @@ export function ContactsPanel({ root }: { root: string }) {
                     <div className="actions">
                       <button
                         className="text-link"
-                        disabled={command.pending || c.state !== 'ACTIVE'}
+                        disabled={
+                          !env.mocksEnabled ||
+                          command.pending ||
+                          c.state !== 'ACTIVE'
+                        }
                         onClick={() => void invite(c.id)}
                       >
                         Send / resend invite
                       </button>
                       <button
                         className="danger-link"
-                        disabled={command.pending || c.state !== 'ACTIVE'}
+                        disabled={
+                          !env.mocksEnabled ||
+                          command.pending ||
+                          c.state !== 'ACTIVE'
+                        }
                         onClick={() => setRevoke(c)}
                       >
                         Revoke
@@ -110,7 +134,11 @@ export function ContactsPanel({ root }: { root: string }) {
       )}
       {open && (
         <Modal
-          title="Invite client to this project"
+          title={
+            env.mocksEnabled
+              ? 'Invite client to this project'
+              : 'Add project contact'
+          }
           drawer
           pending={command.pending}
           onClose={() => setOpen(false)}
@@ -122,23 +150,34 @@ export function ContactsPanel({ root }: { root: string }) {
               onSubmit={async (e) => {
                 e.preventDefault()
                 const f = new FormData(e.currentTarget)
+                const parsed = contactCreateSchema.safeParse({
+                  name,
+                  email,
+                  expiry: String(f.get('expiry')),
+                })
+                if (!parsed.success) {
+                  setMessage('Enter a name, valid email and access expiry.')
+                  return
+                }
                 let id = created
                 if (!id) {
-                  const result = await command.run<{ contact: ProjectContact }>(
-                    `${root}/contacts`,
-                    {
-                      name,
-                      email,
-                      accessExpiresAt: new Date(
-                        String(f.get('expiry')),
-                      ).toISOString(),
-                    },
-                  )
+                  const result = await command.createContact(root, {
+                    clientId,
+                    name,
+                    email,
+                    accessExpiresAt: new Date(
+                      String(f.get('expiry')),
+                    ).toISOString(),
+                  })
                   if (!result) return
                   id = result.contact.id
                   setCreated(id)
                 }
-                if (await invite(id)) {
+                if (!env.mocksEnabled || (await invite(id))) {
+                  if (!env.mocksEnabled)
+                    setMessage(
+                      'Contact saved. Invitations and client access are not enabled yet.',
+                    )
                   setOpen(false)
                   setCreated('')
                   setName('')
@@ -191,27 +230,38 @@ export function ContactsPanel({ root }: { root: string }) {
               )}
               <ErrorNotice error={command.error} />
             </form>
-            <section className="email-preview">
-              <h3>Email invitation preview</h3>
-              <div className="email-preview-card">
-                <strong className="email-brand">▣ Content Collector</strong>
-                <h4>Hi {name || 'there'},</h4>
-                <p>You’re invited to share content for your project.</p>
-                <div className="reference-info">
-                  <strong>You’ll be able to:</strong>
-                  <p>✓ Provide answers and files</p>
-                  <p>✓ Submit for agency review</p>
-                  <p>✓ Read feedback and revise</p>
+            {env.mocksEnabled ? (
+              <section className="email-preview">
+                <h3>Email invitation preview</h3>
+                <div className="email-preview-card">
+                  <strong className="email-brand">▣ Content Collector</strong>
+                  <h4>Hi {name || 'there'},</h4>
+                  <p>You’re invited to share content for your project.</p>
+                  <div className="reference-info">
+                    <strong>You’ll be able to:</strong>
+                    <p>✓ Provide answers and files</p>
+                    <p>✓ Submit for agency review</p>
+                    <p>✓ Read feedback and revise</p>
+                  </div>
+                  <p>
+                    You’ll only see this project and its related content. You
+                    won’t have access to other projects or agency data.
+                  </p>
+                  <small>
+                    Invitation recipient: {email || 'Your client’s email'}
+                  </small>
                 </div>
-                <p>
-                  You’ll only see this project and its related content. You
-                  won’t have access to other projects or agency data.
-                </p>
-                <small>
-                  Invitation recipient: {email || 'Your client’s email'}
-                </small>
-              </div>
-            </section>
+              </section>
+            ) : (
+              <section className="email-preview">
+                <h3>Contact record only</h3>
+                <Notice>
+                  Saving this contact does not send email, create an agency
+                  account or open the client portal. Invitation and
+                  client-session workflows are not available yet.
+                </Notice>
+              </section>
+            )}
           </div>
           <div className="modal-actions">
             <button className="secondary-button" onClick={() => setOpen(false)}>
@@ -222,7 +272,7 @@ export function ContactsPanel({ root }: { root: string }) {
               form="client-invite-form"
               disabled={command.pending}
             >
-              Send invitation
+              {env.mocksEnabled ? 'Send invitation' : 'Save contact'}
             </button>
           </div>
         </Modal>

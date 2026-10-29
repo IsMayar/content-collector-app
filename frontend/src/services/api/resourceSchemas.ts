@@ -1,3 +1,8 @@
+import { previewSchema } from '@/features/projects/schemas/previewSchema'
+import {
+  customerSchema,
+  projectContactSchema,
+} from '@/features/clients/schemas/clientSchema'
 import { answer } from '@/features/client/schemas/answerSchema'
 import { progress, project } from '@/features/projects/schemas/projectSchema'
 import {
@@ -78,5 +83,10 @@ export function validateProductRead(path: string, data: unknown) {
         ),
       }),
     })
+  if (/^workspaces\/[^/]+\/clients(?:\?.*)?$/.test(path))
+    schema = z.object({ data: z.array(customerSchema), page })
+  if (/^workspaces\/[^/]+\/projects\/[^/]+\/contacts$/.test(route))
+    schema = z.object({ data: z.array(projectContactSchema) })
+  if (route.endsWith('/client-preview')) schema = previewSchema
   return schema.safeParse(data)
 }

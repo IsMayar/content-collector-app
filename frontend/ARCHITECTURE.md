@@ -29,6 +29,7 @@ src/
       schemas/projectSchema.ts
       types/project.types.ts
     workspace/                  onboarding, dashboard and workspace types
+    clients/                    workspace customers, project contacts, schemas/types/API commands
     templates/                  library/editor pages, preview components, template types
     structure-editor/           structure/item editors, schema and field definitions
     client/                     client pages, editors, upload helpers, schemas/types
@@ -63,3 +64,11 @@ The former src/api, src/components, src/lib and mixed-feature page modules are r
 All unit/component tests are in tests/unit, with their shared setup there. Standalone suites remain tests/e2e, tests/pwa and tests/integration/real-auth. Unit tests are typechecked by tsconfig.app; browser/tooling TypeScript is checked by tsconfig.node. Configurations and index.html remain at the root. The @/ alias still resolves strictly to src. Generated logs/caches/traces stay under ignored .artifacts; dependencies and build output stay in ignored node_modules/dist.
 
 Use scripts/Verify-Frontend.ps1 for typecheck, build, lint, formatting and unit checks; -Browser -Pwa adds both browser suites. Run suites serially on this machine. The real HTTPS runner imports the current source paths and is launched through the existing backend acceptance test. No application token or raw customer content is written to persistent browser storage, logs or version control.
+
+## T12 contacts and owner preview
+
+features/clients owns clientsApi typed query/command adapters, CustomerPanel (RHF/Zod list/create/versioned name edit), ProjectContactsPanel, clientSchema and customer/contact DTOs. Project types retain compatibility type re-exports only. No duplicate entity/transport/cache or extra navigation route. Existing project creation selects/creates the customer; project access hosts management.
+
+features/projects owns previewApi, previewSchema, preview.types and PreviewPanel. The API envelope is {preview: ...}; a deliberate null-answer preview variant reuses ItemDefinition and the client TypedValue renderer without pretending an answer row exists. TypedValue preview mode never mounts UploadQueue. Fields are disabled, repeater rows are illustrative, section switching stays local, and there are no draft/AI/submission commands. The owner-only project tab and direct-tab boundary agree.
+
+MSW uses the same HTTP paths/envelopes and the same default-enabled rule as real structure projection. Real contact save creates metadata only; existing invitation/revoke demonstrations remain explicitly mock-only, with disabled controls/explanation for real integration. No mocked production fallback. [Contracts, access rules, final verification and deferred workflows](../docs/T12_CLIENT_CONTACTS_AND_PREVIEW.md).

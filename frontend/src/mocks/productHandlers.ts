@@ -292,7 +292,7 @@ function foundation(
     if (method === 'POST') {
       agencyActor(request, workspaceId, true, true)
       requireRule(
-        body.businessName && body.email,
+        body.businessName,
         422,
         'VALIDATION',
         'Customer name and contact email are required.',
@@ -301,12 +301,35 @@ function foundation(
         id: uid(),
         businessName: String(body.businessName),
         contactName: String(body.contactName || ''),
-        email: String(body.email),
+        email: body.email ? String(body.email).trim().toLowerCase() : null,
         version: 1,
       }
       actor.workspace.clients.push(client)
       return response({ client }, 201)
     }
+  }
+  if (resource === 'clients' && resourceId && method === 'PATCH') {
+    agencyActor(request, workspaceId, true, true)
+    const customer = actor.workspace.clients.find((c) => c.id === resourceId)
+    requireRule(customer, 404, 'NOT_FOUND', 'Customer unavailable.')
+    checkVersion(customer.version, body.expectedVersion)
+    requireRule(
+      typeof body.businessName === 'string' &&
+        body.businessName.trim().length > 0 &&
+        body.businessName.length <= 200,
+      400,
+      'VALIDATION_FAILED',
+      'Enter a business name.',
+    )
+    customer.businessName = String(body.businessName).trim()
+    customer.version++
+    for (const record of Object.values(productDb.projects))
+      if (
+        record.project.workspaceId === workspaceId &&
+        record.project.clientId === customer.id
+      )
+        record.project.clientBusinessName = customer.businessName
+    return response({ client: customer })
   }
   if (resource === 'templates' && !resourceId) {
     if (method === 'GET')

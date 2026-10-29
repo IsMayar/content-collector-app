@@ -10,12 +10,14 @@ export function TypedValue({
   onChange,
   disabled,
   root,
+  preview = false,
 }: {
   item: Pick<ClientItem, 'id' | 'label' | 'type' | 'validation' | 'assets'>
   value: AnswerValue
   onChange: (v: AnswerValue) => void
   disabled: boolean
   root: string
+  preview?: boolean
 }) {
   const data = value as unknown as Record<string, unknown>
   const rules = item.validation
@@ -106,7 +108,14 @@ export function TypedValue({
       </fieldset>
     )
   if (item.type === 'FILE' || item.type === 'IMAGE')
-    return (
+    return preview ? (
+      <p className="disabled-preview">
+        {item.type === 'IMAGE' ? 'Image upload' : 'File upload'} ·{' '}
+        {rules.minFiles || 0}–{rules.maxFiles || 1} files ·{' '}
+        {rules.allowedExtensions?.join(', ') || 'Supported file types'}. Uploads
+        are unavailable in preview.
+      </p>
+    ) : (
       <UploadQueue
         root={root}
         itemId={item.id}
@@ -135,7 +144,11 @@ export function TypedValue({
                   ),
                 })
               if (column.type === 'IMAGE')
-                return (
+                return preview ? (
+                  <p key={column.key}>
+                    {column.label}: image upload unavailable in preview.
+                  </p>
+                ) : (
                   <div key={column.key}>
                     <h3>{column.label}</h3>
                     <UploadQueue

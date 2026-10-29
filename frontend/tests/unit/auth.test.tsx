@@ -31,8 +31,12 @@ async function signIn(
   email = 'owner@studio.example',
   password = demoPassword,
 ) {
-  await user.type(await screen.findByLabelText('Email address'), email)
-  await user.type(screen.getByLabelText('Password', { exact: true }), password)
+  // Exercise the real paste/input path without dozens of unrelated per-key
+  // React renders. Keyboard entry/focus is covered by the browser suite.
+  await user.click(await screen.findByLabelText('Email address'))
+  await user.paste(email)
+  await user.click(screen.getByLabelText('Password', { exact: true }))
+  await user.paste(password)
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
 }
 describe('safe return destinations', () => {

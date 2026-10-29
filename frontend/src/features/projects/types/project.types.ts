@@ -13,22 +13,10 @@ export interface Assignment {
   canReview: boolean
   canExport: boolean
 }
-export interface Client {
-  id: UUID
-  businessName: string
-  contactName: string | null
-  email: string | null
-  version: number
-}
-export interface ProjectContact {
-  id: UUID
-  name: string
-  email: string
-  state: 'ACTIVE' | 'REVOKED'
-  timezone: Timezone | null
-  accessExpiresAt: Instant
-  emailRemindersEnabled: boolean
-}
+export type {
+  Client,
+  ProjectContact,
+} from '@/features/clients/types/client.types'
 export interface Progress {
   requiredTotal: number
   submittedRequired: number

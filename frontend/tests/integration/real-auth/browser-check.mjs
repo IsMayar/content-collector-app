@@ -736,6 +736,120 @@ async function command(input) {
       assert.ok(!serviceWorkerResponse, 'MSW intercepted structure acceptance')
       break
     }
+    case 'workspace-contacts-preview': {
+      settings.previewProject = new URL(page.url()).pathname.split('/').at(-1)
+      await page
+        .getByRole('link', { name: 'Client access', exact: true })
+        .click()
+      await expect(
+        page.getByRole('heading', { name: 'Customers', exact: true }),
+      ).toBeVisible()
+      await page
+        .getByRole('button', {
+          name: 'Edit Browser project customer',
+          exact: true,
+        })
+        .click()
+      await page
+        .getByLabel('Business name', { exact: true })
+        .fill('Updated browser customer')
+      const renamed = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname.includes('/clients/') &&
+          r.request().method() === 'PATCH',
+      )
+      await page
+        .getByRole('button', { name: 'Save customer name', exact: true })
+        .click()
+      assert.equal((await renamed).status(), 200)
+      await expect(
+        page.getByText('Customer updated.', { exact: true }),
+      ).toBeVisible()
+      await page
+        .getByRole('button', { name: 'Add project contact', exact: true })
+        .click()
+      const dialog = page.getByRole('dialog')
+      await dialog
+        .getByLabel('Contact name', { exact: true })
+        .fill('Browser contact')
+      await dialog
+        .getByLabel('Contact email', { exact: true })
+        .fill('browser-contact@example.test')
+      const created = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname.endsWith('/contacts') &&
+          r.request().method() === 'POST',
+      )
+      await dialog
+        .getByRole('button', { name: 'Save contact', exact: true })
+        .click()
+      assert.equal((await created).status(), 201)
+      await expect(
+        page.getByText('browser-contact@example.test', { exact: true }),
+      ).toBeVisible()
+      const writes = []
+      const observeWrites = (req) => {
+        if (
+          new URL(req.url()).pathname.startsWith('/api/') &&
+          !['GET', 'HEAD', 'OPTIONS'].includes(req.method()) &&
+          !new URL(req.url()).pathname.startsWith('/api/v1/auth/')
+        )
+          writes.push(req.method() + ' ' + new URL(req.url()).pathname)
+      }
+      page.on('request', observeWrites)
+      try {
+        await page
+          .getByRole('link', { name: 'Client preview', exact: true })
+          .click()
+        await expect(page.getByText(/Read-only owner preview/)).toBeVisible()
+        await expect(
+          page
+            .getByRole('heading', { name: 'Browser WEBSITE', exact: true })
+            .first(),
+        ).toBeVisible()
+        await page
+          .getByRole('button', { name: 'Concurrent section edit', exact: true })
+          .click()
+        await expect(
+          page.getByRole('heading', { name: /Preserved instructions/ }),
+        ).toHaveCount(0)
+        await expect(
+          page.getByText('Preserved instructions', { exact: true }),
+        ).toBeVisible()
+        assert.ok(
+          (await page.locator('.preview-item').count()) === 7,
+          'Preview did not filter the unanswered conditional item',
+        )
+        for (const control of await page
+          .locator(
+            '.preview-item input,.preview-item textarea,.preview-item select',
+          )
+          .all())
+          await expect(control).toBeDisabled()
+        await page.setViewportSize({ width: 390, height: 844 })
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+          ),
+          'Mobile preview overflows',
+        )
+        await page.reload()
+        await waitState('authenticated')
+        await expect(page.getByText(/Read-only owner preview/)).toBeVisible()
+        await expect(
+          page.getByRole('button', {
+            name: 'Concurrent section edit',
+            exact: true,
+          }),
+        ).toBeVisible()
+        assert.deepEqual(writes, [], 'Preview persisted application writes')
+      } finally {
+        page.off('request', observeWrites)
+        await page.setViewportSize({ width: 1440, height: 1000 })
+      }
+      assert.ok(!serviceWorkerResponse, 'MSW intercepted T12 acceptance')
+      break
+    }
     case 'workspace-reload': {
       await page.reload()
       await waitState('authenticated')
@@ -772,6 +886,22 @@ async function command(input) {
       break
     }
     case 'workspace-isolation': {
+      for (const suffix of ['client-preview', 'contacts'])
+        assert.equal(
+          (
+            await run(
+              'workspaces/' +
+                input.other +
+                '/projects/' +
+                settings.previewProject +
+                '/' +
+                suffix,
+            )
+          ).status,
+          404,
+          'Foreign T12 resource exposed',
+        )
+
       for (const id of [input.other, '00000000-0000-0000-0000-000000000001']) {
         assert.ok(
           (await run('workspaces/' + id)).status === 404,
