@@ -129,7 +129,7 @@ Controllers handle HTTP/DTO validation, service owns live authorization/locking/
 - **PASS:** explicit `-Dtest=RealAuthenticationBrowserCheck`: **2 tests, 0 failures/errors/skips**, real HTTPS Edge/Vite/Spring/PostgreSQL, MSW off. Existing lifecycle and all-three-type wizard acceptance retained; added all-eight-type structure editor, keyboard reorder, dependency rejection, repeaters, enabled states, two-tab 409/currentVersion/input retention/refresh/retry and persistence acceptance. These 2 tests are separate from the default 554.
 - An earlier full backend run had one stale Flyway-history count assertion (8 instead of 9); corrected the expected migration count and reran the exact clean verify successfully. No test deleted, disabled or relaxed. Existing denial coverage was narrowed only for the newly authorized sections route; unsupported descendant DELETE/lifecycle/preview routes remain denied.
 - Protected source check: no changes to supplied docs/spec, V1–V8, starter template resource, backend pom, frontend package manifest or resolved lockfile. No new dependencies, credentials, application provider calls, remote push or backend submission workflow.
-- Ignored local evidence: backend/target-t11-verify-final.log, backend/target-t11-focused.log, backend/target-t11-browser.log; frontend/audit-t11-{typecheck,build,lint,format,browser-format,tests}.log. Default Surefire XML totals independently summed to 554/0/0/0 after final clean.
+- Ignored local evidence: backend/target-t11-verify-final.log, backend/target-t11-focused.log, backend/target-t11-browser.log; frontend/.artifacts/logs/t11/audit-t11-{typecheck,build,lint,format,browser-format,tests}.log. Default Surefire XML totals independently summed to 554/0/0/0 after final clean.
 - Full mock visual/PWA/browser suites and hosted deployment/provider acceptance were not rerun for this backend-scoped change. Real HTTPS integration was run. Existing T04 hosted CI, T05 resend/provider and T06 deployment/TLS/proxy/key/retention gates remain pending.
 
 
@@ -183,3 +183,6 @@ frontend/src/test/product.test.ts
 
 Implementation/regression commit: `995728c`. Frontend/real HTTPS integration commit: `2ca9345`. Documentation is committed separately; no push.
 
+
+
+The later resume/cleanup preserved this original implementation and moved its HTTPS harness into frontend/tests/integration/real-auth. The original changed-file inventory above records the implementation commits. [Current organization, test-fixture correction, file moves and latest verification](T11_RESUME_AND_FRONTEND_ORGANIZATION.md).
