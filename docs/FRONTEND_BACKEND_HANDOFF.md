@@ -264,3 +264,10 @@ Final resume evidence: **85 focused T11 cases**, **555 backend clean-verify test
 ## 29 October — frontend organization and T11 Part 2
 
 HTTP paths/DTOs and agency/client reducer identities are unchanged. Source locations now follow frontend/ARCHITECTURE.md: app/router/AppRouter.tsx, app/store/store.ts, services/api/{baseApi,baseQuery,resourceApi,resourceSchemas}, feature-owned api/components/pages/schemas/types and tests/unit. Mocks remain explicit and separate. T11 semantic mutation safety now evaluates the entire structure, including collected visibility dependents; 409 REOPEN_REQUIRED also applies to affected drafts and section enable transitions even with reopenAffected=true. No reopen/submission endpoint exists. [Current rules and future T17/T22 transaction boundary](T11_PART2.md).
+
+
+## T12 Part 1 — real customer/contact and owner-preview integration
+
+Customer GET/POST contracts are unchanged; PATCH clients/{id} accepts businessName/expectedVersion only. Project contact GET/POST follows api_catalog.json, including required clientId matching the project's existing customer and a future expiry no later than 90 days. A saved contact issues no invitation/session; real invite/revoke UI remains disabled until the later workflow. Duplicate project email returns CONTACT_EXISTS; stale customer name returns VERSION_CONFLICT/currentVersion.
+
+GET projects/{id}/client-preview now returns the catalog's {preview: ...} envelope. It is owner-only and uses the independent project structure and shared ItemDefinition renderer. The explicit preview variant has answer=null, canEdit=false, empty assets/comments, no revision pointer, AI off and empty-preview counts; no Answer record/savedAt is fabricated. Disabled and unanswered conditional items are omitted until real draft visibility exists. This is not the authenticated client checklist/session contract. Source lives under features/clients and the project preview api/schemas/types/components; shared RTK transport/cache remains unchanged. [Complete contracts, rules and evidence](T12_CLIENT_CONTACTS_AND_PREVIEW.md).

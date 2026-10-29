@@ -476,7 +476,7 @@ Milestone status: In progress
 | T09  | Template JSON validator and catalog seed     | All ten built-ins validate                          | Complete    |
 | T10  | Project creation for all three types         | Template snapshot remains independent               | Complete    |
 | T11  | Section and item editor and reorder          | Keyboard reorder and structure conflicts work       | In progress |
-| T12  | Client contacts and read-only client preview | Preview exposes no live client session              | Not started |
+| T12  | Client contacts and read-only client preview | Preview exposes no live client session              | Complete    |
 | T13  | Team invitations and project assignments     | Seat reservation and reviewer/export flags enforced | Not started |
 
 ### Milestone M3 Client collection
@@ -697,3 +697,20 @@ Earlier responsive 71/72 and HTTPS 1/2 runs failed and are documented, not count
 **Full T11 remains In progress** for real draft revalidation and submitted/approved revision reopening acceptance requiring T14–T17/T22 persistence. Part 2's bounded safety/integration work is verified. **M2 remains In progress**; T12/T13 and client/review workflows were not implemented. T04 hosted CI, T05 provider/resend and T06 deployment/proxy/key/retention gates remain pending. No remote push or full-MVP claim.
 
 Implementation commits: `4914c1d` frontend organization/regression readiness; `cbfa778` backend collected-work policy/tests. Documentation follows in a separate commit. No push.
+
+
+## T12 Part 1 — client contacts and read-only owner preview — 29 October 2026
+
+**T12 Complete** for its documented roadmap acceptance: client contacts and a preview that exposes no live client session. **M2 remains In progress.** [Exact scope decisions, API/DTO contracts, package trees, migration, files, commands and verification](T12_CLIENT_CONTACTS_AND_PREVIEW.md). T01–T11 history and all later task statuses are preserved.
+
+Reused T10 ProjectCustomer/list/create and clientId association. Added only catalog customer-name PATCH with numeric expectedVersion, scoped contact GET/POST, and authenticated owner preview GET. Additive V10 creates project_contacts and a composite project/customer FK; existing rows survive V9 upgrade, V1–V9/original specs/templates/dependency resolution remain unchanged. Live JWT/session/workspace/member/plan/project authorization and CSRF/CORS/default-deny are preserved. Same project/email duplicates reject, foreign or unrelated association is hidden, and a contact row creates no account/member/invitation/session/email.
+
+Preview reads independent operational structure with stable ordered IDs and shared client field presentation; disabled and unanswered conditional requests are omitted. Explicit null-answer preview projection, empty assets/comments, canEdit=false and no AI/upload/submit APIs prevent impersonation or persistence. All 24 project classes remain in proper subpackages. Frontend features/clients owns query/commands, schemas/types and management components; project preview owns its API/schema/types and uses TypedValue's safe preview mode. Real invitation/revoke controls are explicitly deferred; mock demos remain opt-in with no production fallback.
+
+**Final PASS:** focused T12 **40/40**; backend clean verify **620 tests, 0 failures/errors/skips** (all 580 prior plus 40), including existing T11 110-case regression; frontend **87/87 in 4 files** (74 prior plus 13); strict TypeScript/production build/zero-warning lint/format passed; complete desktop/tablet/phone browser suite **75/75, 0 failed** (all 72 prior plus 3); production PWA **1/1**; final real HTTPS/MSW-off **2/2**, zero failures/errors/skips. PostgreSQL isolation/concurrent duplicates/rollback/FKs/V9 upgrade/restart, Flyway/Hibernate validation and executable JAR passed. Original packaged template bytes verified. The existing bundle-size advisory remains.
+
+Failed attempts are documented and not counted as passes. New mock preview default-enabled mismatch caused 3 new responsive failures with the prior 72 passing; fixed and covered by an added HTTP regression. Auth unit per-character typing hit two existing 5-second budgets; normal paste/input now exercises the same real form/API without changing assertions or timeouts, while full browser keyboard coverage remains. The final whole wrapper and final HTTPS rerun passed after all source changes. No arbitrary sleeps, skipped tests or security relaxation.
+
+No remaining local T12 acceptance blocker. T11 remains In progress for real draft/revision reopening dependencies. T13 team invitations/assignments, T14 invitation delivery/exchange/client sessions, T15–T17 collection/review and T22 lifecycle were not implemented. T04 hosted CI, T05 provider/resend and T06 production deployment/proxy/key/retention gates remain pending. No full-MVP/provider/deployment claim or remote push. Backend foundation commit: `73aa4a4`; frontend/integration and documentation are separate commits.
+
+T12 implementation commits: `73aa4a4` backend and `f5af935` frontend/real-browser integration. Exact file manifest and final evidence are in T12_CLIENT_CONTACTS_AND_PREVIEW.md. No push.
