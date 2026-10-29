@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test'
 export default defineConfig({
-  testDir: './pwa',
-  outputDir: 'pwa-test-results',
+  testDir: './tests/pwa',
+  outputDir: '.artifacts/playwright/pwa',
   workers: 1,
   use: {
     baseURL: 'http://127.0.0.1:5175',

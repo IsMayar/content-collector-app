@@ -1,3 +1,5 @@
+.artifacts/
+# Compatibility with older local outputs; new runs use .artifacts/playwright/.
 test-results/
 playwright-report/
 pwa-test-results/

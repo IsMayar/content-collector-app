@@ -116,13 +116,13 @@ async function command(input) {
   switch (input.action) {
     case 'start': {
       settings = input
-      process.chdir(fileURLToPath(new URL('..', import.meta.url)))
+      process.chdir(fileURLToPath(new URL('../../..', import.meta.url)))
       process.env.VITE_ENABLE_MOCKS = 'false'
       process.env.VITE_API_BASE_URL = '/api/v1/'
       process.env.VITE_API_PROXY_TARGET = input.backend
       server = await createServer({
         configFile: fileURLToPath(
-          new URL('../vite.config.ts', import.meta.url),
+          new URL('../../../vite.config.ts', import.meta.url),
         ),
         mode: 'real-auth',
         logLevel: 'silent',

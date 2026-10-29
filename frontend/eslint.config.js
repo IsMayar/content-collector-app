@@ -9,15 +9,13 @@ export default tseslint.config(
       'dist/**',
       'node_modules/**',
       'public/mockServiceWorker.js',
-      'test-results/**',
-      'playwright-report/**',
-      'pwa-test-results/**',
+      '.artifacts/**',
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['real-auth/**/*.mjs'],
+    files: ['tests/integration/**/*.mjs'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {

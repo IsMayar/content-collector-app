@@ -17,7 +17,7 @@
     "lint": "eslint . --max-warnings 0",
     "test:browser": "playwright test",
     "test:pwa": "npm run build && playwright test --config playwright.pwa.config.ts",
-    "format:check": "prettier --check src e2e pwa public/sw.js vite.config.ts playwright.config.ts playwright.pwa.config.ts eslint.config.js"
+    "format:check": "prettier --check src tests public/sw.js vite.config.ts playwright.config.ts playwright.pwa.config.ts eslint.config.js"
   },
   "dependencies": {
     "@heroui/react": "3.2.6",

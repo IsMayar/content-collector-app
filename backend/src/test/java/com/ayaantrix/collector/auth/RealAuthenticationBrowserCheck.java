@@ -68,7 +68,7 @@ class RealAuthenticationBrowserCheck {
             UserAccount user=null;
             if(!onboarding){user=new UserAccount(email,"Synthetic Browser User",app.getBean(PasswordEncoder.class).encode(password),clock.instant());user.markVerified(clock.instant());users.saveAndFlush(user);}
             int port=((WebServerApplicationContext)app).getWebServer().getPort();
-            Path runner=Path.of(System.getProperty("user.dir")).resolve("../frontend/real-auth/browser-check.mjs").normalize();
+            Path runner=Path.of(System.getProperty("user.dir")).resolve("../frontend/tests/integration/real-auth/browser-check.mjs").normalize();
             var builder=new ProcessBuilder("node",runner.toString()).redirectError(ProcessBuilder.Redirect.DISCARD);
             builder.environment().remove("DEBUG");builder.environment().remove("PWDEBUG");
             Process process=builder.start();

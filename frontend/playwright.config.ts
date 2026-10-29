@@ -1,7 +1,8 @@
 import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './tests/e2e',
+  outputDir: '.artifacts/playwright/e2e',
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

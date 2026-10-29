@@ -11,7 +11,7 @@ npm run dev:mock
 
 Open http://127.0.0.1:5173/sign-in. `dev:mock` explicitly enables MSW, with a visible development label and synthetic accounts. No backend or database is needed. Use `owner@studio.example` with `ContentDemo!2026`, or `solo@studio.example` / `member@studio.example` with the same password.
 
-For later mock starts, run only `npm run dev:mock`. Use `npm run dev` with mocks disabled when integrating the owner's backend. The default API base is `/api/v1/`; Vite proxies `/api` to `http://127.0.0.1:8080`. Environment names are documented in `.env.example` and [the handoff](../docs/FRONTEND_BACKEND_HANDOFF.md). The existing T03 backend intentionally denies auth requests until the owner implements those contracts.
+For later mock starts, run only `npm run dev:mock`. Use `npm run dev` with mocks disabled when integrating the owner's backend. The default API base is `/api/v1/`; Vite proxies `/api` to `http://127.0.0.1:8080`. Environment names are documented in `.env.example` and [the handoff](../docs/FRONTEND_BACKEND_HANDOFF.md). The real backend currently supports agency authentication, workspaces, template reads, project creation and T11 Part 1 structure editing. Later collection/review/billing backend tasks remain separate; use mock mode for those frontend-only journeys.
 
 Before `npm ci`, stop this project's dev/preview servers with Ctrl+C. Windows locks native dependencies while Vite runs; a failed install can leave Vite unavailable until installation succeeds.
 
@@ -26,7 +26,7 @@ npm run format:check
 npm run preview
 ```
 
-`test:browser` starts an isolated mock server on port 5174 and runs desktop (1440×1000), tablet (768×1024) and phone (360×800) scenarios in installed Microsoft Edge, then stops it. Override the channel with `$env:PLAYWRIGHT_CHANNEL='chromium'` after installing Playwright Chromium using `npx playwright install chromium`. Traces/screenshots are in ignored `test-results/`; reproduce a failure with `npx playwright show-trace <trace.zip>`.
+`test:browser` starts an isolated mock server on port 5174 and runs desktop (1440×1000), tablet (768×1024) and phone (360×800) scenarios in installed Microsoft Edge, then stops it. Override the channel with `$env:PLAYWRIGHT_CHANNEL='chromium'` after installing Playwright Chromium using `npx playwright install chromium`. Traces/screenshots are in ignored `.artifacts/playwright/e2e/`; reproduce a failure with `npx playwright show-trace <trace.zip>`.
 
 Preview serves production output on http://127.0.0.1:4173 with mocks disabled. It requires the real API for session bootstrap; production mocking cannot be enabled through VITE_ENABLE_MOCKS. Production hosting must rewrite application routes to `index.html`.
 
@@ -36,14 +36,18 @@ Preview serves production output on http://127.0.0.1:4173 with mocks disabled. I
 - `src/api`: shared HTTP/CSRF transport, runtime DTO schemas and separate agency/client RTK Query APIs.
 - `src/features/auth`: session state, bootstrap, all authentication forms and injected endpoints.
 - `src/components`: public/auth/agency/client layouts, navigation, page headers, form controls, state panels, notifications and confirmation dialog.
-- `src/features/projects`: onboarding, dashboards, projects, templates, structure/access/team/reminder editors.
+- `src/features/projects`: onboarding, dashboards, projects, templates and structure/access/files editors.
 - `src/features/client`: client access, typed answers, autosave/conflicts, submissions and uploads.
 - `src/features/review`: exact-revision review, comments, activity and approved exports.
-- `src/features/settings`: AI assistance, analytics/shares/digests, billing, identity and sessions.
+- `src/features/settings`: workspace/team settings, reminders, AI assistance, analytics/shares/digests, billing, identity and sessions.
 - `src/features/public`: landing and proposed pricing pages.
 - `src/mocks`: browser MSW setup, request handlers and deterministic synthetic fixtures.
 - `src/test`: Vitest + Testing Library tests using MSW's Node interceptor.
-- `e2e`: real Edge browser scenarios using the same network mocks.
+- `tests/e2e`: desktop/tablet/phone browser scenarios using explicit network mocks.
+- `tests/pwa`: production PWA/cache-boundary browser scenarios.
+- `tests/integration/real-auth`: real HTTPS Edge/Vite/Spring/PostgreSQL harness; MSW disabled.
+- `scripts`: PowerShell verification entry point.
+- `.artifacts` (ignored): verification logs, TypeScript caches and browser results.
 - `src/styles`: Tailwind/HeroUI imports, palette, typography, spacing and surface tokens.
 
 `@/` resolves to `src/` in TypeScript and Vite. Strict TypeScript and React StrictMode remain enabled. Authentication forms use React Hook Form/Zod; product editors use typed local state, native constraints and shared domain validation. RTK Query owns server data; the auth slice keeps access tokens/identity only in memory. There is no persistent token storage. HeroUI v3 needs no v2-style provider. Native semantic fields integrate with React Hook Form; HeroUI supplies primary buttons. Route guards support UX and do not replace backend authorization.
@@ -75,3 +79,19 @@ Original foundation references checked 21 October 2026; FE01 additions checked 2
 - [ESLint flat configuration](https://eslint.org/docs/latest/use/configure/configuration-files).
 
 Direct dependency versions are resolved exactly in `package.json`; `package-lock.json` records the full dependency tree. Use `npm ci` to reproduce it.
+
+
+## Verification and generated files
+
+Run the checks from one fail-fast command; logs are written outside the frontend root:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\frontend'
+.\scripts\Verify-Frontend.ps1
+# Include browser and production PWA checks when Edge is available:
+.\scripts\Verify-Frontend.ps1 -Browser -Pwa
+```
+
+Real HTTPS acceptance is launched by the existing backend test, which now resolves `tests/integration/real-auth/browser-check.mjs`. From backend, run `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test`.
+
+Keep `.gitignore`, `.prettierrc.json`, package.json/package-lock.json, index.html and the Vite/TypeScript/ESLint/Playwright configuration files at the frontend root. They are active tooling inputs. `node_modules` and `dist` are generated dependency/build directories. Old root-level audit logs are disposable; current logs and TypeScript caches belong under ignored `.artifacts/`. Never move `.env.local` into source or commit it. See [ARCHITECTURE.md](ARCHITECTURE.md) for ownership and organization rules.

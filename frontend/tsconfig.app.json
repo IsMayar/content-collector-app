@@ -14,8 +14,11 @@
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
-    "types": ["vite/client"]
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["vite/client"],
+    "tsBuildInfoFile": "./.artifacts/cache/tsconfig.app.tsbuildinfo"
   },
   "include": ["src"]
 }
