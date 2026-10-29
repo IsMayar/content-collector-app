@@ -16,6 +16,7 @@ public class ProjectCustomer {
     public ProjectCustomer(UUID workspace,String business,String contact,String email,Instant now) {
         id=UUID.randomUUID();workspaceId=workspace;businessName=business;contactName=contact;this.email=email;createdAt=now;updatedAt=now;
     }
+    public void rename(String name,Instant now){businessName=name;updatedAt=now;}
     public UUID id(){return id;} public String businessName(){return businessName;}
     public String contactName(){return contactName;} public String email(){return email;} public Long version(){return version;}
 }
