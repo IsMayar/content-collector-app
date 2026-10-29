@@ -23,7 +23,8 @@ async function waitState(expected, target = page) {
       () =>
         target.evaluate(
           async () =>
-            (await import('/src/app/store.ts')).store.getState().auth.status,
+            (await import('/src/app/store/store.ts')).store.getState().auth
+              .status,
         ),
       { timeout: 30000 },
     )
@@ -69,8 +70,8 @@ async function signin(
 }
 async function run(args, target = page) {
   return target.evaluate(async (args) => {
-    const { store } = await import('/src/app/store.ts')
-    const { createBaseQuery } = await import('/src/api/baseQuery.ts')
+    const { store } = await import('/src/app/store/store.ts')
+    const { createBaseQuery } = await import('/src/services/api/baseQuery.ts')
     const control = new AbortController()
     const result = await createBaseQuery(true)(
       args,
@@ -94,7 +95,7 @@ async function run(args, target = page) {
 }
 async function rawMutation(path, target = page) {
   return target.evaluate(async (path) => {
-    const { store } = await import('/src/app/store.ts')
+    const { store } = await import('/src/app/store/store.ts')
     const protection = await fetch('/api/v1/auth/csrf', {
       credentials: 'include',
     }).then((res) => res.json())
@@ -213,7 +214,7 @@ async function command(input) {
               target.evaluate(
                 async (id) =>
                   Object.keys(
-                    (await import('/src/app/store.ts')).store.getState()
+                    (await import('/src/app/store/store.ts')).store.getState()
                       .agencyApi.queries,
                   ).some((key) => key.includes(id)),
                 settings.workspace,
@@ -235,7 +236,9 @@ async function command(input) {
         for (const target of [page, peer]) {
           await waitState('anonymous', target)
           const cleared = await target.evaluate(async () => {
-            const state = (await import('/src/app/store.ts')).store.getState()
+            const state = (
+              await import('/src/app/store/store.ts')
+            ).store.getState()
             return (
               state.auth.accessToken === null &&
               state.auth.memberships.length === 0 &&
@@ -327,7 +330,8 @@ async function command(input) {
       )
       const memberships = await page.evaluate(
         async () =>
-          (await import('/src/app/store.ts')).store.getState().auth.memberships,
+          (await import('/src/app/store/store.ts')).store.getState().auth
+            .memberships,
       )
       assert.ok(
         memberships.length === 1 &&
@@ -339,7 +343,7 @@ async function command(input) {
     }
     case 'workspace-projects': {
       const cards = await page.evaluate(async (workspace) => {
-        const { store } = await import('/src/app/store.ts')
+        const { store } = await import('/src/app/store/store.ts')
         const response = await fetch(
           '/api/v1/workspaces/' + workspace + '/templates',
           {
@@ -420,9 +424,9 @@ async function command(input) {
         ).toBeVisible()
         const compatible = await page.evaluate(
           async ({ workspace, id }) => {
-            const { store } = await import('/src/app/store.ts')
+            const { store } = await import('/src/app/store/store.ts')
             const { validateProductRead } =
-              await import('/src/api/productSchemas.ts')
+              await import('/src/services/api/resourceSchemas.ts')
             const path = 'workspaces/' + workspace + '/projects/' + id
             const response = await fetch('/api/v1/' + path, {
               credentials: 'include',
@@ -603,7 +607,7 @@ async function command(input) {
             page.evaluate(
               async ({ path }) => {
                 const queries = (
-                  await import('/src/app/store.ts')
+                  await import('/src/app/store/store.ts')
                 ).store.getState().agencyApi.queries
                 return Object.values(queries).find(
                   (q) => q.originalArgs === path,
@@ -752,6 +756,19 @@ async function command(input) {
         (await run('workspaces/' + settings.workspace)).status === 200,
         'Workspace did not persist',
       )
+      // Finish the reloaded page's lazy reads before the Java driver advances
+      // its clock. Otherwise a newly mounted read races the explicit expiry probe.
+      await page.locator('main h1').first().waitFor({ state: 'visible' })
+      await expect
+        .poll(() =>
+          page.evaluate(async () => {
+            const { store } = await import('/src/app/store/store.ts')
+            return Object.values(store.getState().agencyApi.queries).every(
+              (query) => query?.status !== 'pending',
+            )
+          }),
+        )
+        .toBe(true)
       break
     }
     case 'workspace-isolation': {
@@ -775,9 +792,9 @@ async function command(input) {
     }
     case 'workspace-member': {
       await page.evaluate(async () => {
-        const { store } = await import('/src/app/store.ts')
+        const { store } = await import('/src/app/store/store.ts')
         const { bootstrapSession } =
-          await import('/src/features/auth/session.ts')
+          await import('/src/features/auth/store/session.ts')
         await store.dispatch(bootstrapSession())
       })
       await waitState('authenticated')
@@ -791,7 +808,7 @@ async function command(input) {
         .poll(() =>
           page.evaluate(
             async () =>
-              (await import('/src/app/store.ts')).store.getState().auth
+              (await import('/src/app/store/store.ts')).store.getState().auth
                 .workspaceId,
           ),
         )
@@ -802,7 +819,7 @@ async function command(input) {
       const stale = await page.evaluate(
         async (id) =>
           Object.keys(
-            (await import('/src/app/store.ts')).store.getState().agencyApi
+            (await import('/src/app/store/store.ts')).store.getState().agencyApi
               .queries,
           ).some((key) => key.includes(id)),
         settings.workspace,
@@ -834,9 +851,9 @@ async function command(input) {
     }
     case 'workspace-revoked': {
       await page.evaluate(async () => {
-        const { store } = await import('/src/app/store.ts')
+        const { store } = await import('/src/app/store/store.ts')
         const { bootstrapSession } =
-          await import('/src/features/auth/session.ts')
+          await import('/src/features/auth/store/session.ts')
         await store.dispatch(bootstrapSession())
       })
       await waitState('authenticated')
@@ -846,7 +863,7 @@ async function command(input) {
         }),
       ).toBeVisible()
       const retained = await page.evaluate(async (id) => {
-        const state = (await import('/src/app/store.ts')).store.getState()
+        const state = (await import('/src/app/store/store.ts')).store.getState()
         return (
           state.auth.memberships.some((m) => m.workspaceId === id) ||
           Object.keys(state.agencyApi.queries).some((key) => key.includes(id))
@@ -861,7 +878,7 @@ async function command(input) {
     }
     case 'csrf': {
       const statuses = await page.evaluate(async () => {
-        const { store } = await import('/src/app/store.ts')
+        const { store } = await import('/src/app/store/store.ts')
         const paths = [
           'auth/login',
           'auth/refresh',
@@ -979,8 +996,9 @@ async function command(input) {
     }
     case 'logout':
       await page.evaluate(async () => {
-        const { store } = await import('/src/app/store.ts')
-        const { logoutSession } = await import('/src/features/auth/session.ts')
+        const { store } = await import('/src/app/store/store.ts')
+        const { logoutSession } =
+          await import('/src/features/auth/store/session.ts')
         await store.dispatch(logoutSession())
       })
       await waitState('anonymous')

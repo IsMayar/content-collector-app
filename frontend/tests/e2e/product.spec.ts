@@ -1,3 +1,8 @@
+import {
+  mainReady,
+  agencyReadsReady,
+  createProjectReady,
+} from './helpers/readiness'
 import { test, expect, type Page } from '@playwright/test'
 import { Buffer } from 'node:buffer'
 test.setTimeout(90000)
@@ -5,7 +10,13 @@ async function signIn(page: Page, email = 'owner@studio.example') {
   await page.goto('/sign-in')
   await page.getByLabel('Email address').fill(email)
   await page.getByLabel('Password', { exact: true }).fill('ContentDemo!2026')
+  const signedIn = page.waitForResponse(
+    (r) => new URL(r.url()).pathname === '/api/v1/me' && r.status() === 200,
+  )
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await signedIn
+  await mainReady(page)
+  await agencyReadsReady(page)
   await expect(
     page.getByRole('heading', { name: /Welcome back,|Good morning,/ }),
   ).toBeVisible()
@@ -25,6 +36,8 @@ async function nav(page: Page, name: string) {
       .getByRole('navigation', { name: 'Workspace navigation', exact: true })
       .getByRole('link', { name, exact: true })
       .click()
+  await mainReady(page)
+  await agencyReadsReady(page)
 }
 async function noOverflow(page: Page) {
   expect(
@@ -134,6 +147,11 @@ test('all project types, template previews, settings and keyboard reorder', asyn
   page,
 }, info) => {
   await signIn(page)
+  const documentNavigations: string[] = []
+  page.on('request', (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+      documentNavigations.push(new URL(request.url()).pathname)
+  })
   await nav(page, 'Templates')
   await expect(
     page.getByRole('heading', { name: 'Project templates', exact: true }),
@@ -180,9 +198,7 @@ test('all project types, template previews, settings and keyboard reorder', asyn
       .selectOption({ label: 'Lamar Dental' })
     await page.getByLabel('Due date', { exact: true }).fill('2026-12-20')
     await page.getByRole('button', { name: 'Continue to review' }).click()
-    await page
-      .getByRole('button', { name: 'Create project', exact: true })
-      .click()
+    await createProjectReady(page, 'Create project')
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
     await noOverflow(page)
     const move = page.getByRole('button', { name: /Move .+ down/ }).first()
@@ -207,11 +223,16 @@ test('all project types, template previews, settings and keyboard reorder', asyn
     path: info.outputPath('workspace-settings.png'),
     fullPage: true,
   })
+  expect(
+    documentNavigations,
+    'Wizard and workspace links must preserve the SPA session',
+  ).toEqual([])
 })
 test('public landing and pricing remain responsive and keyboard accessible', async ({
   page,
 }, info) => {
   await page.goto('/')
+  await mainReady(page)
   await expect(
     page.getByRole('heading', { name: /Get client content/ }),
   ).toBeVisible()
@@ -257,7 +278,7 @@ test('wizard preserves details and item drawer traps and restores keyboard focus
     'Wizard review verification',
   )
   await page.getByRole('button', { name: 'Continue to review' }).click()
-  await page.getByRole('button', { name: 'Save as draft', exact: true }).click()
+  await createProjectReady(page, 'Save as draft')
   await expect(
     page.getByRole('heading', {
       name: 'Wizard review verification',
@@ -522,6 +543,7 @@ test('administration boards: settings, usage, reminders and counts-only analytic
   await expect(
     page.getByText('Reminder policy saved.', { exact: true }),
   ).toBeVisible()
+  await agencyReadsReady(page)
   await noOverflow(page)
   await page.screenshot({
     path: info.outputPath('board11-cadence.png'),
@@ -725,9 +747,7 @@ test('settings owns billing and selected templates open project details directly
       (r) =>
         r.method() === 'POST' && /\/projects$/.test(new URL(r.url()).pathname),
     )
-    await page
-      .getByRole('button', { name: 'Create project', exact: true })
-      .click()
+    await createProjectReady(page, 'Create project')
     expect((await sent).postDataJSON()).toMatchObject({
       projectType: type,
       templateVersionId: target.searchParams.get('template'),

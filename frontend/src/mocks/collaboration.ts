@@ -1,20 +1,18 @@
+import type { ReminderPreview } from '@/features/reminders/types/reminder.types'
+import type { ItemDefinition } from '@/features/structure-editor/types/structure.types'
+import type { TemplateDefinition } from '@/features/templates/types/template.types'
+import { mockState } from '@/mocks/handlers'
+import { clone, now, productDb, touch, uid } from '@/mocks/productDb'
 import {
-  registerProductResolver,
   agencyActor,
   agencyProject,
   checkVersion,
   itemIn,
+  registerProductResolver,
   requireRule,
   response,
-} from './productHandlers'
-import { mockState } from './handlers'
-import { clone, now, productDb, touch, uid } from './productDb'
-import { initialValue, progressFor, visibleItems } from '@/lib/domain'
-import type {
-  ItemDefinition,
-  ReminderPreview,
-  TemplateDefinition,
-} from '@/api/contracts'
+} from '@/mocks/productHandlers'
+import { initialValue, progressFor, visibleItems } from '@/shared/utils/domain'
 
 function schemaValid(definition: ItemDefinition) {
   requireRule(

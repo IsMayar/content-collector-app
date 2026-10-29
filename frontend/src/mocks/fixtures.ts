@@ -1,4 +1,5 @@
-import type { Me } from '@/api/types'
+import type { Me } from '@/features/auth/types/auth.types'
+
 export const demoPassword = 'ContentDemo!2026'
 export const agencyId = '11111111-1111-4111-8111-111111111111'
 export const soloId = '22222222-2222-4222-8222-222222222222'

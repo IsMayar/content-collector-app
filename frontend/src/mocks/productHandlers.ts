@@ -1,6 +1,5 @@
-import { delay, http, HttpResponse } from 'msw'
-import { apiBaseUrl } from '@/api/baseQuery'
-import { mockState } from './handlers'
+import type { TemplateDefinition } from '@/features/templates/types/template.types'
+import { mockState } from '@/mocks/handlers'
 import {
   clone,
   createProject,
@@ -8,9 +7,11 @@ import {
   templates,
   touch,
   uid,
-} from './productDb'
-import type { ProjectRecord, TemplateDefinition } from '@/api/productTypes'
-import { progressFor } from '@/lib/domain'
+} from '@/mocks/productDb'
+import type { ProjectRecord } from '@/mocks/types/fixtures.types'
+import { apiBaseUrl } from '@/services/api/baseQuery'
+import { progressFor } from '@/shared/utils/domain'
+import { delay, http, HttpResponse } from 'msw'
 
 export const apiRoot = new URL(
   apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`,

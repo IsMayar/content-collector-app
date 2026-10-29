@@ -20,5 +20,5 @@
     "types": ["vite/client"],
     "tsBuildInfoFile": "./.artifacts/cache/tsconfig.app.tsbuildinfo"
   },
-  "include": ["src"]
+  "include": ["src", "tests/unit"]
 }

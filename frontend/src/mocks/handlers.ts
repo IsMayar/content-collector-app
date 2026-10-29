@@ -1,13 +1,14 @@
+import '@/mocks/agencyFiles'
+import '@/mocks/collaboration'
+import '@/mocks/collection'
+import '@/mocks/commercial'
+import type { MockAccount } from '@/mocks/fixtures'
+import { accountFixtures, agencyId } from '@/mocks/fixtures'
+import { productDb, resetProductDb, uid } from '@/mocks/productDb'
+import { productHandlers } from '@/mocks/productHandlers'
+import '@/mocks/review'
+import { apiBaseUrl } from '@/services/api/baseQuery'
 import { delay, http, HttpResponse } from 'msw'
-import { accountFixtures, agencyId, type MockAccount } from './fixtures'
-import { apiBaseUrl } from '@/api/baseQuery'
-import { productHandlers } from './productHandlers'
-import { resetProductDb, productDb, uid } from './productDb'
-import './collaboration'
-import './collection'
-import './review'
-import './commercial'
-import './agencyFiles'
 
 export const mockState = {
   accounts: accountFixtures(),

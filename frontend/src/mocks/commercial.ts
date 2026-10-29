@@ -1,3 +1,8 @@
+import { env } from '@/config/env'
+import type { AiDraftJob } from '@/features/ai/types/ai.types'
+import { clientProject } from '@/mocks/collection'
+import { mockState } from '@/mocks/handlers'
+import { now, productDb, touch, uid } from '@/mocks/productDb'
 import {
   agencyActor,
   agencyProject,
@@ -6,12 +11,9 @@ import {
   registerProductResolver,
   requireRule,
   response,
-} from './productHandlers'
-import { clientProject } from './collection'
-import { now, productDb, touch, uid } from './productDb'
-import { progressFor } from '@/lib/domain'
-import { mockState } from './handlers'
-import type { AiDraftJob } from '@/api/contracts'
+} from '@/mocks/productHandlers'
+import { progressFor } from '@/shared/utils/domain'
+
 const jobs = new Map<
   string,
   AiDraftJob & { projectId: string; polls: number }
@@ -32,12 +34,7 @@ registerProductResolver((request, path, _search, body) => {
   const [domain, wid, resource, pid, area, id] = path
   const method = request.method
   if (domain === 'demo' && wid === 'scenario') {
-    requireRule(
-      import.meta.env.DEV || import.meta.env.MODE === 'test',
-      404,
-      'NOT_FOUND',
-      'Unavailable.',
-    )
+    requireRule(env.development || env.test, 404, 'NOT_FOUND', 'Unavailable.')
     const scenario = String(body.scenario)
     requireRule(
       [

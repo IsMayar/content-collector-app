@@ -1,3 +1,4 @@
+import { mainReady } from './helpers/readiness'
 import { test, expect, type Page } from '@playwright/test'
 
 async function signIn(page: Page) {
@@ -30,18 +31,19 @@ async function noOverflow(page: Page) {
   ).toBe(true)
 }
 
-test('all authentication pages share the brand layout with no arrow actions', async ({
-  page,
-}, info) => {
-  for (const [path, title] of [
-    ['sign-in', 'Welcome back'],
-    ['sign-up', 'Create your account'],
-    ['verify-email', 'Verify your email'],
-    ['forgot-password', 'Reset your password'],
-    ['reset-password', 'Choose a new password'],
-    ['team-invite', 'You’re invited to join'],
-  ]) {
+for (const [path, title] of [
+  ['sign-in', 'Welcome back'],
+  ['sign-up', 'Create your account'],
+  ['verify-email', 'Verify your email'],
+  ['forgot-password', 'Reset your password'],
+  ['reset-password', 'Choose a new password'],
+  ['team-invite', 'You’re invited to join'],
+]) {
+  test(`authentication layout: ${path} keeps brand styling and accessible actions`, async ({
+    page,
+  }, info) => {
     await page.goto('/' + path)
+    await mainReady(page)
     await expect(
       page.getByRole('heading', { name: title, exact: true }),
     ).toBeVisible()
@@ -52,8 +54,8 @@ test('all authentication pages share the brand layout with no arrow actions', as
       path: info.outputPath(`auth-${path}.png`),
       fullPage: true,
     })
-  }
-})
+  })
+}
 
 test('customer choice creates a new customer and keeps existing selection separate', async ({
   page,

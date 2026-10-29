@@ -32,27 +32,9 @@ Preview serves production output on http://127.0.0.1:4173 with mocks disabled. I
 
 ## Structure
 
-- `src/app`: router, typed hooks, Redux store and providers.
-- `src/api`: shared HTTP/CSRF transport, runtime DTO schemas and separate agency/client RTK Query APIs.
-- `src/features/auth`: session state, bootstrap, all authentication forms and injected endpoints.
-- `src/components`: public/auth/agency/client layouts, navigation, page headers, form controls, state panels, notifications and confirmation dialog.
-- `src/features/projects`: onboarding, dashboards, projects, templates and structure/access/files editors.
-- `src/features/client`: client access, typed answers, autosave/conflicts, submissions and uploads.
-- `src/features/review`: exact-revision review, comments, activity and approved exports.
-- `src/features/settings`: workspace/team settings, reminders, AI assistance, analytics/shares/digests, billing, identity and sessions.
-- `src/features/public`: landing and proposed pricing pages.
-- `src/mocks`: browser MSW setup, request handlers and deterministic synthetic fixtures.
-- `src/test`: Vitest + Testing Library tests using MSW's Node interceptor.
-- `tests/e2e`: desktop/tablet/phone browser scenarios using explicit network mocks.
-- `tests/pwa`: production PWA/cache-boundary browser scenarios.
-- `tests/integration/real-auth`: real HTTPS Edge/Vite/Spring/PostgreSQL harness; MSW disabled.
-- `scripts`: PowerShell verification entry point.
-- `.artifacts` (ignored): verification logs, TypeScript caches and browser results.
-- `src/styles`: Tailwind/HeroUI imports, palette, typography, spacing and surface tokens.
+Application bootstrapping lives in src/app (App, main, router and store). Features own api/components/pages/schemas/types folders: auth, projects, workspace, templates, structure-editor and the client, settings, billing, analytics, reminders, AI, review and public areas. Reusable components/hooks/types/utilities live in src/shared; page shells in src/layouts; HTTP/RTK infrastructure in src/services/api; public environment configuration in src/config/env.ts. src/styles/globals.css is the single CSS entry. [Exact architecture and ownership](ARCHITECTURE.md).
 
-`@/` resolves to `src/` in TypeScript and Vite. Strict TypeScript and React StrictMode remain enabled. Authentication forms use React Hook Form/Zod; product editors use typed local state, native constraints and shared domain validation. RTK Query owns server data; the auth slice keeps access tokens/identity only in memory. There is no persistent token storage. HeroUI v3 needs no v2-style provider. Native semantic fields integrate with React Hook Form; HeroUI supplies primary buttons. Route guards support UX and do not replace backend authorization.
-
-The owner handles backend implementation manually. Frontend batches remain separate from original full-stack milestones. See [the authentication handoff](../docs/FRONTEND_BACKEND_HANDOFF.md) and [the product integration handoff](../docs/FRONTEND_PRODUCT_HANDOFF.md) for actual operations, DTOs, scenarios and unresolved backend decisions. Reload resets mock sessions, file bytes and fixture changes. Stay in one SPA tab for the owner → client → review → export demo.
+Unit/component tests and setup are in tests/unit. Browser journeys remain tests/e2e, production cache checks tests/pwa, and the real HTTPS harness tests/integration/real-auth. All outputs stay under .artifacts. The @/ alias remains src. The dependency lock and root build/configuration files remain required. API paths and reducer identities are unchanged; strict TypeScript, React StrictMode, in-memory access tokens and separate agency/client stores remain enforced.
 
 ## Product preview
 

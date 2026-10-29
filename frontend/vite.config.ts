@@ -20,6 +20,7 @@ export default defineConfig(({ mode, command }) => {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },
     server: {
+      watch: { ignored: ['**/.artifacts/**'] },
       port: 5173,
       strictPort: true,
       proxy: {
@@ -30,9 +31,9 @@ export default defineConfig(({ mode, command }) => {
       },
     },
     test: {
-      include: ['src/**/*.test.{ts,tsx}'],
+      include: ['tests/unit/**/*.test.{ts,tsx}'],
       environment: 'jsdom',
-      setupFiles: ['./src/test/setup.ts'],
+      setupFiles: ['./tests/unit/setup.ts'],
       environmentOptions: { jsdom: { url: 'http://localhost:5173/' } },
       restoreMocks: true,
     },

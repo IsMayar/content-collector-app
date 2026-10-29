@@ -1,15 +1,16 @@
-import { http, HttpResponse } from 'msw'
+import { fileOperation } from '@/mocks/collection'
+import { uid } from '@/mocks/productDb'
 import {
   agencyProject,
   apiRoot,
+  failure,
+  productHandlers,
   registerProductResolver,
   requireRule,
   response,
-  productHandlers,
-  failure,
-} from './productHandlers'
-import { fileOperation } from './collection'
-import { uid } from './productDb'
+} from '@/mocks/productHandlers'
+import { http, HttpResponse } from 'msw'
+
 const grants = new Map<
   string,
   {
@@ -176,7 +177,6 @@ registerProductResolver(async (request, path, search, body) => {
   }
   return null
 })
-
 productHandlers.unshift(
   http.put(
     `${apiRoot}mock-agency-transfer/:ticket`,

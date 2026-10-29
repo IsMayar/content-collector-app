@@ -1,15 +1,17 @@
-import catalog from './data/starterTemplates.json'
+import type { Project } from '@/features/projects/types/project.types'
 import type {
   Item,
-  Project,
   Section,
-  TemplateDefinition,
+} from '@/features/structure-editor/types/structure.types'
+import type { TemplateDefinition } from '@/features/templates/types/template.types'
+import catalog from '@/mocks/data/starterTemplates.json'
+import { accountFixtures, agencyId, soloId } from '@/mocks/fixtures'
+import type {
+  ProjectRecord,
   TemplateRecord,
   WorkspaceRecord,
-  ProjectRecord,
-} from '@/api/productTypes'
-import { accountFixtures, agencyId, soloId } from './fixtures'
-import { initialValue, progressFor } from '@/lib/domain'
+} from '@/mocks/types/fixtures.types'
+import { initialValue, progressFor } from '@/shared/utils/domain'
 
 export const demoProjectId = '33333333-3333-4333-8333-333333333333'
 export const clone = <T>(value: T): T => structuredClone(value)
@@ -39,7 +41,7 @@ export const productDb = {
   usedInvitations: new Set<string>(),
   preferences: {} as Record<
     string,
-    import('@/api/contracts').NotificationPreferences
+    import('@/features/workspace/types/workspace.types').NotificationPreferences
   >,
   revokedSessions: new Set<string>(),
 }

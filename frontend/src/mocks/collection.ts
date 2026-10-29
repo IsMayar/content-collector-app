@@ -1,23 +1,27 @@
-import { http, HttpResponse } from 'msw'
-import {
-  registerProductResolver,
-  requireRule,
-  response,
-  checkVersion,
-  itemIn,
-  apiRoot,
-  failure,
-  productHandlers,
-} from './productHandlers'
-import { clone, now, productDb, touch, uid } from './productDb'
-import { progressFor, validateAnswer, visibleItems } from '@/lib/domain'
 import type {
   AnswerValue,
   ClientChecklist,
   ClientItem,
-  NotificationPreferences,
-  SubmissionRevision,
-} from '@/api/contracts'
+} from '@/features/client/types/client.types'
+import type { SubmissionRevision } from '@/features/review/types/review.types'
+import type { NotificationPreferences } from '@/features/workspace/types/workspace.types'
+import { clone, now, productDb, touch, uid } from '@/mocks/productDb'
+import {
+  apiRoot,
+  checkVersion,
+  failure,
+  itemIn,
+  productHandlers,
+  registerProductResolver,
+  requireRule,
+  response,
+} from '@/mocks/productHandlers'
+import {
+  progressFor,
+  validateAnswer,
+  visibleItems,
+} from '@/shared/utils/domain'
+import { http, HttpResponse } from 'msw'
 
 export function clientProject(projectId: string, write = false) {
   const session = productDb.client
@@ -52,7 +56,7 @@ export function clientProject(projectId: string, write = false) {
   return { record: r, contact: c }
 }
 export function checklist(
-  r: import('@/api/productTypes').ProjectRecord,
+  r: import('@/mocks/types/fixtures.types').ProjectRecord,
   editable: boolean,
 ): ClientChecklist {
   const visible = visibleItems(r.structure, r.answers)
@@ -425,7 +429,7 @@ registerProductResolver((request, path, _search, body) => {
   return fileOperation(r, projectId, area, itemId, sub, method, body)
 })
 export function fileOperation(
-  r: import('@/api/productTypes').ProjectRecord,
+  r: import('@/mocks/types/fixtures.types').ProjectRecord,
   projectId: string,
   area: string,
   itemId: string,
@@ -583,7 +587,6 @@ export function fileOperation(
   }
   return null
 }
-// Transfer URLs are deliberately separate from authenticated JSON endpoints.
 productHandlers.unshift(
   http.put(`${apiRoot}mock-transfer/:id`, async ({ request, params }) => {
     try {

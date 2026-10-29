@@ -1,6 +1,7 @@
+import { ErrorNotice, Field } from '@/shared/components/ProductUI'
+import { useCommand } from '@/shared/hooks/useCommand'
 import { useState } from 'react'
-import { useCommand } from '@/components/ProductUI'
-import { ErrorNotice, Field } from '@/components/ProductUI'
+
 export function ScenarioControls() {
   const command = useCommand()
   const [scenario, setScenario] = useState('normal')

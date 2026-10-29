@@ -1,5 +1,5 @@
-import { http, HttpResponse } from 'msw'
-import { strToU8, zipSync } from 'fflate'
+import type { ExportCommand } from '@/features/review/types/review.types'
+import { clone, now, productDb, touch, uid } from '@/mocks/productDb'
 import {
   agencyProject,
   apiRoot,
@@ -10,10 +10,10 @@ import {
   registerProductResolver,
   requireRule,
   response,
-} from './productHandlers'
-import { clone, now, productDb, touch, uid } from './productDb'
-import { progressFor, visibleItems } from '@/lib/domain'
-import type { ExportCommand } from '@/api/contracts'
+} from '@/mocks/productHandlers'
+import { progressFor, visibleItems } from '@/shared/utils/domain'
+import { strToU8, zipSync } from 'fflate'
+import { http, HttpResponse } from 'msw'
 
 registerProductResolver((request, path, _search, body) => {
   const [, wid, resource, pid, area, id, action, revisionId] = path

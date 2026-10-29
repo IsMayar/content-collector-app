@@ -1,40 +1,65 @@
-# Frontend organization
+# Frontend architecture
 
-The application is organized by product feature. Shared transport, layouts and visual primitives have a single home; browser test tools and generated output live outside application source.
+The source now follows feature ownership. Pages compose feature components; feature APIs use the existing shared RTK Query transport and cache. The UI, HTTP routes, agency/client identity boundary and permissions are preserved.
 
 ```text
-frontend/
-  src/
-    app/                  router, Redux store, hooks and providers
-    api/                  contracts, runtime schemas, shared transport and RTK Query
-    components/           reusable layouts, fields, dialogs, feedback and navigation
-    features/
-      auth/               account forms, session state and agency bootstrap
-      client/             private client portal and content editing
-      foundation/         route recovery and legacy-bookmark compatibility
-      projects/           project wizard, templates, structure, access and files
-      public/             landing, help, pricing and legal reading pages
-      review/             revisions, comments, activity and exports
-      settings/           workspace/team/account, reminders, analytics and billing
-    lib/                  shared domain rules, downloads, errors and return destinations
-    mocks/                explicit development/test MSW handlers and synthetic fixtures
-    styles/               global tokens, framework imports and product styles
-    test/                 Vitest/Testing Library tests and shared setup
-  tests/
-    e2e/                  mock-backed browser journeys at desktop/tablet/phone widths
-    pwa/                  production service-worker and public-cache acceptance
-    integration/real-auth/ real HTTPS harness launched by backend acceptance tests
-  scripts/                fail-fast PowerShell verification
-  public/                 static public assets, manifest and service worker
-  .artifacts/             ignored logs, compiler caches and browser traces/results
-  dist/                   ignored production build
-  node_modules/           ignored installed dependencies
+src/
+  app/
+    App.tsx                     Redux, feedback and router composition
+    main.tsx                    StrictMode bootstrap, explicit development mocks, public PWA
+    router/AppRouter.tsx        route definitions and lazy page loading
+    store/store.ts              Redux store, cache/session listeners
+  features/
+    auth/
+      api/authApi.ts
+      components/LoginForm.tsx  sign-in orchestration using existing transport
+      pages/LoginPage.tsx       page presentation; other account pages are separate
+      schemas/loginSchema.ts
+      schemas/authResponseSchemas.ts
+      types/auth.types.ts
+      store/                    in-memory identity, refresh and bootstrap
+      utils/actionToken.ts      transient action-link token handling
+    projects/
+      api/projectsApi.ts        typed project queries sharing the resource cache
+      components/ProjectCard.tsx
+      components/ProjectTable.tsx
+      pages/ProjectsPage.tsx
+      pages/ProjectPage.tsx
+      pages/CreateProjectPage.tsx
+      schemas/projectSchema.ts
+      types/project.types.ts
+    workspace/                  onboarding, dashboard and workspace types
+    templates/                  library/editor pages, preview components, template types
+    structure-editor/           structure/item editors, schema and field definitions
+    client/                     client pages, editors, upload helpers, schemas/types
+    settings/                   workspace settings page composition
+    billing/                    plan/subscription/usage pages and DTOs
+    analytics/                  insights, project metrics, digest and status sharing
+    reminders/                  reminder policy/delivery UI and DTOs
+    ai/                         AI draft UI and DTOs
+    review/                     review/activity/export components and DTO types
+    public/                     public landing, pricing, help and legal pages
+  shared/
+    components/                 reusable fields, feedback, dialogs and route recovery
+    hooks/                      typed Redux hooks, workspace and mutation hooks
+    types/                      common HTTP, pagination and JSON primitives
+    utils/                      shared domain rules, downloads, errors and safe destinations
+  layouts/                      AgencyLayout, ClientLayout, AuthLayout, PublicLayout
+  services/api/
+    baseApi.ts                  shared agency base, retaining agencyApi reducer identity
+    clientApi.ts                separate client base/identity
+    baseQuery.ts                one CSRF/auth/refresh HTTP implementation
+    resourceApi.ts              shared read/command endpoint cache
+    resourceSchemas.ts          routes responses into feature-owned Zod schemas
+  config/env.ts                 public build/runtime configuration; no secrets
+  mocks/                        explicit MSW fixtures/handlers only
+  styles/globals.css            single CSS entry preserving existing layer order
 ```
 
-Keep feature UI and its state with the owning feature. Promote a component into components only when it is shared. Keep API contracts/validation and shared HTTP behavior in api, and business rules independent of rendering in lib. Do not copy mocks into production features or add a second transport for backend integration. Preserve separate agency/client identities, in-memory tokens and public-only PWA caching.
+Keep pages, components, API adapters, schemas and types inside their owning feature. Shared code must actually be reused; do not add unused wrapper APIs or duplicate DTO definitions. ProjectCard extracts the existing compact project identity markup; the rest of its table stays ProjectTable. LoginPage uses LoginForm, while other account forms share AuthForm. No page redesign was needed to satisfy this structure.
 
-Unit/component tests remain in src/test so their existing setup and source aliases stay consistent. All standalone browser suites are grouped under tests. Both Playwright configurations use explicit test/output directories; TypeScript build information is in .artifacts/cache. The HTTPS harness resolves Vite relative to the frontend root regardless of its deeper test directory.
+The former src/api, src/components, src/lib and mixed-feature page modules are removed. Public DTO types are split by feature; fixture-only records are under mocks/types. Type-only cross-feature references do not create runtime coupling. The existing agencyApi/clientApi reducer identities remain unchanged so sessions, cache clearing and the HTTPS harness observe the same stores. Feature queries reuse the same RTK endpoints rather than creating a second transport or cache.
 
-Required root configuration files stay at the root where tools discover them. package-lock.json is required for npm ci. .gitignore and .prettierrc.json are active project configuration, not disposable files. Local environment files remain ignored. Do not place new log files, screenshots or traces at the root; use .artifacts. Verify-Frontend.ps1 writes current check logs into .artifacts/logs/verification and stops at the first failure.
+All unit/component tests are in tests/unit, with their shared setup there. Standalone suites remain tests/e2e, tests/pwa and tests/integration/real-auth. Unit tests are typechecked by tsconfig.app; browser/tooling TypeScript is checked by tsconfig.node. Configurations and index.html remain at the root. The @/ alias still resolves strictly to src. Generated logs/caches/traces stay under ignored .artifacts; dependencies and build output stay in ignored node_modules/dist.
 
-This organization change does not redesign pages, change routes or implement T12/T13. Backend T11 contracts and remaining submitted-content reopening integration are documented in ../docs/T11_STRUCTURE_EDITOR.md.
+Use scripts/Verify-Frontend.ps1 for typecheck, build, lint, formatting and unit checks; -Browser -Pwa adds both browser suites. Run suites serially on this machine. The real HTTPS runner imports the current source paths and is launched through the existing backend acceptance test. No application token or raw customer content is written to persistent browser storage, logs or version control.
