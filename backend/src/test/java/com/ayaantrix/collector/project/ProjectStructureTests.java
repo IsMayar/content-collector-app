@@ -301,4 +301,98 @@ class ProjectStructureTests {
         assertThat(jdbc.queryForObject("select definition::text from collector.project_snapshots where workspace_id=? and project_id=?",String.class,t.workspace(),p.id())).isEqualTo(snapshot);assertThat(jdbc.queryForList("select definition::text from collector.template_versions order by id",String.class)).isEqualTo(catalog);
         assertThat(context.getBean(Flyway.class).info().applied()).hasSize(9);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
     }
+
+    @ParameterizedTest @ValueSource(strings={"NOT_STARTED","DRAFT","SUBMITTED","APPROVED","CHANGES_REQUESTED"})
+    void collectedMetadataEditsAndPureOrderingPreserveStateHistoryAndIds(String state){
+        var t=tenant();var p=create(t,ProjectType.WEBSITE);var before=detail(t,p);var section=before.structure().getFirst();var item=section.at("/items/0");
+        String snapshot=jdbc.queryForObject("select definition::text from collector.project_snapshots where workspace_id=? and project_id=?",String.class,t.workspace(),p.id());
+        jdbc.update("update collector.items set state=? where workspace_id=? and id=?",state,t.workspace(),id(item));
+        var metadata=definition(item);metadata.put("label","Metadata only").put("instructions","New instructions").put("example","A clearly labelled example");
+        as(t.actor(),()->editor().patchItem(t.workspace(),p.id(),id(item),new ItemPatch(metadata,1L,false)));
+        as(t.actor(),()->editor().patchSection(t.workspace(),p.id(),id(section),new SectionPatch("Renamed section",null,2L)));
+        var order=ordering(detail(t,p));Collections.reverse(order.sectionIds());order.itemOrderBySection().values().forEach(Collections::reverse);
+        as(t.actor(),()->editor().reorder(t.workspace(),p.id(),order));
+        assertThat(jdbc.queryForObject("select state from collector.items where workspace_id=? and id=?",String.class,t.workspace(),id(item))).isEqualTo(state);
+        assertThat(jdbc.queryForObject("select section_id from collector.items where workspace_id=? and id=?",UUID.class,t.workspace(),id(item))).isEqualTo(id(section));
+        assertThat(jdbc.queryForObject("select definition::text from collector.project_snapshots where workspace_id=? and project_id=?",String.class,t.workspace(),p.id())).isEqualTo(snapshot);
+        assertThat(detail(t,p).project().structureVersion()).isEqualTo(4);assertThat(count(t,"audit_logs")).isEqualTo(3);
+    }
+    static Stream<Arguments> collectedStatesAndReopenIntent(){return Stream.of("DRAFT","SUBMITTED","APPROVED","CHANGES_REQUESTED").flatMap(state->Stream.of(Arguments.of(state,false),Arguments.of(state,true)));}
+    @ParameterizedTest @MethodSource("collectedStatesAndReopenIntent")
+    void clientReopenFlagNeverAuthorizesCollectedSchemaChanges(String state,boolean reopen) throws Exception {
+        var t=tenant();var p=create(t,ProjectType.WEBSITE);var item=detail(t,p).structure().getFirst().at("/items/0");
+        jdbc.update("update collector.items set state=? where workspace_id=? and id=?",state,t.workspace(),id(item));
+        var def=definition(item);def.put("required",false);var before=detail(t,p);
+        mvc.perform(write(t,p,"PATCH","/items/"+id(item)+"/schema",new ItemPatch(def,1L,reopen)).header("X-Request-ID","collected-work-safe"))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REOPEN_REQUIRED"))
+            .andExpect(header().string("X-Request-ID","collected-work-safe")).andExpect(jsonPath("$.traceId").value("collected-work-safe"));
+        assertThat(detail(t,p)).isEqualTo(before);assertThat(count(t,"audit_logs")).isZero();
+    }
+    @ParameterizedTest @ValueSource(strings={"DRAFT","SUBMITTED","APPROVED","CHANGES_REQUESTED"})
+    void controllingItemChangesCannotBypassProtectionOfCollectedDependents(String state){
+        var t=tenant();var p=create(t,ProjectType.WEBSITE);UUID section=emptySection(t,p);var control=add(t,p,section,field("control","SINGLE_SELECT"));
+        var conditional=field("dependent","LONG_TEXT");conditional.putObject("visibleWhen").put("dependsOnItemKey","control").put("operator","EQUALS").put("optionKey","yes");var child=add(t,p,section,conditional);
+        jdbc.update("update collector.items set state=? where workspace_id=? and id=?",state,t.workspace(),id(child));
+        var change=definition(control);((ArrayNode)change.at("/validation/options")).addObject().put("key","no").put("label","No");
+        rejected(t,p,()->as(t.actor(),()->editor().patchItem(t.workspace(),p.id(),id(control),new ItemPatch(change,4L,true))),"REOPEN_REQUIRED");
+        // The uncollected controller itself is still NOT_STARTED: protection came from the full impact plan.
+        assertThat(jdbc.queryForObject("select state from collector.items where workspace_id=? and id=?",String.class,t.workspace(),id(control))).isEqualTo("NOT_STARTED");
+    }
+    @ParameterizedTest @ValueSource(booleans={false,true})
+    void bothSectionVisibilityTransitionsRequireCollectedWorkHandling(boolean enabled){
+        var t=tenant();var p=create(t,ProjectType.WEBSITE);var section=detail(t,p).structure().getFirst();var item=section.at("/items/0");
+        jdbc.update("update collector.items set state='DRAFT' where workspace_id=? and id=?",t.workspace(),id(item));
+        jdbc.update("update collector.sections set enabled=? where workspace_id=? and id=?",!enabled,t.workspace(),id(section));
+        rejected(t,p,()->as(t.actor(),()->editor().patchSection(t.workspace(),p.id(),id(section),new SectionPatch(null,enabled,1L))),"REOPEN_REQUIRED");
+    }
+    @Test void impactPlanIdentifiesDraftAndRevisionMarkersWithoutCreatingLaterModels(){
+        var t=tenant();var p=create(t,ProjectType.WEBSITE);var section=detail(t,p).structure().getFirst();
+        UUID draft=id(section.at("/items/0")),submitted=id(section.at("/items/1"));
+        jdbc.update("update collector.items set state='DRAFT' where workspace_id=? and id=?",t.workspace(),draft);
+        jdbc.update("update collector.items set state='SUBMITTED' where workspace_id=? and id=?",t.workspace(),submitted);
+        var before=detail(t,p).structure();var after=before.stream().map(JsonNode::deepCopy).toList();((ObjectNode)after.getFirst()).put("enabled",false);
+        var policy=context.getBean(com.ayaantrix.collector.project.service.ProjectStructureMutationPolicy.class);var impact=policy.assess(before,after);
+        assertThat(impact.draftItemIds()).containsExactly(draft);assertThat(impact.revisionItemIds()).containsExactly(submitted);assertThat(impact.affectedItemIds()).contains(draft,submitted);
+        assertThatThrownBy(()->impact.draftItemIds().clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(()->policy.requireSupported(impact,true)).isInstanceOf(ApiException.class);
+        assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector' and table_name in ('answers','submission_revisions','review_decisions')",Integer.class)).isZero();
+    }
+    @Test void impactBoundaryRejectsHardRemovalAndStillAllowsUntouchedNewRequests(){
+        var t=tenant();var p=create(t,ProjectType.WEBSITE);var before=detail(t,p).structure();var after=new ArrayList<JsonNode>();for(var s:before)after.add(s.deepCopy());
+        ((ArrayNode)after.getFirst().get("items")).remove(0);
+        var policy=context.getBean(com.ayaantrix.collector.project.service.ProjectStructureMutationPolicy.class);
+        assertThatThrownBy(()->policy.assess(before,after)).isInstanceOf(ApiException.class);
+        assertThat(policy.assess(before,before).requiresCollectedWorkHandling()).isFalse();
+        var item=before.getFirst().at("/items/0");jdbc.update("update collector.items set state='APPROVED' where workspace_id=? and id=?",t.workspace(),id(item));
+        UUID s=emptySection(t,p);add(t,p,s,field("new.request","SHORT_TEXT"));assertThat(detail(t,p).project().structureVersion()).isEqualTo(3);
+    }
+    @ParameterizedTest @ValueSource(strings={"REVOKE","DEMOTE","ARCHIVE","VERSION"})
+    void waitingStructureWritesRecheckConcurrentMembershipStateAndVersions(String kind) throws Exception {
+        var t=tenant();var p=create(t,ProjectType.WEBSITE);var before=detail(t,p);var held=new CountDownLatch(1);var release=new CountDownLatch(1);
+        boolean membership=kind.equals("REVOKE")||kind.equals("DEMOTE");String table=membership?"workspaces":"projects";
+        try(var pool=Executors.newFixedThreadPool(2)){
+            var change=pool.submit(()->tx().executeWithoutResult(status->{
+                jdbc.queryForObject("select id from collector."+table+" where id=? for update",UUID.class,membership?t.workspace():p.id());held.countDown();
+                try{if(!release.await(12,TimeUnit.SECONDS))throw new IllegalStateException("Synthetic lock wait timed out");}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException("Interrupted test");}
+                switch(kind){
+                    case "REVOKE"->jdbc.update("update collector.workspace_members set state='DISABLED' where workspace_id=?",t.workspace());
+                    case "DEMOTE"->jdbc.update("update collector.workspace_members set role='MEMBER' where workspace_id=?",t.workspace());
+                    case "ARCHIVE"->jdbc.update("update collector.projects set state='ARCHIVED' where workspace_id=? and id=?",t.workspace(),p.id());
+                    case "VERSION"->jdbc.update("update collector.projects set structure_version=2 where workspace_id=? and id=?",t.workspace(),p.id());
+                }
+            }));
+            assertThat(held.await(5,TimeUnit.SECONDS)).isTrue();
+            var write=pool.submit(()->{try{as(t.actor(),()->editor().createSection(t.workspace(),p.id(),new SectionCreate(null,"Concurrent rejected change",1L)));return "ACCEPTED";}catch(ApiException e){return e.getCode();}});
+            try{
+                long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(6);int waiting=0;
+                while(waiting==0 && System.nanoTime()<until){waiting=jdbc.queryForObject("select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like ? and pid<>pg_backend_pid()",Integer.class,"%"+table+"%");if(waiting==0)Thread.sleep(10);}
+                assertThat(waiting).as("Actual PostgreSQL structure writer lock waiter").isGreaterThan(0);
+            }finally{release.countDown();}
+            change.get(15,TimeUnit.SECONDS);
+            String expected=switch(kind){case "REVOKE"->"NOT_FOUND";case "DEMOTE"->"ACCESS_DENIED";case "ARCHIVE"->"READ_ONLY";default->"STRUCTURE_CONFLICT";};
+            String result=write.get(15,TimeUnit.SECONDS);assertThat(result).isEqualTo(expected);
+        }finally{release.countDown();}
+        assertThat(context.getBean(ProjectStructureRepository.class).structure(t.workspace(),p.id())).isEqualTo(before.structure());assertThat(count(t,"audit_logs")).isZero();
+        assertThat(jdbc.queryForObject("select structure_version from collector.projects where workspace_id=? and id=?",Long.class,t.workspace(),p.id())).isEqualTo(kind.equals("VERSION")?2:1);
+    }
 }
