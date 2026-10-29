@@ -125,3 +125,8 @@ No tracked application source file was deleted. The 28 removed log files and two
 
 
 Verified test-fixture correction commit: `ec3f44d`. Verified frontend organization/HTTPS path commit: `a07808e`. Documentation is committed separately. No push.
+
+
+## 29 October continuation
+
+The later feature-source reorganization replaces the old flat/mixed frontend modules with the requested app/features/shared/layouts/services/config/styles ownership. Unit tests now live in tests/unit; browser directories and ignored .artifacts are retained. See [current frontend architecture](../frontend/ARCHITECTURE.md) and [T11 Part 2 evidence and remaining dependencies](T11_PART2.md). Earlier evidence above remains historical.

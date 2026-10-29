@@ -186,3 +186,8 @@ Implementation/regression commit: `995728c`. Frontend/real HTTPS integration com
 
 
 The later resume/cleanup preserved this original implementation and moved its HTTPS harness into frontend/tests/integration/real-auth. The original changed-file inventory above records the implementation commits. [Current organization, test-fixture correction, file moves and latest verification](T11_RESUME_AND_FRONTEND_ORGANIZATION.md).
+
+
+## Part 2 continuation — 29 October 2026
+
+[Current full-candidate collected-work policy and final verification](T11_PART2.md) supersedes the Part 1 per-target safety description. It protects transitive visibility dependents and both section enabled transitions without implementing submission/review persistence or treating reopenAffected as authorization. Full T11/M2 remain In progress for actual T17/T22 integration. Existing endpoints and V1–V9 remain unchanged.
