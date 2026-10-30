@@ -27,4 +27,5 @@ export const projectContactSchema = z.object({
   timezone: z.string().nullable(),
   accessExpiresAt: z.iso.datetime(),
   emailRemindersEnabled: z.boolean(),
+  accessInitializedAt: z.iso.datetime().nullable().optional(),
 })

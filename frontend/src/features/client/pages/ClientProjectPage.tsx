@@ -1,9 +1,10 @@
+import { useClientChecklist } from '@/features/client/api/portalApi'
+import { PortalFoundation } from '@/features/client/components/PortalFoundation'
+import { useAppSelector } from '@/shared/hooks/useAppStore'
 import { AnswerEditor } from '@/features/client/components/AnswerEditor'
 import { ClientPreferences } from '@/features/client/components/ClientPreferences'
-import type { ClientChecklist } from '@/features/client/types/client.types'
 import { clientApi } from '@/services/api/clientApi'
-import { usePortalData } from '@/services/api/resourceApi'
-import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
+import { ConfirmDialog, Notice, StatePanel } from '@/shared/components/Feedback'
 import {
   Badge,
   DualProgress,
@@ -21,7 +22,8 @@ import { Link, useNavigate, useParams } from 'react-router'
 export function ClientProjectPage() {
   const { projectId } = useParams()
   const root = `client/projects/${projectId}`
-  const q = usePortalData<ClientChecklist>(`${root}/checklist`)
+  const q = useClientChecklist(projectId || '')
+  const blocked = useAppSelector((s) => s.clientAccess.blocked)
   const [selected, setSelected] = useState('')
   const [settings, setSettings] = useState(false)
   const [view, setView] = useState('home')
@@ -29,10 +31,11 @@ export function ClientProjectPage() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const [confirm, setConfirm] = useState(false)
-  const data = q.data
+  const foundation = q.data && 'capabilities' in q.data ? q.data : undefined
+  const data = q.data && !('capabilities' in q.data) ? q.data : undefined
   const items = data?.sections.flatMap((s) => s.items) || []
   const active = items.find((i) => i.id === selected) || items[0]
-  if (q.isError)
+  if (q.isError || blocked)
     return (
       <div className="access-card">
         <Heading
@@ -42,9 +45,14 @@ export function ClientProjectPage() {
         />
         <ErrorNotice error={command.error} />
         <div className="actions">
-          <button className="secondary-button" onClick={() => void q.refetch()}>
-            Try again
-          </button>
+          {!blocked && (
+            <button
+              className="secondary-button"
+              onClick={() => void q.refetch()}
+            >
+              Try again
+            </button>
+          )}
           <Link
             className="primary-button"
             to={`/client/access?projectId=${projectId}`}
@@ -53,11 +61,19 @@ export function ClientProjectPage() {
           </Link>
         </div>
         <p>
-          Saved drafts remain with the project. Your agency can help if access
-          has been revoked.
+          Your agency can help you request another link if access has changed.
         </p>
       </div>
     )
+  if (q.isLoading || (foundation && q.isFetching))
+    return (
+      <StatePanel
+        kind="loading"
+        title="Opening your project"
+        description="Checking your private project access…"
+      />
+    )
+  if (foundation) return <PortalFoundation data={foundation} />
   return (
     <QueryState query={q}>
       {data && (

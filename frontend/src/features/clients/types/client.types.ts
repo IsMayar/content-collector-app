@@ -13,6 +13,7 @@ export interface ProjectContact {
   state: 'ACTIVE' | 'REVOKED'
   timezone: Timezone | null
   accessExpiresAt: Instant
+  accessInitializedAt?: string | null
   emailRemindersEnabled: boolean
 }
 export interface ContactCreate {

@@ -214,7 +214,11 @@ export function ProjectPage() {
           {tab === 'access' && owner && (
             <>
               <CustomerPanel workspaceId={id} clientId={p.clientId} />
-              <ContactsPanel root={root} clientId={p.clientId} />
+              <ContactsPanel
+                root={root}
+                clientId={p.clientId}
+                canInvite={['ACTIVE', 'PAUSED', 'COMPLETED'].includes(p.state)}
+              />
             </>
           )}
           {tab === 'assignments' && owner && <AssignmentsPanel root={root} />}

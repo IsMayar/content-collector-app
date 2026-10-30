@@ -1,3 +1,4 @@
+import { clientAccessEstablished } from '@/features/client/store/clientAccessSlice'
 import { clientApi } from '@/services/api/clientApi'
 import { Notice } from '@/shared/components/Feedback'
 import { ErrorNotice, Field, Heading } from '@/shared/components/ProductUI'
@@ -14,12 +15,20 @@ export function ClientAccessPage() {
   const [token, setToken] = useState(
     () => new URLSearchParams(location.hash.slice(1)).get('token') || '',
   )
+  // A second email link can be a hash-only navigation on the same mounted page.
+  const [observedHash, setObservedHash] = useState(location.hash)
+  if (location.hash !== observedHash) {
+    setObservedHash(location.hash)
+    if (location.hash)
+      setToken(new URLSearchParams(location.hash.slice(1)).get('token') || '')
+  }
   const command = useCommand(true)
   const [message, setMessage] = useState('')
   const [fresh, setFresh] = useState('')
   useEffect(() => {
-    if (location.hash) navigate('/client/access', { replace: true })
-  }, [location.hash, navigate])
+    if (location.hash)
+      navigate('/client/access' + location.search, { replace: true })
+  }, [location.hash, location.search, navigate])
   return (
     <div className="access-card invitation-landing">
       <span className="access-emblem">
@@ -91,6 +100,7 @@ export function ClientAccessPage() {
               if (result) {
                 setToken('')
                 dispatch(clientApi.util.resetApiState())
+                dispatch(clientAccessEstablished())
                 navigate(`/client/projects/${result.projectId}`)
               }
             }}

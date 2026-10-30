@@ -14,12 +14,13 @@ export function useCommand(client = false) {
   ): Promise<T | undefined> {
     setError('')
     try {
-      return (await (client ? portal : agency)({
+      const result = await (client ? portal : agency)({
         url,
         method,
         body,
         headers,
-      }).unwrap()) as T
+      }).unwrap()
+      return (result ?? {}) as T
     } catch (e) {
       setError(errorMessage(e))
       return undefined

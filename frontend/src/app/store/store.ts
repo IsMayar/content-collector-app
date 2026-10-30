@@ -1,3 +1,6 @@
+import clientAccessReducer, {
+  clientAccessUnavailable,
+} from '@/features/client/store/clientAccessSlice'
 import { refreshIdentity } from '@/features/auth/store/session'
 import authReducer, {
   identityReceived,
@@ -42,10 +45,25 @@ export const createAppStore = () => {
       void dispatch(refreshIdentity())
     },
   })
+  sessionListener.startListening({
+    predicate: (action) =>
+      action.type === `${clientApi.reducerPath}/executeQuery/rejected` &&
+      (action as { payload?: { status?: unknown } }).payload?.status === 401,
+    effect: (_action, api) => {
+      api.dispatch(clientAccessUnavailable())
+    },
+  })
+  sessionListener.startListening({
+    actionCreator: clientAccessUnavailable,
+    effect: (_action, api) => {
+      api.dispatch(clientApi.util.resetApiState())
+    },
+  })
   return configureStore({
     devTools: false,
     reducer: {
       auth: authReducer,
+      clientAccess: clientAccessReducer,
       [agencyApi.reducerPath]: agencyApi.reducer,
       [clientApi.reducerPath]: clientApi.reducer,
     },

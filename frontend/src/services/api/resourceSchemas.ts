@@ -1,3 +1,4 @@
+import { portalFoundationSchema } from '@/features/client/schemas/portalSchema'
 import { teamSchema } from '@/features/workspace/schemas/teamSchema'
 import { assignmentsSchema } from '@/features/projects/schemas/assignmentSchema'
 import { previewSchema } from '@/features/projects/schemas/previewSchema'
@@ -38,6 +39,13 @@ export function validateProductRead(path: string, data: unknown) {
       progress,
       structure: z.array(section),
     })
+  else if (
+    route.endsWith('/checklist') &&
+    typeof data === 'object' &&
+    data !== null &&
+    'capabilities' in data
+  )
+    schema = portalFoundationSchema
   else if (route.endsWith('/checklist'))
     schema = z.looseObject({
       project: z.looseObject({

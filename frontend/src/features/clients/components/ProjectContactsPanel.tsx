@@ -20,9 +20,11 @@ import { Link } from 'react-router'
 export function ContactsPanel({
   root,
   clientId,
+  canInvite = true,
 }: {
   root: string
   clientId: string
+  canInvite?: boolean
 }) {
   const q = useProjectContacts(root),
     command = useClientCommands()
@@ -33,14 +35,20 @@ export function ContactsPanel({
     [created, setCreated] = useState(''),
     [revoke, setRevoke] = useState<ProjectContact | null>(null),
     [message, setMessage] = useState('')
+  const [inviteKeys, setInviteKeys] = useState<Record<string, string>>({})
   async function invite(id: string) {
+    const key = inviteKeys[id] || crypto.randomUUID()
+    setInviteKeys((keys) => ({ ...keys, [id]: key }))
     const result = await command.run<{ demoUrl?: string }>(
       `${root}/contacts/${id}/invite`,
       {},
+      'POST',
+      { 'Idempotency-Key': key },
     )
     if (result) {
       setLink(result.demoUrl || '')
       setMessage('Invitation sent.')
+      setInviteKeys((keys) => ({ ...keys, [id]: crypto.randomUUID() }))
       return true
     }
     return false
@@ -58,8 +66,9 @@ export function ContactsPanel({
       </div>
       {!env.mocksEnabled && (
         <Notice>
-          Contact records do not issue a client session. Invitation sending and
-          access revocation require the later access workflow.
+          Contacts receive a private, single-use email link. Publish your
+          project before sending invitations. Revoking access ends every client
+          session for this contact.
         </Notice>
       )}
       <QueryState query={q}>
@@ -89,29 +98,29 @@ export function ContactsPanel({
                   <td>{c.email}</td>
                   <td>Client contact</td>
                   <td>
-                    <Badge>{c.state}</Badge>
+                    <Badge>
+                      {c.state !== 'ACTIVE'
+                        ? c.state
+                        : Date.parse(c.accessExpiresAt) <= Date.now()
+                          ? 'EXPIRED'
+                          : c.accessInitializedAt === null
+                            ? 'NOT_INVITED'
+                            : 'ACTIVE'}
+                    </Badge>
                   </td>
                   <td>{new Date(c.accessExpiresAt).toLocaleDateString()}</td>
                   <td>
                     <div className="actions">
                       <button
                         className="text-link"
-                        disabled={
-                          !env.mocksEnabled ||
-                          command.pending ||
-                          c.state !== 'ACTIVE'
-                        }
+                        disabled={!canInvite || command.pending}
                         onClick={() => void invite(c.id)}
                       >
                         Send / resend invite
                       </button>
                       <button
                         className="danger-link"
-                        disabled={
-                          !env.mocksEnabled ||
-                          command.pending ||
-                          c.state !== 'ACTIVE'
-                        }
+                        disabled={command.pending || c.state !== 'ACTIVE'}
                         onClick={() => setRevoke(c)}
                       >
                         Revoke
@@ -176,7 +185,7 @@ export function ContactsPanel({
                 if (!env.mocksEnabled || (await invite(id))) {
                   if (!env.mocksEnabled)
                     setMessage(
-                      'Contact saved. Invitations and client access are not enabled yet.',
+                      'Contact saved. Use Send / resend invite when the project is published.',
                     )
                   setOpen(false)
                   setCreated('')

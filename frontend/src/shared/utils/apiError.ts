@@ -30,6 +30,8 @@ export function apiProblem(error: unknown): Partial<Problem> {
 }
 export function errorMessage(error: unknown): string {
   const problem = apiProblem(error)
+  if (problem.code === 'CLIENT_ACCESS_UNAVAILABLE')
+    return 'Your project link or session has expired, or access was revoked. Request a fresh link from your agency.'
   if (problem.code === 'INVALID_CREDENTIALS')
     return 'Email or password is incorrect. Please try again.'
   if (problem.code === 'EMAIL_NOT_VERIFIED')

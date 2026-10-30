@@ -1,3 +1,4 @@
+import { useAppSelector } from '@/shared/hooks/useAppStore'
 import { agencyApi } from '@/services/api/baseApi'
 import { clientApi } from '@/services/api/clientApi'
 import { validateProductRead } from '@/services/api/resourceSchemas'
@@ -89,10 +90,11 @@ export function usePortalData<T>(
   path: string,
   options: { skip?: boolean; pollingInterval?: number } = {},
 ) {
+  const blocked = useAppSelector((s) => s.clientAccess.blocked)
   const query = portalApi.usePortalReadQuery(path, {
     refetchOnMountOrArgChange: true,
-    skip: !path || options.skip,
+    skip: !path || options.skip || (blocked && path.startsWith('client/')),
     pollingInterval: options.pollingInterval,
   })
-  return { ...query, data: query.data as T | undefined }
+  return { ...query, data: query.currentData as T | undefined }
 }

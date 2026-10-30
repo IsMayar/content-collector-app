@@ -2,7 +2,7 @@
 import { createServer } from 'vite'
 import { createServer as createHttpServer } from 'node:http'
 import { chromium, expect } from '@playwright/test'
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import assert from 'node:assert/strict'
@@ -15,6 +15,8 @@ let server,
   origin,
   teammateContext,
   teammatePage
+let clientContext, clientPage
+let clientBearerAttached = false
 let phase = 'start'
 let refreshes = 0
 let serviceWorkerResponse = false
@@ -75,30 +77,33 @@ async function signin(
   if (expected === 200) await waitState('authenticated', target)
   else await waitState('anonymous', target)
 }
-async function run(args, target = page) {
-  return target.evaluate(async (args) => {
-    const { store } = await import('/src/app/store/store.ts')
-    const { createBaseQuery } = await import('/src/services/api/baseQuery.ts')
-    const control = new AbortController()
-    const result = await createBaseQuery(true)(
-      args,
-      {
-        signal: control.signal,
-        abort: () => control.abort(),
-        dispatch: store.dispatch,
-        getState: store.getState,
-        extra: undefined,
-        endpoint: 'real-auth-check',
-        type: 'query',
-      },
-      {},
-    )
-    return {
-      status: result.error?.status || result.meta?.response?.status,
-      code: result.error?.data?.code,
-      data: result.data,
-    }
-  }, args)
+async function run(args, target = page, agency = true) {
+  return target.evaluate(
+    async ({ args, agency }) => {
+      const { store } = await import('/src/app/store/store.ts')
+      const { createBaseQuery } = await import('/src/services/api/baseQuery.ts')
+      const control = new AbortController()
+      const result = await createBaseQuery(agency)(
+        args,
+        {
+          signal: control.signal,
+          abort: () => control.abort(),
+          dispatch: store.dispatch,
+          getState: store.getState,
+          extra: undefined,
+          endpoint: 'real-auth-check',
+          type: 'query',
+        },
+        {},
+      )
+      return {
+        status: result.error?.status || result.meta?.response?.status,
+        code: result.error?.data?.code,
+        data: result.data,
+      }
+    },
+    { args, agency },
+  )
 }
 async function rawMutation(path, target = page) {
   return target.evaluate(async (path) => {
@@ -1055,6 +1060,273 @@ async function command(input) {
       ).toHaveCount(0)
       assert.ok(!serviceWorkerResponse, 'MSW intercepted T13 lifecycle')
       await teammateContext.close()
+      break
+    }
+    case 'client-owner-invite': {
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '?tab=access',
+      )
+      const row = page
+        .getByRole('row')
+        .filter({ hasText: 'browser-contact@example.test' })
+      const sent = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname.endsWith('/invite'),
+      )
+      await row
+        .getByRole('button', { name: 'Send / resend invite', exact: true })
+        .click()
+      assert.equal((await sent).status(), 202)
+      await expect(
+        page.getByText('Invitation sent.', { exact: true }),
+      ).toBeVisible()
+      break
+    }
+    case 'client-open': {
+      if (!clientContext) {
+        clientContext = await browser.newContext({
+          ignoreHTTPSErrors: true,
+          viewport: { width: 1440, height: 1000 },
+        })
+        clientPage = await clientContext.newPage()
+        observe(clientPage)
+        clientPage.on('request', (request) => {
+          if (
+            new URL(request.url()).pathname.startsWith('/api/v1/client') &&
+            request.headers().authorization
+          )
+            clientBearerAttached = true
+        })
+      }
+      await clientPage.goto(
+        origin +
+          '/client/access?projectId=' +
+          settings.previewProject +
+          '#token=' +
+          input.token,
+      )
+      await waitState('anonymous', clientPage)
+      await expect(
+        clientPage.getByRole('button', {
+          name: 'Open my project',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await expect.poll(() => new URL(clientPage.url()).hash === '').toBe(true)
+      phase = 'client-open:exchange'
+      const exchanged = clientPage.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/v1/client-access/exchange',
+      )
+      await clientPage
+        .getByRole('button', { name: 'Open my project', exact: true })
+        .click()
+      assert.equal((await exchanged).status(), 200)
+      const root = 'client/projects/' + settings.previewProject + '/checklist'
+      const data = (await run(root, clientPage, false)).data
+      await expect(
+        clientPage.getByRole('heading', {
+          name: data.project.title,
+          exact: true,
+        }),
+      ).toBeVisible()
+      await expect(
+        clientPage.getByRole('navigation', { name: 'Requested sections' }),
+      ).toBeVisible()
+      await expect(
+        clientPage.getByRole('button', {
+          name: /Save draft|Submit for review|Upload files/,
+        }),
+      ).toHaveCount(0)
+      assert.equal(data.capabilities.canRespond, false)
+      phase = 'client-open:cookie'
+      const cookies = await clientContext.cookies(
+        origin +
+          '/api/v1/client/projects/' +
+          settings.previewProject +
+          '/checklist',
+      )
+      const cookie = cookies.find((c) => c.name === '__Secure-collector_client')
+      assert.ok(
+        cookie?.secure &&
+          cookie.httpOnly &&
+          cookie.sameSite === 'Lax' &&
+          cookie.path === '/api/v1',
+      )
+      assert.ok(
+        await clientPage.evaluate(
+          () => !document.cookie.includes('collector_client'),
+        ),
+      )
+      phase = 'client-open:scope'
+      const other = (
+        await run('workspaces/' + settings.workspace + '/projects')
+      ).data.data.find((p) => p.id !== settings.previewProject)
+      assert.equal(
+        (
+          await run(
+            'client/projects/' + other.id + '/checklist',
+            clientPage,
+            false,
+          )
+        ).status,
+        404,
+      )
+      assert.equal(
+        (await run('workspaces/' + settings.workspace, clientPage, false))
+          .status,
+        401,
+      )
+      phase = 'client-open:layout'
+      for (const width of [1440, 360]) {
+        await clientPage.setViewportSize({ width, height: 1000 })
+        const navigation = clientPage.getByRole('navigation', {
+          name: 'Requested sections',
+        })
+        await navigation.getByRole('button').last().click()
+        await clientPage.keyboard.press('Tab')
+        assert.ok(
+          await clientPage.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+          'Client portal horizontal overflow',
+        )
+        const directory = new URL(
+          '../../../.artifacts/real-auth/t14/',
+          import.meta.url,
+        )
+        mkdirSync(directory, { recursive: true })
+        await clientPage.screenshot({
+          path: fileURLToPath(new URL(`portal-${width}.png`, directory)),
+          fullPage: true,
+        })
+      }
+      await clientPage.reload()
+      await waitState('anonymous', clientPage)
+      await expect(
+        clientPage.getByRole('heading', {
+          name: data.project.title,
+          exact: true,
+        }),
+      ).toBeVisible()
+      assert.ok(
+        !clientBearerAttached && !serviceWorkerResponse,
+        'Client/agency transport isolation failed',
+      )
+      assert.equal((await run('me')).status, 200)
+      break
+    }
+    case 'client-idle-request-link': {
+      const root = 'client/projects/' + settings.previewProject + '/checklist'
+      assert.equal((await run(root, clientPage, false)).status, 401)
+      await clientPage.evaluate(() => window.dispatchEvent(new Event('focus')))
+      await expect(
+        clientPage.getByRole('heading', {
+          name: 'Let’s reconnect to your project',
+        }),
+      ).toBeVisible()
+      await clientPage
+        .getByRole('link', { name: 'Request a fresh link', exact: true })
+        .click()
+      await clientPage
+        .getByLabel('Your email', { exact: true })
+        .fill('browser-contact@example.test')
+      const requested = clientPage.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/v1/client-access/request-link',
+      )
+      await clientPage
+        .getByRole('button', { name: 'Request fresh link', exact: true })
+        .click()
+      assert.equal((await requested).status(), 202)
+      await expect(clientPage.getByRole('status')).toContainText(
+        'If this address has active access',
+      )
+      break
+    }
+    case 'client-expired-invitation': {
+      const expiredContext = await browser.newContext({
+        ignoreHTTPSErrors: true,
+      })
+      try {
+        const target = await expiredContext.newPage()
+        observe(target)
+        await target.goto(origin + '/client/access#token=' + input.token)
+        await waitState('anonymous', target)
+        const result = target.waitForResponse(
+          (res) =>
+            new URL(res.url()).pathname === '/api/v1/client-access/exchange',
+        )
+        await target
+          .getByRole('button', { name: 'Open my project', exact: true })
+          .click()
+        assert.equal((await result).status(), 401)
+        phase = 'client-expired-invitation:message'
+        await expect(target.getByRole('alert')).toContainText('expired')
+      } finally {
+        await expiredContext.close()
+      }
+      break
+    }
+    case 'client-revoke': {
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '?tab=access',
+      )
+      await page
+        .getByRole('row')
+        .filter({ hasText: 'browser-contact@example.test' })
+        .getByRole('button', { name: 'Revoke', exact: true })
+        .click()
+      const result = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'DELETE' &&
+          new URL(res.url()).pathname.endsWith('/access'),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Revoke access', exact: true })
+        .click()
+      assert.equal((await result).status(), 204)
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      const response = clientPage.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname.endsWith('/checklist') &&
+          res.status() === 401,
+      )
+      await clientPage.evaluate(() => window.dispatchEvent(new Event('focus')))
+      await response
+      await expect(
+        clientPage.getByRole('heading', {
+          name: 'Let’s reconnect to your project',
+        }),
+      ).toBeVisible()
+      const state = await clientPage.evaluate(async () =>
+        (await import('/src/app/store/store.ts')).store.getState(),
+      )
+      assert.ok(
+        state.clientAccess.blocked &&
+          Object.keys(state.clientApi.queries).length === 0,
+      )
+      assert.equal((await run('me')).status, 200)
+      await clientPage.reload()
+      await expect(
+        clientPage.getByRole('heading', {
+          name: 'Let’s reconnect to your project',
+        }),
+      ).toBeVisible()
+      await clientContext.close()
+      clientContext = undefined
       break
     }
     case 'workspace-reload': {
