@@ -272,7 +272,7 @@ class ProjectFoundationTests {
         var t=tenant();mvc.perform(post(t.root()+"/clients").with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content("{\"businessName\":\"New customer\",\"contactName\":\"Synthetic Person\",\"email\":\"Customer@Example.TEST\"}"))
             .andExpect(status().isCreated()).andExpect(jsonPath("$.client.email").value("customer@example.test")).andExpect(jsonPath("$.client.version").value(0));
         mvc.perform(get(t.root()+"/clients").header("Authorization",bearer(t))).andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(2));
-        assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector' and table_name in ('answers','submission_revisions')",Integer.class)).isZero();
+        assertThat(count(t,"answers")).isZero();assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector' and table_name in ('submission_revisions')",Integer.class)).isZero();
     }
     UUID workspaceTemplate(Tenant t,tools.jackson.databind.JsonNode definition,int version){
         UUID template=UUID.randomUUID(),id=UUID.randomUUID();jdbc.update("insert into collector.templates(id,workspace_id,template_key,project_type,industry,title,is_builtin,version) values (?,?,? ,?,'GENERAL','Custom',false,1)",template,t.workspace(),"custom."+template,definition.get("projectType").asText());
@@ -319,7 +319,7 @@ class ProjectFoundationTests {
     }
     @Test void cleanFlywayHibernateAndRestartPreserveProjectSnapshotAndSession() throws Exception {
         var t=tenant();var p=create(t,ProjectType.MOBILE_APP);var before=as(t.actor(),()->service().read(t.workspace(),p.id()));context.close();open();
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(12);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(13);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");assertThat(as(t.actor(),()->service().read(t.workspace(),p.id()))).isEqualTo(before);
         mvc.perform(get(t.root()+"/projects/"+p.id()).header("Authorization",bearer(t))).andExpect(status().isOk());seed().seed();assertThat(count(t,"projects")).isEqualTo(1);
     }
@@ -330,7 +330,7 @@ class ProjectFoundationTests {
         var original=seed().originals().get(0);data.update("insert into collector.templates(id,template_key,project_type,industry,title,is_builtin,version) values (?,?,'WEBSITE','PLUMBER',?,true,1)",BuiltInTemplateSeeder.templateId(KEY),KEY,original.get("title").asText());
         data.update("insert into collector.template_versions(id,template_id,version_no,schema_version,definition) values (?,?,1,1,?::jsonb)",VERSION,BuiltInTemplateSeeder.templateId(KEY),original.toString());
         try(var upgraded=start(url)){
-            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(12);assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(13);assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(data.queryForObject("select name from collector.workspaces where id=?",String.class,w)).isEqualTo("Preserved");assertThat(data.queryForObject("select password_hash from collector.users where id=?",String.class,user)).isEqualTo(hash);
             assertThat(json.readTree(data.queryForObject("select definition::text from collector.template_versions where id=?",String.class,VERSION))).isEqualTo(original);assertThat(data.queryForObject("select count(*) from collector.templates where is_builtin",Integer.class)).isEqualTo(10);
         }

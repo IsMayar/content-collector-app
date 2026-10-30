@@ -69,7 +69,7 @@ public class ProjectStructureMutationPolicy {
 
     public void requireSupported(Impact impact,boolean reopenRequested) {
         if(!impact.requiresCollectedWorkHandling())return;
-        // No client answers or immutable revision repositories exist yet. Never fabricate reopening.
+        // Persisted draft existence is reflected in item DRAFT state. Semantic changes remain fail-closed pending draft revalidation/reopening.
         String detail=reopenRequested
             ? "Reopening requires the revision workflow and draft revalidation, which are not available yet. Collected work was preserved."
             : "This change affects collected work. Use the revision reopening workflow before changing its structure.";

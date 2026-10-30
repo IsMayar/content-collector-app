@@ -30,6 +30,8 @@ public class ApiException extends RuntimeException {
         return status;
     }
 
+    public java.util.List<java.util.Map<String,String>> getErrors(){return java.util.List.of();}
+
     public Long getCurrentVersion(){return currentVersion;}
 
     public String getCode() {

@@ -118,6 +118,8 @@ class RealAuthenticationBrowserCheck {
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
                     var clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
                     io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
+                    io.step(Map.of("action","client-draft-collection"));
+                    assertThat(jdbc.queryForObject("select count(*) from collector.answers where project_id=?",Integer.class,clientProject)).isGreaterThan(0);
                     clock.advance(24*3600+1);io.step(Map.of("action","client-idle-request-link"));
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
                     clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();

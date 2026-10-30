@@ -323,7 +323,7 @@ class PasswordRecoveryWorkflowTests {
         UUID id=UUID.randomUUID();byte[] encrypted={1,2,3,4};
         data.update("insert into collector.outbox_jobs(id,job_type,payload_json,encrypted_payload,encryption_key_id,dedupe_key,state) values (?,'VERIFY_EMAIL','{}'::jsonb,?,'test-v1','upgrade','QUEUED')",id,encrypted);
         var flyway=Flyway.configure().dataSource(source).load();flyway.migrate();assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
-        assertThat(flyway.info().applied()).hasSize(12);assertThat(data.queryForObject("select encrypted_payload from collector.outbox_jobs where id=?",byte[].class,id)).containsExactly(encrypted);
+        assertThat(flyway.info().applied()).hasSize(13);assertThat(data.queryForObject("select encrypted_payload from collector.outbox_jobs where id=?",byte[].class,id)).containsExactly(encrypted);
         data.update("insert into collector.outbox_jobs(job_type,payload_json,encrypted_payload,encryption_key_id,dedupe_key,state) values ('RESET_PASSWORD','{}'::jsonb,?,'test-v1','reset-upgrade','QUEUED')",encrypted);
     }
 }

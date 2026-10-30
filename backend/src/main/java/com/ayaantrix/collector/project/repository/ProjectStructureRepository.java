@@ -90,18 +90,9 @@ public class ProjectStructureRepository {
     }
     public Map<UUID,Progress> progress(UUID workspace,List<UUID> projects){
         if(projects.isEmpty())return Map.of();var result=new HashMap<UUID,Progress>();
-        // Fresh projects have no answers: every conditional item is hidden until its predecessor is answered in T15.
-        String placeholders=String.join(",",Collections.nCopies(projects.size(),"?"));var args=new ArrayList<Object>();args.add(workspace);args.addAll(projects);
-        jdbc.query("""
-            select i.project_id,count(*) filter(where i.required) required_total,
-                count(*) filter(where i.required and i.state in ('SUBMITTED','APPROVED')) submitted,
-                count(*) filter(where i.required and i.state='APPROVED') approved,
-                count(*) filter(where i.required and i.state not in ('SUBMITTED','APPROVED')) actionable,
-                count(*) filter(where not i.required and i.state='APPROVED') optional_approved
-            from collector.items i join collector.sections s on s.workspace_id=i.workspace_id and s.project_id=i.project_id and s.id=i.section_id
-            where i.workspace_id=? and i.project_id in (
-            """+placeholders+") and i.enabled and s.enabled and not (i.schema_json ?? 'visibleWhen') group by i.project_id",
-            (org.springframework.jdbc.core.RowCallbackHandler)rs->result.put(rs.getObject("project_id",UUID.class),new Progress(rs.getLong("required_total"),rs.getLong("submitted"),rs.getLong("approved"),rs.getLong("actionable"),rs.getLong("optional_approved"))),args.toArray());
-        return result;
+        for(UUID project:projects){var all=structure(workspace,project);var values=new HashMap<UUID,JsonNode>();jdbc.query("select item_id,value_json from collector.answers where workspace_id=? and project_id=?",(org.springframework.jdbc.core.RowCallbackHandler)rs->values.put(rs.getObject(1,UUID.class),json.readTree(rs.getString(2))),workspace,project);
+        long required=0,submitted=0,approved=0,action=0,optional=0;
+        for(var section:all)for(var item:section.path("items")){if(!com.ayaantrix.collector.project.service.ProjectDraftVisibility.visible(section,item,all,values))continue;boolean req=item.path("required").asBoolean();String state=item.path("state").asText();if(req){required++;if(Set.of("SUBMITTED","APPROVED").contains(state))submitted++;if(state.equals("APPROVED"))approved++;else if(!state.equals("SUBMITTED"))action++;}else if(state.equals("APPROVED"))optional++;}
+        result.put(project,new Progress(required,submitted,approved,action,optional));}return result;
     }
 }

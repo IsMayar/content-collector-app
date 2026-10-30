@@ -40,6 +40,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         var problem = problemFactory.create(status, exception.getCode(), title(status),
                 exception.getMessage(), requestTrace.getTraceId(request));
         if(exception.getCurrentVersion()!=null)problem.setProperty("currentVersion",exception.getCurrentVersion());
+        if(!exception.getErrors().isEmpty())problem.setProperty("errors",exception.getErrors());
         var headers = new HttpHeaders();
         if (status.value() == 429 && "RATE_LIMITED".equals(exception.getCode())) {
             headers.set(HttpHeaders.RETRY_AFTER, "60");
