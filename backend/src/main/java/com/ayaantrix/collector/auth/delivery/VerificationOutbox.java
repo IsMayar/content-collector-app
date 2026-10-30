@@ -22,8 +22,12 @@ public class VerificationOutbox {
                 (id,job_type,payload_json,encrypted_payload,encryption_key_id,dedupe_key,state,available_at,created_at,updated_at)
                 values (?,?,jsonb_build_object('tokenId',?::text,'traceId',?::text),?,?,?,'QUEUED',?,?,?)
                 """,jobId,token.getPurpose().name(),token.getId().toString(),traceId,payload,cipher.keyId(),
-                (token.getPurpose()==com.ayaantrix.collector.auth.entity.TokenPurpose.VERIFY_EMAIL?"verify-email:":"password-reset:")+token.getId(),
+                (switch(token.getPurpose()){case VERIFY_EMAIL->"verify-email:";case RESET_PASSWORD->"password-reset:";case TEAM_INVITE->"team-invite:";})+token.getId(),
                 Timestamp.from(token.getCreatedAt()),Timestamp.from(token.getCreatedAt()),Timestamp.from(token.getCreatedAt()));
+    }
+    public void discardTeamInvitationJob(UUID tokenId,java.time.Instant now){
+        if(!TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("Invitation cleanup requires a transaction.");
+        jdbc.update("update collector.outbox_jobs set state='SUCCEEDED',encrypted_payload=null,lease_owner=null,lease_expires_at=null,last_error_code='TOKEN_NOT_USABLE',updated_at=? where job_type='TEAM_INVITE' and payload_json->>'tokenId'=? and state in ('QUEUED','RUNNING','FAILED')",Timestamp.from(now),tokenId.toString());
     }
     // Remove queued/held capability payloads atomically with successful password changes/replacement.
     public void discardUnusablePasswordResetJobs(UUID userId,java.time.Instant now) {

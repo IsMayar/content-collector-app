@@ -15,8 +15,9 @@ public class AccountToken {
     @Id
     @Column(nullable = false, updatable = false)
     private UUID id;
-    @Column(name = "user_id", nullable = false, updatable = false)
+    @Column(name = "user_id", updatable = false)
     private UUID userId;
+    @Column(name="workspace_id",updatable=false) private UUID workspaceId;
     @Column(name = "email_normalized", nullable = false, updatable = false, columnDefinition = "text")
     private String emailNormalized;
     @Enumerated(EnumType.STRING)
@@ -52,6 +53,11 @@ public class AccountToken {
         this.expiresAt = now.plus(purpose.lifetime());
     }
 
+    public AccountToken(UUID workspace,String email,String digest,Instant now){
+        if(digest==null || !digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("A SHA-256 digest is required.");
+        id=UUID.randomUUID();workspaceId=Objects.requireNonNull(workspace);emailNormalized=Objects.requireNonNull(email);tokenHash=digest;purpose=TokenPurpose.TEAM_INVITE;createdAt=now;updatedAt=now;expiresAt=now.plus(purpose.lifetime());
+    }
+    public UUID getWorkspaceId(){return workspaceId;}
     // Informational only: authoritative consumption must use the conditional repository update.
     public boolean isUsableFor(TokenPurpose expected, Instant now) {
         Objects.requireNonNull(now);

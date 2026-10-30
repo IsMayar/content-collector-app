@@ -101,6 +101,16 @@ class RealAuthenticationBrowserCheck {
                     assertThat(jdbc.queryForList("select id,structure_version,version,state from collector.projects where workspace_id=? order by id",workspace)).isEqualTo(beforePreview);
                     assertThat(jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace)).isEqualTo(initialSnapshots);
                     assertThat(jdbc.queryForObject("select count(*) from collector.audit_logs where workspace_id=?",Integer.class,workspace)).isEqualTo(17);
+                    String teammate="teammate-"+UUID.randomUUID()+"@example.test";
+                    io.step(Map.of("action","team-invite","email",teammate));
+                    assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
+                    var invitationMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.recipient().equals(teammate)&&m.purpose()==TokenPurpose.TEAM_INVITE).findFirst().orElseThrow();
+                    io.step(Map.of("action","team-register"));
+                    assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
+                    var verificationMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.recipient().equals(teammate)&&m.purpose()==TokenPurpose.VERIFY_EMAIL).findFirst().orElseThrow();
+                    io.step(Map.of("action","team-verify-accept","verification",verificationMail.actionLink().getFragment().substring(6),"invitation",invitationMail.actionLink().getFragment().substring(6)));
+                    io.step(Map.of("action","team-assign-revoke"));
+                    assertThat(jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace)).isEqualTo(initialSnapshots);
                     io.step(Map.of("action","workspace-reload"));
                     clock.advance(331);io.step(Map.of("action","workspace-expired-access"));
                     // Isolated second tenant fixture; no T13 management/test-control HTTP endpoint is introduced.

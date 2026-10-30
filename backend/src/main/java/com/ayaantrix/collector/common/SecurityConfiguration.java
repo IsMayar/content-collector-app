@@ -52,6 +52,11 @@ public class SecurityConfiguration {
                                 "/api/v1/workspaces/*/projects/*/items/*/schema").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/workspaces").authenticated()
                         .requestMatchers(HttpMethod.PATCH,"/api/v1/workspaces/*").authenticated()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/members","/api/v1/workspaces/*/projects/*/assignments").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/members","/api/v1/team-invitations/accept","/api/v1/workspaces/*/ownership-transfer").authenticated()
+                        .requestMatchers(HttpMethod.PATCH,"/api/v1/workspaces/*/members/*").authenticated()
+                        .requestMatchers(HttpMethod.DELETE,"/api/v1/workspaces/*/members/*","/api/v1/workspaces/*/member-invitations/*","/api/v1/workspaces/*/projects/*/assignments/*").authenticated()
+                        .requestMatchers(HttpMethod.PUT,"/api/v1/workspaces/*/projects/*/assignments/*").authenticated()
                         .anyRequest().denyAll()
                 )
 

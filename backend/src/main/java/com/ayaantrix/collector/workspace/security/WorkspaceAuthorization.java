@@ -24,13 +24,13 @@ public class WorkspaceAuthorization {
     WorkspaceAuthorization(AgencySessions sessions,UserAccountRepository users,WorkspaceRepository workspaces,WorkspaceMemberRepository members){
         this.sessions=sessions;this.users=users;this.workspaces=workspaces;this.members=members;
     }
-    public UUID actor(){
+    public UUID identity(){
         var authentication=SecurityContextHolder.getContext().getAuthentication();
         if(!(authentication instanceof JwtAuthenticationToken token) || !token.isAuthenticated())throw unauthenticated();
         final UUID user;try{user=UUID.fromString(token.getToken().getSubject());}catch(RuntimeException invalid){throw unauthenticated();}
-        users.findLockedById(user).orElseThrow(WorkspaceAuthorization::unauthenticated);
         sessions.validateAccess(token.getToken());return user;
     }
+    public UUID actor(){UUID user=identity();users.findLockedById(user).orElseThrow(WorkspaceAuthorization::unauthenticated);identity();return user;}
     public record Access(Workspace workspace,WorkspaceMember member){}
     public Access require(UUID workspace,UUID user,boolean owner){
         var w=workspaces.lockAccessible(workspace,user).orElseThrow(WorkspaceAuthorization::notFound);

@@ -11,6 +11,9 @@ import java.util.*;
 
 // Narrow persistence port: deliberately no global findAll/findById/deleteById shortcuts.
 public interface WorkspaceRepository extends Repository<Workspace,UUID> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select w from Workspace w where w.id=:workspace")
+    Optional<Workspace> lockInvitationWorkspace(UUID workspace);
     Workspace saveAndFlush(Workspace workspace);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select w from Workspace w where w.id=:workspace and exists (select m.id from WorkspaceMember m where m.workspaceId=w.id and m.userId=:user and m.state=com.ayaantrix.collector.workspace.entity.WorkspaceMember.State.ACTIVE)")

@@ -13,17 +13,19 @@ import java.util.*;
 public class AccountDeliveryOperations {
     public enum Resolution { CONFIRMED_SENT, CONFIRMED_NOT_SENT, ABANDON }
     public record Job(UUID id,String purpose,String state,int attempts,String outcome,Instant updatedAt) {}
+    private final com.ayaantrix.collector.auth.repository.AccountTokenRepository tokens;
+    private final com.ayaantrix.collector.workspace.service.WorkspaceTeamPolicy team;
     private final JdbcTemplate jdbc;
     private final Clock clock;
     private final TransactionTemplate transactions;
-    public AccountDeliveryOperations(JdbcTemplate jdbc,Clock clock,PlatformTransactionManager manager){
+    public AccountDeliveryOperations(JdbcTemplate jdbc,Clock clock,PlatformTransactionManager manager,com.ayaantrix.collector.auth.repository.AccountTokenRepository tokens,com.ayaantrix.collector.workspace.service.WorkspaceTeamPolicy team){this.tokens=tokens;this.team=team;
         this.jdbc=jdbc;this.clock=clock;this.transactions=new TransactionTemplate(manager);
     }
     public List<Job> inspectHeld(int limit) {
         if(limit<1 || limit>100)throw new IllegalArgumentException("Inspection limit must be 1-100.");
         return jdbc.query("""
             select id,job_type,state,attempt_count,last_error_code,updated_at from collector.outbox_jobs
-            where job_type in ('VERIFY_EMAIL','RESET_PASSWORD') and state='FAILED'
+            where job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE') and state='FAILED'
             order by updated_at,id limit ?
             """,(row,index)->new Job(row.getObject(1,UUID.class),row.getString(2),row.getString(3),row.getInt(4),
                 row.getString(5),row.getTimestamp(6).toInstant()),limit);
@@ -38,7 +40,7 @@ public class AccountDeliveryOperations {
             var jobs=jdbc.query("""
                 select attempt_count,last_error_code from collector.outbox_jobs
                 where id=? and updated_at=? and attempt_count=? and state='FAILED'
-                and job_type in ('VERIFY_EMAIL','RESET_PASSWORD') for update
+                and job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE') for update
                 """,(row,index)->new Object[]{row.getInt(1),row.getString(2)},id,Timestamp.from(expectedUpdatedAt),expectedAttempts);
             if(jobs.isEmpty())return false;
             var job=jobs.getFirst();
@@ -53,6 +55,9 @@ public class AccountDeliveryOperations {
                     and ((j.job_type='VERIFY_EMAIL' and u.state='UNVERIFIED')
                       or (j.job_type='RESET_PASSWORD' and u.state='ACTIVE' and u.verified_at is not null)))
                 """,Boolean.class,id,Timestamp.from(now),Timestamp.from(now));
+            var tokenId=jdbc.queryForObject("select (payload_json->>'tokenId')::uuid from collector.outbox_jobs where id=?",UUID.class,id);
+            var teamToken=tokens.findById(tokenId).filter(t->t.getPurpose()==com.ayaantrix.collector.auth.entity.TokenPurpose.TEAM_INVITE);
+            if(teamToken.isPresent())usable=team.canDeliver(teamToken.get());
             boolean retry=resolution==Resolution.CONFIRMED_NOT_SENT && Boolean.TRUE.equals(usable) && (int)job[0]<5;
             String state=resolution==Resolution.CONFIRMED_SENT?"SUCCEEDED":retry?"QUEUED":"DEAD";
             String code=resolution==Resolution.CONFIRMED_SENT?"RECONCILED_SENT":retry?"RECONCILED_NOT_SENT":"RECONCILED_CLOSED";

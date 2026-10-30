@@ -81,7 +81,12 @@ public class SecurityProblemHandler
         boolean clientManagementRoute=(method.equals("PATCH") && path.matches("/api/v1/workspaces/[^/]+/clients/[^/]+"))
             || (method.equals("GET") && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/(contacts|client-preview)"))
             || (method.equals("POST") && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/contacts"));
-        boolean unauthorized=!denied && (accountRoute || workspaceRoute || catalogRoute || projectRoute || structureRoute || clientManagementRoute || request.getHeader("Authorization")!=null);
+        boolean teamRoute=(method.equals("POST") && (path.equals("/api/v1/team-invitations/accept") || path.matches("/api/v1/workspaces/[^/]+/(members|ownership-transfer)")))
+            || (method.equals("GET") && path.matches("/api/v1/workspaces/[^/]+/(members|projects/[^/]+/assignments)"))
+            || (java.util.List.of("PATCH","DELETE").contains(method) && path.matches("/api/v1/workspaces/[^/]+/members/[^/]+"))
+            || (method.equals("DELETE") && path.matches("/api/v1/workspaces/[^/]+/member-invitations/[^/]+"))
+            || (java.util.List.of("PUT","DELETE").contains(method) && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/assignments/[^/]+"));
+        boolean unauthorized=!denied && (accountRoute || workspaceRoute || catalogRoute || projectRoute || structureRoute || clientManagementRoute || teamRoute || request.getHeader("Authorization")!=null);
         ProblemDetail problem = problemFactory.create(
                 unauthorized?HttpStatus.UNAUTHORIZED:HttpStatus.FORBIDDEN,
                 unauthorized?"INVALID_CREDENTIALS":"ACCESS_DENIED",
