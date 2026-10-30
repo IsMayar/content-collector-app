@@ -1,3 +1,6 @@
+import { CollectionPortal } from '@/features/client/components/CollectionPortal'
+import { collectionSchema } from '@/features/client/schemas/collectionSchema'
+import { clearPendingDrafts } from '@/features/client/hooks/draftAutosave'
 import { ClientProjectPage } from '@/features/client/pages/ClientProjectPage'
 import { errorMessage } from '@/shared/utils/apiError'
 import { ClientAccessPage } from '@/features/client/pages/ClientAccessPage'
@@ -327,5 +330,108 @@ describe('T14 client portal foundation', () => {
     await screen.findByRole('heading', {
       name: 'Let’s reconnect to your project',
     })
+  })
+})
+
+describe('T15 persisted collection portal', () => {
+  function collection(saved = false) {
+    const data = foundation()
+    Object.assign(data, {
+      collection: true,
+      capabilities: { canRespond: true },
+    })
+    Object.assign(data.sections[0].items[0], {
+      canEdit: true,
+      state: saved ? 'DRAFT' : 'NOT_STARTED',
+      answer: saved
+        ? {
+            itemId: data.sections[0].items[0].id,
+            value: { text: 'Restored from PostgreSQL' },
+            version: 3,
+            savedAt: '2026-10-30T00:00:00Z',
+          }
+        : null,
+    })
+    return collectionSchema.parse(data)
+  }
+  it('renders acknowledged persisted answers and no future submit action', () => {
+    clearPendingDrafts()
+    const data = collection(true)
+    render(
+      <Provider store={createAppStore()}>
+        <MemoryRouter>
+          <CollectionPortal data={data} onRefresh={() => {}} />
+        </MemoryRouter>
+      </Provider>,
+    )
+    expect(screen.getByLabelText('Your response')).toHaveValue(
+      'Restored from PostgreSQL',
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+    expect(
+      screen.queryByRole('button', { name: /Submit for review/ }),
+    ).not.toBeInTheDocument()
+    clearPendingDrafts()
+  })
+  it('saves through the existing client HTTP transport and announces server confirmation', async () => {
+    clearPendingDrafts()
+    let writes = 0
+    const data = collection()
+    server.use(
+      http.put(
+        '*/api/v1/client/projects/:p/items/:i/answer',
+        async ({ request }) => {
+          expect(request.headers.get('Authorization')).toBeNull()
+          const body = (await request.json()) as {
+            value: unknown
+            expectedVersion: number
+          }
+          writes++
+          return HttpResponse.json({
+            answer: {
+              itemId: data.sections[0].items[0].id,
+              value: body.value,
+              version: body.expectedVersion + 1,
+              savedAt: '2026-10-30T00:00:00Z',
+            },
+            itemState: 'DRAFT',
+          })
+        },
+      ),
+    )
+    render(
+      <Provider store={createAppStore()}>
+        <MemoryRouter>
+          <CollectionPortal data={data} onRefresh={() => {}} />
+        </MemoryRouter>
+      </Provider>,
+    )
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Your response'), 'A real draft')
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Saved at'),
+    )
+    expect(writes).toBe(1)
+    expect(screen.getByLabelText('Your response')).toHaveValue('A real draft')
+    clearPendingDrafts()
+  })
+  it('keeps read-only lifecycle fields disabled', () => {
+    clearPendingDrafts()
+    const data = collection(true)
+    data.capabilities.canRespond = false
+    data.sections[0].items[0].canEdit = false
+    render(
+      <Provider store={createAppStore()}>
+        <MemoryRouter>
+          <CollectionPortal data={data} onRefresh={() => {}} />
+        </MemoryRouter>
+      </Provider>,
+    )
+    expect(screen.getByLabelText('Your response')).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: 'Save draft' }),
+    ).not.toBeInTheDocument()
+    clearPendingDrafts()
   })
 })

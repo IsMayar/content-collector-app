@@ -1,3 +1,4 @@
+import { collectionSchema } from '@/features/client/schemas/collectionSchema'
 import { portalFoundationSchema } from '@/features/client/schemas/portalSchema'
 import { teamSchema } from '@/features/workspace/schemas/teamSchema'
 import { assignmentsSchema } from '@/features/projects/schemas/assignmentSchema'
@@ -45,7 +46,7 @@ export function validateProductRead(path: string, data: unknown) {
     data !== null &&
     'capabilities' in data
   )
-    schema = portalFoundationSchema
+    schema = 'collection' in data ? collectionSchema : portalFoundationSchema
   else if (route.endsWith('/checklist'))
     schema = z.looseObject({
       project: z.looseObject({

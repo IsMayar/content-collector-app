@@ -92,7 +92,9 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
     ).toBeVisible()
     expect(screen.getByText('Enter your password.')).toBeVisible()
     expect(mockState.activeEmail).toBeNull()
-    expect(screen.getByLabelText('Email address')).toHaveFocus()
+    await waitFor(() =>
+      expect(screen.getByLabelText('Email address')).toHaveFocus(),
+    )
   })
   it('signs in, follows the return destination and keeps tokens out of browser storage', async () => {
     const { user, router, store } = mount(

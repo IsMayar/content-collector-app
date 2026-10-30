@@ -1,3 +1,4 @@
+import { pendingDrafts, clearPendingDrafts } from '../hooks/draftAutosave'
 import { clientAccessEstablished } from '@/features/client/store/clientAccessSlice'
 import { clientApi } from '@/services/api/clientApi'
 import { Notice } from '@/shared/components/Feedback'
@@ -93,11 +94,19 @@ export function ClientAccessPage() {
             className="primary-button"
             disabled={command.pending}
             onClick={async () => {
+              if (
+                [...pendingDrafts.values()].some((d) => d.state.dirty) &&
+                !window.confirm(
+                  'You have unsaved answers in this tab. Copy them before opening a new session. Continue and discard those local changes?',
+                )
+              )
+                return
               const result = await command.run<{ projectId: string }>(
                 'client-access/exchange',
                 { token },
               )
               if (result) {
+                clearPendingDrafts()
                 setToken('')
                 dispatch(clientApi.util.resetApiState())
                 dispatch(clientAccessEstablished())

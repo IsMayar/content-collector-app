@@ -1141,10 +1141,10 @@ async function command(input) {
       ).toBeVisible()
       await expect(
         clientPage.getByRole('button', {
-          name: /Save draft|Submit for review|Upload files/,
+          name: /Submit for review|Upload files/,
         }),
       ).toHaveCount(0)
-      assert.equal(data.capabilities.canRespond, false)
+      assert.equal(data.capabilities.canRespond, true)
       phase = 'client-open:cookie'
       const cookies = await clientContext.cookies(
         origin +
@@ -1220,6 +1220,246 @@ async function command(input) {
         'Client/agency transport isolation failed',
       )
       assert.equal((await run('me')).status, 200)
+      break
+    }
+    case 'client-draft-collection': {
+      const root = 'client/projects/' + settings.previewProject
+      phase = 'client-drafts:setup'
+      const ownerRoot =
+        'workspaces/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject
+      let structure = (await run(ownerRoot)).data.project.structureVersion
+      const created = await run({
+        url: ownerRoot + '/sections',
+        method: 'POST',
+        body: {
+          title: 'Browser draft types',
+          expectedStructureVersion: structure,
+        },
+      })
+      assert.equal(created.status, 201)
+      const types = [
+        ['SINGLE_SELECT', { options: [{ key: 'yes', label: 'Yes' }] }],
+        [
+          'MULTI_SELECT',
+          { options: [{ key: 'yes', label: 'Yes' }], maxOptions: 1 },
+        ],
+        ['URL', { allowedSchemes: ['https'] }],
+        [
+          'REPEATER',
+          {
+            maxRows: 3,
+            columns: [
+              {
+                key: 'name',
+                label: 'Name',
+                type: 'SHORT_TEXT',
+                required: true,
+              },
+              { key: 'count', label: 'Count', type: 'NUMBER', required: false },
+            ],
+          },
+        ],
+      ]
+      for (const [type, validation] of types) {
+        structure = (await run(ownerRoot)).data.project.structureVersion
+        const result = await run({
+          url: ownerRoot + '/sections/' + created.data.section.id + '/items',
+          method: 'POST',
+          body: {
+            definition: {
+              key: 'browser.draft.' + type.toLowerCase(),
+              label: 'Browser ' + type,
+              type,
+              instructions: 'Synthetic collection field',
+              example: '',
+              required: true,
+              enabled: true,
+              validation,
+            },
+            expectedStructureVersion: structure,
+          },
+        })
+        assert.equal(result.status, 201)
+      }
+      await clientPage.reload()
+      let checklist = (await run(root + '/checklist', clientPage, false)).data
+      const section = checklist.sections.find((s) =>
+        s.items.some((i) => i.type === 'SHORT_TEXT' && i.canEdit),
+      )
+      assert.ok(section, 'Editable text fixture required')
+      const item = section.items.find(
+        (i) => i.type === 'SHORT_TEXT' && i.canEdit,
+      )
+      const navigation = clientPage.getByRole('navigation', {
+        name: 'Requested sections',
+      })
+      await navigation
+        .getByRole('button', { name: section.title, exact: true })
+        .click()
+      const field = clientPage.locator('article').filter({
+        has: clientPage.getByRole('heading', {
+          name: item.label,
+          exact: true,
+        }),
+      })
+      const input = field.getByLabel('Your response')
+      phase = 'client-drafts:first-save'
+      await input.fill('Persisted browser draft')
+      await expect(field.getByRole('status')).toContainText('Saved at')
+      let saved = (await run(root + '/items/' + item.id, clientPage, false))
+        .data.answer
+      assert.equal(saved.value.text, 'Persisted browser draft')
+      const other = checklist.sections.find((s) => s.id !== section.id)
+      if (other)
+        await navigation
+          .getByRole('button', { name: other.title, exact: true })
+          .click()
+      await navigation
+        .getByRole('button', { name: section.title, exact: true })
+        .click()
+      await expect(input).toHaveValue('Persisted browser draft')
+      await clientPage.reload()
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: section.title, exact: true })
+        .click()
+      await expect(input).toHaveValue('Persisted browser draft')
+      phase = 'client-drafts:offline'
+      await clientContext.setOffline(true)
+      await input.fill('Retained offline draft')
+      await field
+        .getByRole('button', { name: 'Save draft', exact: true })
+        .click()
+      await expect(field.getByRole('status')).toContainText(
+        /Offline|Save error/,
+      )
+      await expect(input).toHaveValue('Retained offline draft')
+      await clientContext.setOffline(false)
+      await field.getByRole('button', { name: 'Retry save' }).click()
+      await expect(field.getByRole('status')).toContainText('Saved at')
+      saved = (await run(root + '/items/' + item.id, clientPage, false)).data
+        .answer
+      // A second browser tab/client writer advances the persisted version.
+      phase = 'client-drafts:external-write'
+      const external = await run(
+        {
+          url: root + '/items/' + item.id + '/answer',
+          method: 'PUT',
+          body: {
+            value: { text: 'Other tab draft' },
+            expectedVersion: saved.version,
+            expectedStructureVersion: checklist.project.structureVersion,
+            saveOperationId: crypto.randomUUID(),
+          },
+        },
+        clientPage,
+        false,
+      )
+      assert.equal(external.status, 200)
+      phase = 'client-drafts:conflict'
+      await input.fill('Keep my conflicting draft')
+      await field
+        .getByRole('button', { name: 'Save draft', exact: true })
+        .click()
+      await expect(field.getByRole('status')).toContainText('Conflict')
+      await expect(input).toHaveValue('Keep my conflicting draft')
+      await field.getByRole('button', { name: 'Compare saved answer' }).click()
+      await expect(
+        field.getByText('Other tab draft', { exact: false }),
+      ).toBeVisible()
+      await field
+        .getByRole('button', { name: 'Save my answer against this version' })
+        .click()
+      await expect(field.getByRole('status')).toContainText('Saved at')
+      assert.equal(
+        (await run(root + '/items/' + item.id, clientPage, false)).data.answer
+          .value.text,
+        'Keep my conflicting draft',
+      )
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: 'Browser draft types', exact: true })
+        .click()
+      for (const [type] of types) {
+        const panel = clientPage.locator('article').filter({
+          has: clientPage.getByRole('heading', {
+            name: 'Browser ' + type,
+            exact: true,
+          }),
+        })
+        if (type === 'SINGLE_SELECT')
+          await panel.getByLabel('Choose one').selectOption('yes')
+        if (type === 'MULTI_SELECT')
+          await panel.getByLabel('Yes', { exact: true }).check()
+        if (type === 'URL')
+          await panel
+            .getByLabel('Your response')
+            .fill('https://example.test/client')
+        if (type === 'REPEATER') {
+          await panel.getByRole('button', { name: /Add entry/ }).click()
+          await panel.getByLabel('Name').fill('Synthetic row')
+          await panel.getByLabel('Count').fill('7')
+        }
+        await panel
+          .getByRole('button', { name: 'Save draft', exact: true })
+          .click()
+        await expect(panel.getByRole('status')).toContainText('Saved at')
+      }
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: section.title, exact: true })
+        .click()
+      const agencyRoot =
+        'workspaces/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject
+      const definition = { ...item }
+      for (const key of [
+        'id',
+        'version',
+        'state',
+        'visible',
+        'canEdit',
+        'answer',
+        'assets',
+        'comments',
+      ])
+        delete definition[key]
+      definition.validation = { ...definition.validation, maxLength: 150 }
+      const unsafe = await run({
+        url: agencyRoot + '/items/' + item.id + '/schema',
+        method: 'PATCH',
+        body: {
+          definition,
+          expectedStructureVersion: checklist.project.structureVersion,
+          reopenAffected: false,
+        },
+      })
+      assert.equal(unsafe.status, 409)
+      assert.equal(unsafe.code, 'REOPEN_REQUIRED')
+      const directory = new URL(
+        '../../../.artifacts/real-auth/t15/',
+        import.meta.url,
+      )
+      mkdirSync(directory, { recursive: true })
+      await clientPage.setViewportSize({ width: 360, height: 950 })
+      assert.ok(
+        await clientPage.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      )
+      await clientPage.screenshot({
+        path: fileURLToPath(new URL('draft-360.png', directory)),
+        fullPage: true,
+      })
+      settings.draftItem = item.id
+      settings.draftVersion = (
+        await run(root + '/items/' + item.id, clientPage, false)
+      ).data.answer.version
       break
     }
     case 'client-idle-request-link': {
@@ -1299,6 +1539,30 @@ async function command(input) {
         .click()
       assert.equal((await result).status(), 204)
       await expect(page.getByRole('dialog')).toHaveCount(0)
+      assert.equal(
+        (
+          await run(
+            {
+              url:
+                'client/projects/' +
+                settings.previewProject +
+                '/items/' +
+                settings.draftItem +
+                '/answer',
+              method: 'PUT',
+              body: {
+                value: { text: 'Rejected' },
+                expectedVersion: settings.draftVersion,
+                expectedStructureVersion: 1,
+                saveOperationId: crypto.randomUUID(),
+              },
+            },
+            clientPage,
+            false,
+          )
+        ).status,
+        401,
+      )
       const response = clientPage.waitForResponse(
         (res) =>
           new URL(res.url()).pathname.endsWith('/checklist') &&

@@ -1,3 +1,5 @@
+import { UnsavedDraftRecovery } from '../components/UnsavedDraftRecovery'
+import { CollectionPortal } from '../components/CollectionPortal'
 import { useClientChecklist } from '@/features/client/api/portalApi'
 import { PortalFoundation } from '@/features/client/components/PortalFoundation'
 import { useAppSelector } from '@/shared/hooks/useAppStore'
@@ -44,6 +46,7 @@ export function ClientProjectPage() {
           description="Your session may have expired, access may have changed, or the connection may be unavailable."
         />
         <ErrorNotice error={command.error} />
+        <UnsavedDraftRecovery projectId={projectId || ''} />
         <div className="actions">
           {!blocked && (
             <button
@@ -65,13 +68,20 @@ export function ClientProjectPage() {
         </p>
       </div>
     )
-  if (q.isLoading || (foundation && q.isFetching))
+  if (
+    q.isLoading ||
+    (foundation && !('collection' in foundation) && q.isFetching)
+  )
     return (
       <StatePanel
         kind="loading"
         title="Opening your project"
         description="Checking your private project access…"
       />
+    )
+  if (foundation && 'collection' in foundation)
+    return (
+      <CollectionPortal data={foundation} onRefresh={() => void q.refetch()} />
     )
   if (foundation) return <PortalFoundation data={foundation} />
   return (
