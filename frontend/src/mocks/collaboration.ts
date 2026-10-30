@@ -88,16 +88,26 @@ registerProductResolver((request, path, _search, body) => {
     actor.workspace.workspace.version++
     return response({ workspace: actor.workspace.workspace })
   }
+  if (resource === 'member-invitations' && method === 'DELETE') {
+    const w = agencyActor(request, wid, true, false).workspace
+    const invitation = w.pendingInvites.find((i) => i.id === rid)
+    requireRule(invitation, 404, 'NOT_FOUND', 'Invitation unavailable.')
+    requireRule(
+      invitation.state !== 'CONSUMED',
+      409,
+      'INVITATION_CONSUMED',
+      'Manage the accepted member instead.',
+    )
+    if (invitation.state === 'PENDING') w.usage.seatsReserved--
+    invitation.state = 'REVOKED'
+    return response({ revoked: true })
+  }
   if (resource === 'members') {
     const actor = agencyActor(request, wid, true, method !== 'GET')
     const w = actor.workspace
     if (method === 'GET')
-      return response({ data: w.members, invitations: w.pendingInvites })
-    if (
-      action === 'invite' ||
-      (!rid && method === 'POST') ||
-      rid === 'invite'
-    ) {
+      return response({ data: w.members, pendingInvites: w.pendingInvites })
+    if (!rid && method === 'POST') {
       requireRule(
         w.members.filter((m) => m.state === 'ACTIVE').length +
           w.pendingInvites.filter((i) => i.state === 'PENDING').length <
@@ -127,17 +137,7 @@ registerProductResolver((request, path, _search, body) => {
         'ALREADY_INVITED',
         'This email already has access or a pending invitation.',
       )
-      const assignments = (
-        Array.isArray(body.assignments) ? body.assignments : []
-      ) as { projectId: string; canReview: boolean; canExport: boolean }[]
-      for (const a of assignments)
-        agencyProject(request, wid, a.projectId, 'owner', true)
       const invitation = {
-        assignments: assignments.map((a) => ({
-          projectId: a.projectId,
-          canReview: a.canReview === true,
-          canExport: a.canExport === true,
-        })),
         id: uid(),
         email: String(body.email),
         state: 'PENDING' as const,
@@ -147,8 +147,26 @@ registerProductResolver((request, path, _search, body) => {
       w.usage.seatsReserved++
       return response(
         { invitation, demoUrl: `/team-invite#token=${invitation.id}` },
-        201,
+        202,
       )
+    }
+    if (method === 'PATCH') {
+      const member = w.members.find((m) => m.id === rid)
+      requireRule(member, 404, 'NOT_FOUND', 'Member unavailable.')
+      requireRule(
+        member.role !== 'OWNER',
+        409,
+        'OWNER_REQUIRED',
+        'Transfer ownership first.',
+      )
+      requireRule(
+        ['ACTIVE', 'DISABLED'].includes(String(body.state)),
+        400,
+        'VALIDATION_FAILED',
+        'Choose a membership state.',
+      )
+      member.state = body.state as 'ACTIVE' | 'DISABLED'
+      return response({ member })
     }
     if (method === 'DELETE') {
       const member = w.members.find((m) => m.id === rid)
@@ -647,7 +665,9 @@ registerProductResolver((request, path, _search, body) => {
         canExport: body.canExport === true,
       })
     touch(r, 'Project assignment updated')
-    return response({ data: r.assignments })
+    return method === 'PUT'
+      ? response({ assignment: r.assignments.find((a) => a.memberId === aid) })
+      : new Response(null, { status: 204 })
   }
   if (action === 'reminder-policy') {
     if (method === 'GET') return response(r.policy)

@@ -209,15 +209,6 @@ export const handlers = [
         state: 'ACTIVE',
       })
       user.memberships.push(membership)
-      for (const a of invite.assignments || []) {
-        const p = productDb.projects[a.projectId]
-        if (p?.project.workspaceId === w.workspace.id)
-          p.assignments.push({
-            memberId,
-            canReview: a.canReview,
-            canExport: a.canExport,
-          })
-      }
       invite.state = 'CONSUMED'
       w.usage.seatsReserved--
       w.usage.seatsUsed++

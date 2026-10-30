@@ -663,17 +663,19 @@ describe('reference workflow permissions', () => {
         .status,
     ).toBe(404)
   })
-  it('validates project assignments before reserving an invitation seat', async () => {
+  it('rejects assignment to a missing project without changing seat reservations', async () => {
     login()
     const seats = productDb.workspaces[agencyId].usage.seatsReserved
     expect(
       (
-        await request(`workspaces/${agencyId}/members/invite`, 'POST', {
-          email: 'new@example.test',
-          assignments: [
-            { projectId: 'missing', canReview: true, canExport: false },
-          ],
-        })
+        await request(
+          `workspaces/${agencyId}/projects/missing/assignments/missing`,
+          'PUT',
+          {
+            canReview: true,
+            canExport: false,
+          },
+        )
       ).status,
     ).toBe(404)
     expect(productDb.workspaces[agencyId].usage.seatsReserved).toBe(seats)

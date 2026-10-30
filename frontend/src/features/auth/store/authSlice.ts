@@ -19,6 +19,7 @@ const slice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
+    accessRejected() {},
     tokenReceived(state, { payload }: PayloadAction<TokenResponse>) {
       state.accessToken = payload.accessToken
       state.expiresAt = Date.now() + payload.expiresIn * 1000
@@ -50,6 +51,7 @@ const slice = createSlice({
   },
 })
 export const {
+  accessRejected,
   tokenReceived,
   identityReceived,
   signedOut,

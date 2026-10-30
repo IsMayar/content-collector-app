@@ -344,3 +344,47 @@ it('ignores an unrelated workspace selection without discarding current private 
   expect(store.getState().auth.workspaceId).toBe(selected)
   expect(Object.keys(store.getState().clientApi.queries)).toEqual(before)
 })
+
+it('serializes live identity reconciliation before explicit bootstrap without restoring stale memberships', async () => {
+  const { user, store } = mount()
+  await signIn(user)
+  await screen.findByRole('heading', { name: 'Welcome back, Alex' })
+  const previous = {
+    user: store.getState().auth.user,
+    memberships: store.getState().auth.memberships,
+  }
+  let release!: () => void
+  let started!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const ready = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  let reads = 0
+  server.use(
+    http.get('http://localhost:5173/api/v1/me', async () => {
+      reads++
+      if (reads === 1) {
+        started()
+        await gate
+        return HttpResponse.json(previous)
+      }
+      return HttpResponse.json({ user: previous.user, memberships: [] })
+    }),
+  )
+  const { refreshIdentity, bootstrapSession } =
+    await import('@/features/auth/store/session')
+  const identity = store.dispatch(refreshIdentity())
+  await ready
+  const bootstrap = store.dispatch(bootstrapSession())
+  expect(store.getState().auth.status).toBe('authenticated')
+  expect(reads).toBe(1)
+  release()
+  await identity
+  await bootstrap
+  expect(store.getState().auth.status).toBe('authenticated')
+  expect(store.getState().auth.memberships).toEqual([])
+  expect(store.getState().auth.workspaceId).toBeNull()
+  expect(reads).toBe(2)
+})

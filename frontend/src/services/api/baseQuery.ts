@@ -1,6 +1,10 @@
 import { env } from '@/config/env'
 import { tokenSchema } from '@/features/auth/schemas/authResponseSchemas'
-import { signedOut, tokenReceived } from '@/features/auth/store/authSlice'
+import {
+  accessRejected,
+  signedOut,
+  tokenReceived,
+} from '@/features/auth/store/authSlice'
 import type { AuthState } from '@/features/auth/types/auth.types'
 import type {
   BaseQueryApi,
@@ -122,5 +126,11 @@ export const createBaseQuery =
         result = await raw(request, api, options)
       }
     }
+    if (
+      agency &&
+      request.url.startsWith('workspaces/') &&
+      [403, 404].includes(Number(result.error?.status))
+    )
+      api.dispatch(accessRejected())
     return result
   }

@@ -14,6 +14,7 @@ export function OwnershipPanel() {
     q = useData<{ data: Member[] }>(`workspaces/${id}/members`),
     command = useCommand(),
     dispatch = useAppDispatch()
+  const [requestKey] = useState(() => crypto.randomUUID())
   const [member, setMember] = useState(''),
     [password, setPassword] = useState(''),
     [confirm, setConfirm] = useState(false)
@@ -90,16 +91,22 @@ export function OwnershipPanel() {
         onConfirm={() =>
           void (async () => {
             if (
-              await command.run(`workspaces/${id}/ownership-transfer`, {
-                targetMemberId: member,
-                currentPassword: password,
-              })
+              await command.run(
+                `workspaces/${id}/ownership-transfer`,
+                {
+                  targetMemberId: member,
+                  currentPassword: password,
+                },
+                'POST',
+                { 'Idempotency-Key': requestKey },
+              )
             ) {
               setPassword('')
               setConfirm(false)
               const result = await dispatch(
                 authApi.endpoints.me.initiate(undefined, {
                   forceRefetch: true,
+                  subscribe: false,
                 }),
               ).unwrap()
               dispatch(identityReceived(result))

@@ -10,6 +10,7 @@ export function useCommand(client = false) {
     url: string,
     body?: unknown,
     method = 'POST',
+    headers?: Record<string, string>,
   ): Promise<T | undefined> {
     setError('')
     try {
@@ -17,6 +18,7 @@ export function useCommand(client = false) {
         url,
         method,
         body,
+        headers,
       }).unwrap()) as T
     } catch (e) {
       setError(errorMessage(e))

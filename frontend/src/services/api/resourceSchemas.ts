@@ -1,3 +1,5 @@
+import { teamSchema } from '@/features/workspace/schemas/teamSchema'
+import { assignmentsSchema } from '@/features/projects/schemas/assignmentSchema'
 import { previewSchema } from '@/features/projects/schemas/previewSchema'
 import {
   customerSchema,
@@ -16,7 +18,10 @@ import { z } from 'zod'
 export function validateProductRead(path: string, data: unknown) {
   const route = path.split('?')[0]
   let schema: z.ZodType = object
-  if (/^workspaces\/[^/]+\/projects$/.test(route))
+  if (/^workspaces\/[^/]+\/members$/.test(route)) schema = teamSchema
+  else if (/^workspaces\/[^/]+\/projects\/[^/]+\/assignments$/.test(route))
+    schema = assignmentsSchema
+  else if (/^workspaces\/[^/]+\/projects$/.test(route))
     schema = z.object({ data: z.array(project), page })
   else if (/^workspaces\/[^/]+\/projects\/[^/]+$/.test(route))
     schema = z.looseObject({

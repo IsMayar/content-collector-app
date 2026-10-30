@@ -431,8 +431,11 @@ test('team invitation drawer, project file upload and handoff screens', async ({
     page.getByRole('dialog', { name: 'Invite a team member' }),
   ).toBeVisible()
   await page.getByLabel('Teammate email').fill('new-member@example.test')
-  await page.getByRole('checkbox', { name: /^Lamar Dental website/ }).check()
-  await page.getByRole('switch', { name: 'Can review content' }).check()
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByText(/do not grant project access automatically/),
+  ).toBeVisible()
   await page.screenshot({
     path: info.outputPath('team-invitation.png'),
     fullPage: true,

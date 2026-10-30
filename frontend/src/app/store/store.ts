@@ -1,5 +1,7 @@
+import { refreshIdentity } from '@/features/auth/store/session'
 import authReducer, {
   identityReceived,
+  accessRejected,
   signedOut,
 } from '@/features/auth/store/authSlice'
 import type { AuthState } from '@/features/auth/types/auth.types'
@@ -31,6 +33,13 @@ export const createAppStore = () => {
         api.dispatch(agencyApi.util.resetApiState())
         api.dispatch(clientApi.util.resetApiState())
       }
+    },
+  })
+  sessionListener.startListening({
+    actionCreator: accessRejected,
+    effect: (_action, api) => {
+      const dispatch = api.dispatch as typeof store.dispatch
+      void dispatch(refreshIdentity())
     },
   })
   return configureStore({

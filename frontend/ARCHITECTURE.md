@@ -72,3 +72,14 @@ features/clients owns clientsApi typed query/command adapters, CustomerPanel (RH
 features/projects owns previewApi, previewSchema, preview.types and PreviewPanel. The API envelope is {preview: ...}; a deliberate null-answer preview variant reuses ItemDefinition and the client TypedValue renderer without pretending an answer row exists. TypedValue preview mode never mounts UploadQueue. Fields are disabled, repeater rows are illustrative, section switching stays local, and there are no draft/AI/submission commands. The owner-only project tab and direct-tab boundary agree.
 
 MSW uses the same HTTP paths/envelopes and the same default-enabled rule as real structure projection. Real contact save creates metadata only; existing invitation/revoke demonstrations remain explicitly mock-only, with disabled controls/explanation for real integration. No mocked production fallback. [Contracts, access rules, final verification and deferred workflows](../docs/T12_CLIENT_CONTACTS_AND_PREVIEW.md).
+
+
+## T13 team and assignment integration
+
+workspace/api/teamApi.ts owns typed team/entitlement queries; workspace/schemas/teamSchema.ts validates member and invitation lifecycle envelopes and invitation input. TeamPage reuses React Hook Form/Zod, shared modal/query/error UI and the existing RTK command transport. Project api/assignmentsApi.ts and schemas/assignmentSchema.ts own assignment reads and independent flag contracts; AssignmentsPanel handles loading, search, empty/error states and revocation. No extra HTTP client or unrelated feature relocation.
+
+Team invitation acceptance keeps credentials in the existing memory-only action-token vault, refreshes /me, selects the returned workspace and links directly to its overview. Invitations reserve seats without staging undocumented assignments; owners assign members in the project Team tab after acceptance. Ownership transfer uses a stable idempotency key and refreshes live roles. Workspace identity changes clear agency/client caches; denied workspace requests trigger live identity reconciliation. Focus/reconnect revalidate active reads. Explicit bootstrap waits for ongoing identity refresh to avoid stale-role/cache races. Backend services remain authoritative; no server-push revocation claim.
+
+Existing tests remain under tests/unit, tests/e2e, tests/integration/real-auth and tests/pwa; generated artifacts stay in .artifacts. [T13 exact contracts, files and final verification](../docs/T13_TEAM_COLLABORATION.md).
+
+Final T13 evidence (30 October 2026): **97 unit tests**, **2 real HTTPS lifecycle tests with MSW disabled**, **75/75 responsive browser cases** and **1/1 production PWA case** passed. Strict TypeScript/build/lint/format pass. The full responsive rerun used a frozen frontend after correcting acceptance routing and identity/bootstrap ordering. Backend acceptance is recorded separately (657 tests); FE/PWA evidence does not prove production provider or deployment gates.

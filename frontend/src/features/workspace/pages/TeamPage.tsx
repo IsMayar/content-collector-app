@@ -1,10 +1,11 @@
-import type { UsageSummary } from '@/features/billing/types/billing.types'
-import type { Project } from '@/features/projects/types/project.types'
 import type {
   InviteSummary,
   Member,
 } from '@/features/workspace/types/workspace.types'
-import { useData } from '@/services/api/resourceApi'
+import { useTeam, useTeamEntitlements } from '@/features/workspace/api/teamApi'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
 import { Modal } from '@/shared/components/Modal'
 import {
@@ -18,33 +19,35 @@ import {
 } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
-import type { Paged } from '@/shared/types/common.types'
-import { Search, ShieldCheck, Users } from 'lucide-react'
+import { ShieldCheck, Users } from 'lucide-react'
 import { useState } from 'react'
+import { teamInvitationSchema } from '@/features/workspace/schemas/teamSchema'
 import { Link } from 'react-router'
 
 export function TeamPage() {
   const { id, owner } = useWorkspace()
-  const q = useData<{ data: Member[]; invitations: InviteSummary[] }>(
-    `workspaces/${id}/members`,
-    { skip: !owner },
-  )
-  const usage = useData<UsageSummary>(`workspaces/${id}/usage`, {
-    skip: !owner,
+  const q = useTeam(id, owner)
+  const workspace = useTeamEntitlements(id, owner)
+  const form = useForm<
+    z.input<typeof teamInvitationSchema>,
+    unknown,
+    z.output<typeof teamInvitationSchema>
+  >({
+    resolver: zodResolver(teamInvitationSchema),
+    defaultValues: { email: '' },
   })
-  const projects = useData<Paged<Project>>(
-    `workspaces/${id}/projects?size=100`,
-    { skip: !owner },
-  )
   const command = useCommand()
   const [demo, setDemo] = useState('')
   const [invite, setInvite] = useState(false),
     [tab, setTab] = useState('members'),
-    [message, setMessage] = useState(''),
-    [search, setSearch] = useState('')
+    [message, setMessage] = useState('')
   const [remove, setRemove] = useState<Member | InviteSummary | null>(null)
-  const [assigned, setAssigned] = useState<string[]>([])
-  const pending = q.data?.invitations.filter((i) => i.state === 'PENDING') || []
+  const [invitationKey, setInvitationKey] = useState(() => crypto.randomUUID())
+  const pending =
+    q.data?.pendingInvites.filter((i) => i.state === 'PENDING') || []
+  const seatsUsed =
+    (q.data?.data.filter((m) => m.state === 'ACTIVE').length || 0) +
+    pending.length
   if (!owner)
     return (
       <Empty
@@ -62,16 +65,13 @@ export function TeamPage() {
           <Users size={25} />
           <div>
             <strong>
-              {(usage.data?.seatsUsed || 0) + (usage.data?.seatsReserved || 0)}{' '}
-              of {usage.data?.seatsLimit || 0}
+              {seatsUsed} of {workspace.data?.entitlements.seats || 0}
             </strong>{' '}
             seats used
             <progress
               aria-label="Workspace seats"
-              value={
-                (usage.data?.seatsUsed || 0) + (usage.data?.seatsReserved || 0)
-              }
-              max={usage.data?.seatsLimit || 1}
+              value={seatsUsed}
+              max={workspace.data?.entitlements.seats || 1}
             />
           </div>
           <button className="primary-button" onClick={() => setInvite(true)}>
@@ -133,10 +133,20 @@ export function TeamPage() {
                       {m.role !== 'OWNER' ? (
                         <button
                           className="danger-link"
-                          disabled={m.state !== 'ACTIVE' || command.pending}
-                          onClick={() => setRemove(m)}
+                          disabled={command.pending}
+                          onClick={() =>
+                            m.state === 'ACTIVE'
+                              ? setRemove(m)
+                              : void command.run(
+                                  `workspaces/${id}/members/${m.id}`,
+                                  { state: 'ACTIVE' },
+                                  'PATCH',
+                                )
+                          }
                         >
-                          Remove access
+                          {m.state === 'ACTIVE'
+                            ? 'Remove access'
+                            : 'Restore membership'}
                         </button>
                       ) : (
                         <span className="subtle">Workspace owner</span>
@@ -149,7 +159,11 @@ export function TeamPage() {
           </div>
         )}
         <Panel title="Pending invitations">
-          {pending.length ? (
+          {(
+            tab === 'invitations'
+              ? q.data?.pendingInvites.length
+              : pending.length
+          ) ? (
             <div className="reference-table-wrap">
               <table className="reference-table">
                 <thead>
@@ -162,7 +176,10 @@ export function TeamPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pending.map((i) => (
+                  {(tab === 'invitations'
+                    ? q.data?.pendingInvites || []
+                    : pending
+                  ).map((i) => (
                     <tr key={i.id}>
                       <td>{i.email}</td>
                       <td>Member</td>
@@ -173,6 +190,7 @@ export function TeamPage() {
                       <td>
                         <button
                           className="danger-link"
+                          disabled={i.state !== 'PENDING' || command.pending}
                           onClick={() => setRemove(i)}
                         >
                           Revoke invitation
@@ -203,39 +221,35 @@ export function TeamPage() {
           onClose={() => setInvite(false)}
         >
           <p className="subtle">
-            Send an invitation and assign project access. A seat will be
-            reserved once the invitation is sent.
+            Invite a verified teammate to your workspace. A seat is reserved
+            until the invitation expires or is revoked.
           </p>
           <form
             className="stack-form team-invitation-form"
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const f = new FormData(e.currentTarget)
+            onSubmit={form.handleSubmit(async (values) => {
               const result = await command.run<{ demoUrl?: string }>(
-                `workspaces/${id}/members/invite`,
-                {
-                  email: f.get('email'),
-                  assignments: assigned.map((projectId) => ({
-                    projectId,
-                    canReview: f.has('review'),
-                    canExport: f.has('export'),
-                  })),
-                },
+                `workspaces/${id}/members`,
+                values,
+                'POST',
+                { 'Idempotency-Key': invitationKey },
               )
               if (result) {
                 setDemo(result.demoUrl || '')
                 setInvite(false)
-                setAssigned([])
+                form.reset()
+                setInvitationKey(crypto.randomUUID())
                 setMessage(
-                  'Team invitation created. Project access activates after acceptance.',
+                  'Invitation sent. Assign project access after your teammate accepts.',
                 )
               }
-            }}
+            })}
           >
             <div className="form-grid">
               <Field label="Teammate email">
                 <input
-                  name="email"
+                  {...form.register('email', {
+                    onChange: () => setInvitationKey(crypto.randomUUID()),
+                  })}
                   required
                   type="email"
                   placeholder="taylor@youragency.com"
@@ -247,98 +261,20 @@ export function TeamPage() {
                 </select>
               </Field>
             </div>
-            <div className="invite-assignment-grid">
-              <section>
-                <div className="assignment-section-heading">
-                  <h3>Assign to projects</h3>
-                  <span aria-live="polite">{assigned.length} selected</span>
-                </div>
-                <label className="board-search invite-project-search">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search projects to assign"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search projects…"
-                  />
-                </label>
-                <div className="assignment-project-list">
-                  {projects.data?.data
-                    .filter((p) =>
-                      p.title.toLowerCase().includes(search.toLowerCase()),
-                    )
-                    .map((p) => (
-                      <label className="assignment-choice" key={p.id}>
-                        <input
-                          type="checkbox"
-                          checked={assigned.includes(p.id)}
-                          onChange={(e) =>
-                            setAssigned(
-                              e.target.checked
-                                ? [...assigned, p.id]
-                                : assigned.filter((id) => id !== p.id),
-                            )
-                          }
-                        />
-                        <span>
-                          <strong>{p.title}</strong>
-                          <small>Client: {p.clientBusinessName}</small>
-                        </span>
-                        <Badge>{p.projectType}</Badge>
-                      </label>
-                    ))}
-                </div>
-                {projects.data &&
-                  !projects.data.data.some((p) =>
-                    p.title.toLowerCase().includes(search.toLowerCase()),
-                  ) && (
-                    <p className="assignment-empty" role="status">
-                      No matching projects. Try another name.
-                    </p>
-                  )}
-                <p className="assignment-help">
-                  Only selected projects will be visible to this teammate. You
-                  can update assignments later.
-                </p>
-              </section>
-              <section className="assignment-permissions">
-                <h3>Permissions for selected projects</h3>
-                <label className="permission-choice">
-                  <input
-                    name="review"
-                    type="checkbox"
-                    role="switch"
-                    disabled={!assigned.length}
-                  />
-                  <span>
-                    <strong>Can review content</strong>
-                    <small>Review submissions and request changes.</small>
-                  </span>
-                </label>
-                <label className="permission-choice">
-                  <input
-                    name="export"
-                    type="checkbox"
-                    role="switch"
-                    disabled={!assigned.length}
-                  />
-                  <span>
-                    <strong>Can export content</strong>
-                    <small>
-                      Export approved content from assigned projects.
-                    </small>
-                  </span>
-                </label>
-                <div className="reference-info">
-                  <ShieldCheck size={20} />
-                  <strong>Seat reservation</strong>
-                  <p>
-                    The invitation reserves one seat. The member must accept to
-                    activate access.
-                  </p>
-                </div>
-              </section>
+            <div className="reference-info">
+              <ShieldCheck size={20} />
+              <strong>Private project access</strong>
+              <p>
+                After acceptance, open a project’s Team tab to assign this
+                teammate. Review and export permissions are granted separately.
+                Invitations do not grant project access automatically.
+              </p>
+              <p>
+                Invitations expire after seven days. Revoke an existing
+                invitation before sending a replacement.
+              </p>
             </div>
+            <ErrorNotice error={form.formState.errors.email?.message} />
             <ErrorNotice error={command.error} />
             <div className="modal-actions">
               <button
@@ -379,7 +315,7 @@ export function TeamPage() {
             if (
               remove &&
               (await command.run(
-                `workspaces/${id}/members/${remove.id}`,
+                `workspaces/${id}/${'user' in remove ? 'members' : 'member-invitations'}/${remove.id}`,
                 undefined,
                 'DELETE',
               ))

@@ -4,7 +4,10 @@ import { tokenField } from '@/features/auth/components/authFields'
 import { AuthForm } from '@/features/auth/components/AuthForm'
 import { tokenInputSchema } from '@/features/auth/schemas/accountSchemas'
 import { identityReceived } from '@/features/auth/store/authSlice'
-import { clearPrivateCaches } from '@/features/auth/store/session'
+import {
+  selectWorkspace,
+  clearPrivateCaches,
+} from '@/features/auth/store/session'
 import { captureToken, tokenVault } from '@/features/auth/utils/actionToken'
 import { Notice } from '@/shared/components/Feedback'
 import { useAppDispatch, useAppSelector } from '@/shared/hooks/useAppStore'
@@ -16,7 +19,7 @@ export function TeamInvitationPage() {
   const auth = useAppSelector((s) => s.auth)
   const dispatch = useAppDispatch()
   const [accept, result] = authApi.useAcceptInvitationMutation()
-  const [complete, setComplete] = useState(false)
+  const [complete, setComplete] = useState('')
   return (
     <AuthCard>
       <AuthHeading
@@ -27,7 +30,10 @@ export function TeamInvitationPage() {
       {complete ? (
         <>
           <Notice>Your team invitation was accepted.</Notice>
-          <Link className="secondary-button mt-6" to="/app">
+          <Link
+            className="secondary-button mt-6"
+            to={`/app/w/${complete}/overview`}
+          >
             Open workspace
           </Link>
         </>
@@ -57,7 +63,10 @@ export function TeamInvitationPage() {
             initialValues={{ token: initialToken }}
             submitLabel="Accept invitation"
             onSubmit={async (values) => {
-              await accept({ token: values.token, idempotencyKey }).unwrap()
+              const accepted = await accept({
+                token: values.token,
+                idempotencyKey,
+              }).unwrap()
               tokenVault.delete('invitation')
               result.reset()
               dispatch(clearPrivateCaches())
@@ -68,7 +77,8 @@ export function TeamInvitationPage() {
                 }),
               ).unwrap()
               dispatch(identityReceived(me))
-              setComplete(true)
+              dispatch(selectWorkspace(accepted.membership.workspaceId))
+              setComplete(accepted.membership.workspaceId)
             }}
           />
         </>

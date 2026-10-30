@@ -127,22 +127,17 @@ test('team assignment search and Insights are readable and functional', async ({
     .getByRole('button', { name: 'Invite member', exact: false })
     .click()
   const modal = page.getByRole('dialog', { name: 'Invite a team member' })
-  const search = modal.getByRole('textbox', {
-    name: 'Search projects to assign',
-  })
-  await expect(search).toBeVisible()
-  expect((await search.boundingBox())!.height).toBeGreaterThanOrEqual(40)
+  const email = modal.getByRole('textbox', { name: 'Teammate email' })
+  await expect(email).toBeVisible()
+  expect((await email.boundingBox())!.height).toBeGreaterThanOrEqual(40)
   await expect(
-    modal.getByRole('switch', { name: /Can review content/ }),
-  ).toBeDisabled()
-  await search.fill('not-a-project')
-  await expect(
-    modal.getByText('No matching projects. Try another name.'),
+    modal.getByText('Private project access', { exact: true }),
   ).toBeVisible()
-  await search.fill('')
-  await modal.locator('.assignment-choice input').first().check()
-  await expect(modal.getByText('1 selected', { exact: true })).toBeVisible()
-  await modal.getByRole('switch', { name: /Can review content/ }).check()
+  await expect(
+    modal.getByText(/do not grant project access automatically/),
+  ).toBeVisible()
+  await expect(modal.getByRole('combobox')).toBeDisabled()
+  await email.fill('new-teammate@example.test')
   await noOverflow(page)
   await page.screenshot({
     path: info.outputPath('team-invitation.png'),

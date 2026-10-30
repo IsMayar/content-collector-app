@@ -7,7 +7,14 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import assert from 'node:assert/strict'
 
-let server, browser, context, page, settings, origin
+let server,
+  browser,
+  context,
+  page,
+  settings,
+  origin,
+  teammateContext,
+  teammatePage
 let phase = 'start'
 let refreshes = 0
 let serviceWorkerResponse = false
@@ -850,6 +857,206 @@ async function command(input) {
       assert.ok(!serviceWorkerResponse, 'MSW intercepted T12 acceptance')
       break
     }
+    case 'team-invite': {
+      settings.teammateEmail = input.email
+      await page.goto(origin + '/app/w/' + settings.workspace + '/team')
+      await page
+        .getByRole('button', { name: 'Invite member', exact: false })
+        .click()
+      const dialog = page.getByRole('dialog', { name: 'Invite a team member' })
+      await dialog.getByLabel('Teammate email').fill(input.email)
+      const sent = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname.endsWith('/members'),
+      )
+      await dialog.getByRole('button', { name: 'Send invitation' }).click()
+      assert.equal((await sent).status(), 202)
+      await expect(
+        page.getByRole('cell', { name: input.email, exact: true }),
+      ).toBeVisible()
+      break
+    }
+    case 'team-register': {
+      teammateContext = await browser.newContext({ ignoreHTTPSErrors: true })
+      teammatePage = await teammateContext.newPage()
+      observe(teammatePage)
+      await teammatePage.goto(origin + '/sign-up')
+      await teammatePage
+        .getByLabel('Your name', { exact: true })
+        .fill('Browser Teammate')
+      await teammatePage
+        .getByLabel('Email address', { exact: true })
+        .fill(settings.teammateEmail)
+      await teammatePage
+        .getByLabel('Password', { exact: true })
+        .fill(settings.password)
+      await teammatePage
+        .getByLabel('Confirm password', { exact: true })
+        .fill(settings.password)
+      const registered = teammatePage.waitForResponse(
+        (res) => new URL(res.url()).pathname === '/api/v1/auth/register',
+      )
+      await teammatePage
+        .getByRole('button', { name: 'Create account', exact: true })
+        .click()
+      assert.equal((await registered).status(), 202)
+      break
+    }
+    case 'team-verify-accept': {
+      await teammatePage.goto(
+        origin + '/verify-email#token=' + input.verification,
+      )
+      const verified = teammatePage.waitForResponse(
+        (res) => new URL(res.url()).pathname === '/api/v1/auth/verify-email',
+      )
+      await teammatePage
+        .getByRole('button', { name: 'Verify email', exact: true })
+        .click()
+      assert.equal((await verified).status(), 200)
+      const ownerEmail = settings.email
+      try {
+        settings.email = settings.teammateEmail
+        await signin(teammatePage)
+      } finally {
+        settings.email = ownerEmail
+      }
+      await teammatePage.goto(origin + '/team-invite#token=' + input.invitation)
+      const accepted = teammatePage.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/v1/team-invitations/accept',
+      )
+      await teammatePage
+        .getByRole('button', { name: 'Accept invitation', exact: true })
+        .click()
+      assert.equal((await accepted).status(), 200)
+      settings.teammateMember = (
+        await accepted.then((res) => res.json())
+      ).membership.memberId
+      await teammatePage
+        .getByRole('link', { name: 'Open workspace', exact: true })
+        .click()
+      await expect(teammatePage).toHaveURL(
+        new RegExp('/app/w/' + settings.workspace),
+      )
+      assert.ok(!new URL(teammatePage.url()).hash)
+      assert.equal(
+        (await run('me', teammatePage)).data.memberships[0].role,
+        'MEMBER',
+      )
+      break
+    }
+    case 'team-assign-revoke': {
+      const root =
+        'workspaces/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '?tab=assignments',
+      )
+      const panel = page
+        .locator('section')
+        .filter({
+          has: page.getByRole('heading', { name: 'Project team', exact: true }),
+        })
+        .last()
+      await panel
+        .getByRole('textbox', { name: 'Search teammates to assign' })
+        .fill('Browser Teammate')
+      await expect(
+        panel.getByText('Browser Teammate', { exact: true }),
+      ).toBeVisible()
+      await panel.getByRole('checkbox', { name: 'Review', exact: true }).check()
+      const assigned = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'PUT' &&
+          new URL(res.url()).pathname.endsWith(
+            '/assignments/' + settings.teammateMember,
+          ),
+      )
+      await panel.getByRole('button', { name: 'Assign', exact: true }).click()
+      assert.equal((await assigned).status(), 200)
+      const visible = await run(root, teammatePage)
+      assert.equal(visible.status, 200)
+      assert.equal(visible.data.project.permissions.canReview, true)
+      assert.equal(visible.data.project.permissions.canExport, false)
+      assert.equal(visible.data.project.permissions.canEditStructure, false)
+      assert.equal(
+        (await run(root + '/client-preview', teammatePage)).status,
+        404,
+      )
+      const allProjects = (
+        await run('workspaces/' + settings.workspace + '/projects')
+      ).data.data
+      const otherProject = allProjects.find(
+        (project) => project.id !== settings.previewProject,
+      )
+      assert.ok(otherProject)
+      assert.equal(
+        (
+          await run(
+            'workspaces/' + settings.workspace + '/projects/' + otherProject.id,
+            teammatePage,
+          )
+        ).status,
+        404,
+      )
+      const projects = (
+        await run(
+          'workspaces/' + settings.workspace + '/projects',
+          teammatePage,
+        )
+      ).data.data
+      assert.equal(projects.length, 1)
+      assert.equal(projects[0].id, settings.previewProject)
+      const removed = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'DELETE' &&
+          new URL(res.url()).pathname.endsWith(
+            '/assignments/' + settings.teammateMember,
+          ),
+      )
+      await panel.getByRole('button', { name: 'Remove', exact: true }).click()
+      assert.equal((await removed).status(), 204)
+      assert.equal((await run(root, teammatePage)).status, 404)
+      await page.goto(origin + '/app/w/' + settings.workspace + '/team')
+      await page
+        .getByRole('row')
+        .filter({ hasText: settings.teammateEmail })
+        .getByRole('button', { name: 'Remove access', exact: true })
+        .click()
+      const revoked = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'DELETE' &&
+          new URL(res.url()).pathname.endsWith(
+            '/members/' + settings.teammateMember,
+          ),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Remove access', exact: true })
+        .click()
+      assert.equal((await revoked).status(), 204)
+      assert.equal((await run('me', teammatePage)).data.memberships.length, 0)
+      assert.equal(
+        (await run('workspaces/' + settings.workspace, teammatePage)).status,
+        404,
+      )
+      await teammatePage.reload()
+      await waitState('authenticated', teammatePage)
+      await expect(
+        teammatePage.getByLabel('Workspace', { exact: true }),
+      ).toHaveCount(0)
+      assert.ok(!serviceWorkerResponse, 'MSW intercepted T13 lifecycle')
+      await teammateContext.close()
+      break
+    }
     case 'workspace-reload': {
       await page.reload()
       await waitState('authenticated')
@@ -980,6 +1187,7 @@ async function command(input) {
       break
     }
     case 'workspace-revoked': {
+      phase = 'workspace-revoked:bootstrap'
       await page.evaluate(async () => {
         const { store } = await import('/src/app/store/store.ts')
         const { bootstrapSession } =
@@ -992,6 +1200,7 @@ async function command(input) {
           name: 'This space isn’t available to your account',
         }),
       ).toBeVisible()
+      phase = 'workspace-revoked:cache'
       const retained = await page.evaluate(async (id) => {
         const state = (await import('/src/app/store/store.ts')).store.getState()
         return (

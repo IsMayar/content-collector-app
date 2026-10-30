@@ -2,6 +2,7 @@ import { signedOut } from '@/features/auth/store/authSlice'
 import {
   bootstrapSession,
   clearPrivateCaches,
+  refreshIdentity,
 } from '@/features/auth/store/session'
 import { StatePanel } from '@/shared/components/Feedback'
 import { RouteFocus } from '@/shared/components/RouteFocus'
@@ -36,6 +37,18 @@ export function SessionBoundary() {
     }
     return () => channel.close()
   }, [dispatch])
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    const refresh = () => {
+      void dispatch(refreshIdentity())
+    }
+    window.addEventListener('focus', refresh)
+    window.addEventListener('online', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('online', refresh)
+    }
+  }, [dispatch, status])
   if (status === 'loading' && !independent)
     return (
       <StatePanel
