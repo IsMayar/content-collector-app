@@ -27,8 +27,10 @@ public class ProjectClientService {
     private final ProjectStructureRepository structures;
     private final Validator validator;
     private final Clock clock;
+    private final ProjectContentPresentation presentation;
     ProjectClientService(ProjectAuthorization authorization,ProjectRepository projects,ProjectCustomerRepository customers,
-            ProjectContactRepository contacts,ProjectStructureRepository structures,Validator validator,Clock clock) {
+            ProjectContactRepository contacts,ProjectStructureRepository structures,Validator validator,Clock clock,ProjectContentPresentation presentation) {
+        this.presentation=presentation;
         this.authorization=authorization;this.projects=projects;this.customers=customers;this.contacts=contacts;
         this.structures=structures;this.validator=validator;this.clock=clock;
     }
@@ -64,25 +66,10 @@ public class ProjectClientService {
         var access=authorization.access(workspace,false);authorization.readableProject(access);
         // A locked coherent projection; no dirty entity, audit, answer, session or token writes.
         var project=projects.lockForStructure(workspace,id).orElseThrow(ProjectAuthorization::missing);
-        var sections=new ArrayList<JsonNode>();long required=0;
-        for(var source:structures.structure(workspace,id)) {
-            if(!source.path("enabled").asBoolean())continue;
-            var section=(ObjectNode)source.deepCopy();var items=section.putArray("items");
-            for(var item:source.get("items")) {
-                // No draft answers exist yet. Conditional requests are hidden until real answer evaluation.
-                if(!item.path("visible").asBoolean())continue;
-                var shown=ProjectStructureRepository.definition(item);
-                shown.put("id",item.get("id").asText()).put("version",item.get("version").asLong())
-                    .put("state","NOT_STARTED").put("visible",true).put("canEdit",false);
-                shown.putNull("answer");shown.putArray("assets");shown.putArray("comments");items.add(shown);
-                if(shown.path("required").asBoolean())required++;
-            }
-            sections.add(section);
-        }
-        return new Preview(new PreviewProject(project.id(),project.title(),project.projectType(),project.state(),project.dueDate(),
-            project.structureVersion(),access.workspace().name(),false),sections,new ProjectDtos.Progress(required,0,0,required,0));
+        return presentation.present(project,access.workspace().name());
     }
-    private static Contact contact(ProjectContact c){return new Contact(c.id(),c.name(),c.email(),c.state(),c.timezone(),c.accessExpiresAt(),c.emailRemindersEnabled());}
+
+    private static Contact contact(ProjectContact c){return new Contact(c.id(),c.name(),c.email(),c.state(),c.timezone(),c.accessExpiresAt(),c.emailRemindersEnabled(),c.accessInitializedAt());}
     private void valid(Object input){if(input==null || !validator.validate(input).isEmpty())throw invalid();}
     private static ApiException invalid(){return new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Client contact request fields are invalid. Grant expiry must be within the next 90 days.");}
 }

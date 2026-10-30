@@ -13,4 +13,7 @@ public class AuditRepository {
  insert into collector.audit_logs(id,workspace_id,project_id,actor_kind,actor_id,action,resource_kind,resource_id,metadata_json,created_at,updated_at)
  values(?,?,?,'USER',?,?,?,?,?::jsonb,?,?)
  """,UUID.randomUUID(),workspace,project,actor,action,kind,resource,json.writeValueAsString(metadata),time,time);}
+ public void writeClient(UUID workspace,UUID project,UUID contact,String action,UUID resource,Instant now){writeAccessActor("CLIENT",workspace,project,contact,action,resource,now);}
+ public void writeAnonymous(UUID workspace,UUID project,UUID contact,String action,UUID resource,Instant now){writeAccessActor("ANONYMOUS",workspace,project,contact,action,resource,now);}
+ private void writeAccessActor(String actorKind,UUID workspace,UUID project,UUID contact,String action,UUID resource,Instant now){var time=java.sql.Timestamp.from(now);jdbc.update("insert into collector.audit_logs(id,workspace_id,project_id,actor_kind,client_contact_id,action,resource_kind,resource_id,metadata_json,created_at,updated_at) values(?,?,?,?,?,?,'CLIENT_ACCESS',?,'{}'::jsonb,?,?)",UUID.randomUUID(),workspace,project,actorKind,contact,action,resource,time,time);}
 }

@@ -111,6 +111,24 @@ class RealAuthenticationBrowserCheck {
                     io.step(Map.of("action","team-verify-accept","verification",verificationMail.actionLink().getFragment().substring(6),"invitation",invitationMail.actionLink().getFragment().substring(6)));
                     io.step(Map.of("action","team-assign-revoke"));
                     assertThat(jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace)).isEqualTo(initialSnapshots);
+                    // T14 reads require a published project. This isolated fixture is not a T22 publish API.
+                    UUID clientProject=jdbc.queryForObject("select project_id from collector.project_contacts where workspace_id=?",UUID.class,workspace);
+                    jdbc.update("update collector.projects set state='ACTIVE' where workspace_id=? and id=?",workspace,clientProject);
+                    io.step(Map.of("action","client-owner-invite"));
+                    assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
+                    var clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
+                    io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
+                    clock.advance(24*3600+1);io.step(Map.of("action","client-idle-request-link"));
+                    assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
+                    clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
+                    io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
+                    io.step(Map.of("action","client-owner-invite"));assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
+                    clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
+                    String expiredClientToken=clientMail.actionLink().getFragment().substring(6);
+                    jdbc.update("update collector.access_tokens set created_at=?,expires_at=? where token_hash=?",java.sql.Timestamp.from(clock.instant().minusSeconds(20)),java.sql.Timestamp.from(clock.instant().minusSeconds(1)),app.getBean(SecureAccountTokens.class).digest(expiredClientToken));
+                    io.step(Map.of("action","client-expired-invitation","token",expiredClientToken));
+                    io.step(Map.of("action","client-revoke"));
+                    assertThat(jdbc.queryForObject("select count(*) from collector.client_sessions where workspace_id=? and revoked_at is null",Integer.class,workspace)).isZero();
                     io.step(Map.of("action","workspace-reload"));
                     clock.advance(331);io.step(Map.of("action","workspace-expired-access"));
                     // Isolated second tenant fixture; no T13 management/test-control HTTP endpoint is introduced.

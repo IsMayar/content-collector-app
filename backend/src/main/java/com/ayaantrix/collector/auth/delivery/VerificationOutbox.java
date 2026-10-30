@@ -22,7 +22,7 @@ public class VerificationOutbox {
                 (id,job_type,payload_json,encrypted_payload,encryption_key_id,dedupe_key,state,available_at,created_at,updated_at)
                 values (?,?,jsonb_build_object('tokenId',?::text,'traceId',?::text),?,?,?,'QUEUED',?,?,?)
                 """,jobId,token.getPurpose().name(),token.getId().toString(),traceId,payload,cipher.keyId(),
-                (switch(token.getPurpose()){case VERIFY_EMAIL->"verify-email:";case RESET_PASSWORD->"password-reset:";case TEAM_INVITE->"team-invite:";})+token.getId(),
+                (switch(token.getPurpose()){case VERIFY_EMAIL->"verify-email:";case RESET_PASSWORD->"password-reset:";case TEAM_INVITE->"team-invite:";case CLIENT_INVITE->"client-invite:";})+token.getId(),
                 Timestamp.from(token.getCreatedAt()),Timestamp.from(token.getCreatedAt()),Timestamp.from(token.getCreatedAt()));
     }
     public void discardTeamInvitationJob(UUID tokenId,java.time.Instant now){

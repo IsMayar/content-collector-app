@@ -57,6 +57,10 @@ public class AccountToken {
         if(digest==null || !digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("A SHA-256 digest is required.");
         id=UUID.randomUUID();workspaceId=Objects.requireNonNull(workspace);emailNormalized=Objects.requireNonNull(email);tokenHash=digest;purpose=TokenPurpose.TEAM_INVITE;createdAt=now;updatedAt=now;expiresAt=now.plus(purpose.lifetime());
     }
+    @Column(name="project_id",updatable=false) private UUID projectId;
+    @Column(name="contact_id",updatable=false) private UUID contactId;
+    public AccountToken(UUID workspace,UUID project,UUID contact,String email,String digest,Instant now,Instant grantExpires){this(workspace,email,digest,now);purpose=TokenPurpose.CLIENT_INVITE;projectId=Objects.requireNonNull(project);contactId=Objects.requireNonNull(contact);if(grantExpires.isBefore(expiresAt))expiresAt=grantExpires;}
+    public UUID getProjectId(){return projectId;}public UUID getContactId(){return contactId;}
     public UUID getWorkspaceId(){return workspaceId;}
     // Informational only: authoritative consumption must use the conditional repository update.
     public boolean isUsableFor(TokenPurpose expected, Instant now) {

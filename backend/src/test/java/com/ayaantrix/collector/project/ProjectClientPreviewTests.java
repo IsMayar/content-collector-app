@@ -212,7 +212,7 @@ class ProjectClientPreviewTests {
     }
     @Test void contactAndPreviewPersistAcrossRestartWithHibernateValidation() {
         var t=tenant();var p=create(t,ProjectType.WEBSITE);var contact=as(t.actor(),()->clients().createContact(t.workspace(),p.id(),new com.ayaantrix.collector.project.dto.ProjectClientDtos.ContactCreate(t.client(),"Synthetic","restart@example.test",NOW.plusSeconds(86400))));var preview=as(t.actor(),()->clients().preview(t.workspace(),p.id()));context.close();open();
-        assertThat(as(t.actor(),()->clients().contacts(t.workspace(),p.id()))).containsExactly(contact);assertThat(as(t.actor(),()->clients().preview(t.workspace(),p.id()))).isEqualTo(preview);assertThat(context.getBean(Flyway.class).info().applied()).hasSize(11);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+        assertThat(as(t.actor(),()->clients().contacts(t.workspace(),p.id()))).containsExactly(contact);assertThat(as(t.actor(),()->clients().preview(t.workspace(),p.id()))).isEqualTo(preview);assertThat(context.getBean(Flyway.class).info().applied()).hasSize(12);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
     }
     @Test void anonymousCsrfCrossTenantRevocationAndUnsupportedRoutesRemainClosed() throws Exception {
         var t=tenant();var p=create(t,ProjectType.WEBSITE);String root=projectRoot(t,p);var other=tenant();
@@ -222,7 +222,7 @@ class ProjectClientPreviewTests {
         }
         mvc.perform(post(root+"/contacts").header("Authorization",bearer(t)).contentType("application/json").content(contactBody(t).toString())).andExpect(status().isForbidden());
         mvc.perform(patch(t.root()+"/clients/"+t.client()).header("Authorization",bearer(t)).contentType("application/json").content("{}" )).andExpect(status().isForbidden());
-        for(String suffix:List.of("/contacts/unknown/invite","/contacts/unknown/access"))mvc.perform(post(root+suffix).header("Authorization",bearer(t)).with(csrf().asHeader())).andExpect(status().isForbidden());
+        for(String suffix:List.of("/contacts/unknown/invite/closed","/contacts/unknown/access"))mvc.perform(post(root+suffix).header("Authorization",bearer(t)).with(csrf().asHeader())).andExpect(status().isForbidden());
         jdbc.update("update collector.workspace_members set state='DISABLED' where workspace_id=? and user_id=?",t.workspace(),t.actor().id());
         mvc.perform(get(root+"/client-preview").header("Authorization",bearer(t))).andExpect(status().isNotFound());
         var otherProject=create(other,ProjectType.WEBSITE);jdbc.update("update collector.auth_sessions set revoked_at=now() where user_id=?",other.actor().id());
@@ -250,6 +250,6 @@ class ProjectClientPreviewTests {
         data.update("insert into collector.workspaces(id,name,timezone) values(?,'Preserved studio','UTC')",workspace);
         data.update("insert into collector.clients(id,workspace_id,business_name,contact_name,email_normalized) values(?,?,'Preserved customer','Synthetic contact','preserve@example.test')",customer,workspace);
         var before=data.queryForMap("select * from collector.clients where id=?",customer);
-        try(var upgraded=start(url)){assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(11);assertThat(data.queryForMap("select * from collector.clients where id=?",customer)).isEqualTo(before);assertThat(data.queryForObject("select count(*) from collector.project_contacts",Long.class)).isZero();}
+        try(var upgraded=start(url)){assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(12);assertThat(data.queryForMap("select * from collector.clients where id=?",customer)).isEqualTo(before);assertThat(data.queryForObject("select count(*) from collector.project_contacts",Long.class)).isZero();}
     }
 }

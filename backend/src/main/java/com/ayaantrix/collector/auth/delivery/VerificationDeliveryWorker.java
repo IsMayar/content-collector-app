@@ -15,6 +15,7 @@ import java.util.*;
 @Component
 public class VerificationDeliveryWorker {
     private final com.ayaantrix.collector.workspace.service.WorkspaceTeamPolicy team;
+    private final com.ayaantrix.collector.clientaccess.repository.ClientAccessRepository clients;
     private final JdbcTemplate jdbc;
     private final TokenDeliveryCipher cipher;
     private final AccountTokenRepository tokens;
@@ -26,9 +27,9 @@ public class VerificationDeliveryWorker {
     private record Claimed(UUID id,UUID tokenId,byte[] encrypted,String keyId,int attempts,TokenPurpose purpose) {}
 
     public VerificationDeliveryWorker(JdbcTemplate jdbc,TokenDeliveryCipher cipher,AccountTokenRepository tokens,
-            UserAccountRepository users,VerificationMailSender sender,Clock clock,PlatformTransactionManager manager,com.ayaantrix.collector.workspace.service.WorkspaceTeamPolicy team,
+            UserAccountRepository users,VerificationMailSender sender,Clock clock,PlatformTransactionManager manager,com.ayaantrix.collector.workspace.service.WorkspaceTeamPolicy team,com.ayaantrix.collector.clientaccess.repository.ClientAccessRepository clients,
             @Value("${collector.delivery.app-base-url:http://127.0.0.1:5173}") String appBase) {
-        this.team=team;this.jdbc=jdbc;this.cipher=cipher;this.tokens=tokens;this.users=users;this.sender=sender;this.clock=clock;
+        this.clients=clients;this.team=team;this.jdbc=jdbc;this.cipher=cipher;this.tokens=tokens;this.users=users;this.sender=sender;this.clock=clock;
         try {
             this.app=URI.create(appBase);
             boolean local=Set.of("localhost","127.0.0.1","[::1]").contains(app.getHost());
@@ -51,7 +52,7 @@ public class VerificationDeliveryWorker {
             // reconciliation, never automatic redelivery of an unknown outcome.
             jdbc.update("""
                     with stale as (
-                      select id from collector.outbox_jobs where job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE')
+                      select id from collector.outbox_jobs where job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE','CLIENT_INVITE')
                         and state='RUNNING' and lease_expires_at<=? order by lease_expires_at,id
                       for update skip locked limit 100
                     ) update collector.outbox_jobs j set state='FAILED',lease_owner=null,lease_expires_at=null,
@@ -59,7 +60,7 @@ public class VerificationDeliveryWorker {
                     """,Timestamp.from(now),Timestamp.from(now));
             jdbc.update("""
                     with expired as (
-                      select j.id from collector.outbox_jobs j where j.job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE')
+                      select j.id from collector.outbox_jobs j where j.job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE','CLIENT_INVITE')
                       and j.state='FAILED' and (j.created_at<=? or exists(
                         select 1 from collector.access_tokens t where t.id=(j.payload_json->>'tokenId')::uuid
                         and (t.expires_at<=? or t.consumed_at is not null or t.revoked_at is not null)))
@@ -69,7 +70,7 @@ public class VerificationDeliveryWorker {
                     """,Timestamp.from(now.minusSeconds(86400)),Timestamp.from(now),Timestamp.from(now));
             var jobs=jdbc.query("""
                     with candidate as (
-                      select id from collector.outbox_jobs where job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE') and attempt_count<5
+                      select id from collector.outbox_jobs where job_type in ('VERIFY_EMAIL','RESET_PASSWORD','TEAM_INVITE','CLIENT_INVITE') and attempt_count<5
                       and state='QUEUED' and available_at<=?
                       order by available_at,id for update skip locked limit 1
                     ) update collector.outbox_jobs j set state='RUNNING',lease_owner=?,lease_expires_at=?,
@@ -85,6 +86,7 @@ public class VerificationDeliveryWorker {
         var user=token.filter(t->t.getUserId()!=null).flatMap(t->users.findById(t.getUserId()));
         boolean eligible=token.isPresent() && token.get().isUsableFor(job.purpose(),clock.instant()) && (job.purpose()==TokenPurpose.TEAM_INVITE
             ? team.canDeliver(token.get())
+            : job.purpose()==TokenPurpose.CLIENT_INVITE ? clients.canDeliver(token.get().getWorkspaceId(),token.get().getProjectId(),token.get().getContactId(),clock.instant())
             : user.isPresent() && (job.purpose()==TokenPurpose.VERIFY_EMAIL ? user.get().getState()==AccountState.UNVERIFIED : user.get().getState()==AccountState.ACTIVE && user.get().getVerifiedAt()!=null)
               && token.get().getEmailNormalized().equals(user.get().getEmailNormalized()));
         if(!eligible){finish(job,owner,"SUCCEEDED","TOKEN_NOT_USABLE",true);return true;}
@@ -92,7 +94,7 @@ public class VerificationDeliveryWorker {
         try { raw=cipher.decrypt(job.encrypted(),job.keyId(),job.id(),job.tokenId()); }
         catch (RuntimeException error) { finish(job,owner,"FAILED","DELIVERY_CIPHER_UNAVAILABLE",false);return true; }
         try {
-            String path=switch(job.purpose()){case VERIFY_EMAIL->"/verify-email";case RESET_PASSWORD->"/reset-password";case TEAM_INVITE->"/team-invite";};
+            String path=switch(job.purpose()){case VERIFY_EMAIL->"/verify-email";case RESET_PASSWORD->"/reset-password";case TEAM_INVITE->"/team-invite";case CLIENT_INVITE->"/client/access?projectId="+token.get().getProjectId();};
             URI link=app.resolve(path+"#token="+raw);
             sender.send(new VerificationMailSender.Message(job.id(),token.get().getEmailNormalized(),link,job.purpose()));
             finish(job,owner,"SUCCEEDED",null,true);

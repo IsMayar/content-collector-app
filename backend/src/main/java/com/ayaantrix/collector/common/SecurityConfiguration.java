@@ -57,6 +57,10 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.PATCH,"/api/v1/workspaces/*/members/*").authenticated()
                         .requestMatchers(HttpMethod.DELETE,"/api/v1/workspaces/*/members/*","/api/v1/workspaces/*/member-invitations/*","/api/v1/workspaces/*/projects/*/assignments/*").authenticated()
                         .requestMatchers(HttpMethod.PUT,"/api/v1/workspaces/*/projects/*/assignments/*").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects/*/contacts/*/invite").authenticated()
+                        .requestMatchers(HttpMethod.DELETE,"/api/v1/workspaces/*/projects/*/contacts/*/access").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/client-access/exchange","/api/v1/client-access/request-link","/api/v1/client-access/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/checklist").permitAll()
                         .anyRequest().denyAll()
                 )
 
@@ -73,6 +77,7 @@ public class SecurityConfiguration {
                         )
                 )
 
+                .headers(headers -> headers.referrerPolicy(policy -> policy.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
                 .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository))
 
                 // CSRF remains enabled for future
