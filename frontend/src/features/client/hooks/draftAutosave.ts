@@ -56,7 +56,7 @@ export class DraftAutosave {
       value,
       dirty: true,
       status: this.blockedConflict
-        ? 'Conflict � unsaved changes'
+        ? 'Conflict - unsaved changes'
         : 'Unsaved changes',
       error: '',
     })
