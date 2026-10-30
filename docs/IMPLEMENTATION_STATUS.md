@@ -2,7 +2,7 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 28 October 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 is In progress and M3–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -481,11 +481,11 @@ Milestone status: In progress
 
 ### Milestone M3 Client collection
 
-Milestone status: Not started
+Milestone status: In progress
 
 | Task | Deliverable                                            | Acceptance                                             | Status      |
 | ---- | ------------------------------------------------------ | ------------------------------------------------------ | ----------- |
-| T14  | Invitation email, fragment exchange and client session | A passive GET cannot consume access                    | Not started |
+| T14  | Invitation email, fragment exchange and client session | A passive GET cannot consume access                    | Complete |
 | T15  | Typed client item editors and repeaters                | Server and browser enforce the same schema semantics   | Not started |
 | T16  | Autosave and conflict UI                               | Two-tab edits produce a safe conflict                  | Not started |
 | T17  | Submission versions and withdraw                       | Immutable revision and exact asset references recorded | Not started |
@@ -723,3 +723,12 @@ Team invitations/verified acceptance, reserved seats, member administration/reau
 Final acceptance passed. Full backend clean verify passed **657 tests** (620 preserved + 37 T13 cases), including the final lock-wait expiry/workspace-state cases. Frontend 97 tests and strict TypeScript/build/lint/format pass. Both real HTTPS lifecycle tests pass after fixing actual accepted-workspace routing and identity/bootstrap ordering. The final complete responsive run passed **75/75** and production PWA verification passed **1/1**. Earlier navigation/session defects and the development-reload interruption are documented with their fixes; no failed final cases remain. [Full contract, architecture, file and evidence record](T13_TEAM_COLLABORATION.md).
 
 **T13 Part 1 Complete**; no remaining local T13 blocker. Backend commit `aca9494`; frontend commit `01f06ff`; documentation follows separately. M2 remains In progress independently for T11 real collected-work reopening/revalidation dependencies (T14–T17/T22). T04 hosted CI, T05 provider/resend and T06 deployment/proxy/key/retention gates remain pending. No client collection/review workflow, full MVP/provider/deployment claim or remote push.
+
+
+## T14 Part 1 — secure project client access — 30 October 2026
+
+**T14 Complete** for invitation, passive-GET safety, explicit exchange and independent session acceptance; **M3 In progress**. [Exact files, APIs, architecture trees, V12, expiry/revocation, scope and commands](T14_CLIENT_ACCESS.md). Existing project contacts become grants only on explicit owner issuance; no client account or workspace membership is invented. One-use fragment credentials, encrypted delivery, seven-day/24-hour-idle opaque HttpOnly cookies, live tenant/project checks and transactional revocation preserve agency isolation. Current client-safe independent structure renders read-only with no fake responses or future write APIs.
+
+Final evidence: **697 backend tests, 0 failures/errors/skips** (657 preserved + 40 T14); **114 frontend unit tests / 6 files**; strict TypeScript/build/lint/format passed; **2 real HTTPS lifecycle tests with MSW disabled**, **75 responsive browser cases in one complete run**, **1 production PWA case**, all passing. Real portal desktop1440/phone360 screenshots inspected. PostgreSQL one-use concurrency, rollback, migration upgrade/restart, Hibernate validation and executable JAR checks passed. Early failed expectations/selectors/recovery are recorded in the focused document; only final completed runs are counted.
+
+V1–V11, original specifications/templates and dependency resolution are unchanged. T11 collected-work reopening remains In progress; T15–T17 answers/autosave/submissions and T22 publication remain deferred. New DRAFT projects cannot issue invitations before publication; HTTPS uses a trusted ACTIVE fixture rather than a fake publish endpoint. Provider fakes do not close T04 hosted CI, T05 real provider/resend or T06 production proxy/key/retention gates. No push or full-MVP claim. Backend commit `2db3caa`; frontend/docs commits recorded in the focused document.

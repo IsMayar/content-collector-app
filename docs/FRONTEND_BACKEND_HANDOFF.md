@@ -282,3 +282,8 @@ The catalog invitation body contains email only (MEMBER); staged project assignm
 Feature APIs/schemas own team and assignment contracts and share the existing RTK transport. Identity changes clear private caches; access denials reconcile live /me; focus/reconnect refetch current reads. Bootstrap waits for an in-flight identity reconciliation so stale snapshots cannot overwrite a newer restored session. This is request-driven reconciliation, not a push channel. Production authorization always rechecks live account/session/membership/assignment state. Unimplemented T14 client exchange and T15–T17 collection/review remain deferred; preview is still read-only and owner-only.
 
 T13 local acceptance is complete: backend 657, frontend unit 97, real HTTPS 2 (MSW off), responsive 75/75 and PWA 1/1; strict typing/build/lint/format pass. Actual API contracts above are implemented; later client/review/provider/deployment gates remain separate. Full evidence and exact file manifest are in T13_TEAM_COLLABORATION.md.
+
+
+## T14 Part 1 — independent project client access
+
+Owner invitation/revocation, explicit fragment exchange, generic fresh links, separate opaque cookie sessions and a read-only real portal are implemented. V12 is additive; V1–V11 and existing agency/team identities remain intact. Shared safe structure projection excludes private content; all client reads revalidate the live scoped grant/session. No answer/upload/submission APIs or T22 publication are added. DRAFT invitation issuance remains closed pending publication. See [T14 contracts, architecture, lifecycle, migration, exact manifest and verification](T14_CLIENT_ACCESS.md). T11 and T04–T06 gates remain independent.

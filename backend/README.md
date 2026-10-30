@@ -472,3 +472,8 @@ These tests require the existing Java 21/Maven wrapper, Docker Linux engine/Post
 [Complete T13 API inventory, package tree, migration/security/delivery details, exact file manifest and verification](../docs/T13_TEAM_COLLABORATION.md). T04 hosted CI, T05 provider/resend, T06 deployment and T11 collected-work reopening remain independent gates. No full MVP claim.
 
 T13 final verification (30 October 2026): **657 backend tests** (620 preserved + 37 T13), **97 frontend unit tests**, **2 real HTTPS lifecycles**, **75 responsive cases** and **1 production PWA case** passed; zero final failures/errors/skips. Strict TypeScript/build/lint/format, Flyway V1–V11, Hibernate validation, restart/concurrency/rollback and executable JAR packaging passed. T13 Part 1 Complete; M2/T11 and release gates retain their separate status. Commits: backend `aca9494`, frontend `01f06ff`; no push.
+
+
+## T14 Part 1 — independent project client access
+
+Owner invitation/revocation, explicit fragment exchange, generic fresh links, separate opaque cookie sessions and a read-only real portal are implemented. V12 is additive; V1–V11 and existing agency/team identities remain intact. Shared safe structure projection excludes private content; all client reads revalidate the live scoped grant/session. No answer/upload/submission APIs or T22 publication are added. DRAFT invitation issuance remains closed pending publication. See [T14 contracts, architecture, lifecycle, migration, exact manifest and verification](../docs/T14_CLIENT_ACCESS.md). T11 and T04–T06 gates remain independent.
