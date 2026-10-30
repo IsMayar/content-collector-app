@@ -449,3 +449,26 @@ Existing GET/POST /api/v1/workspaces/{workspaceId}/clients are preserved. Added 
 Contact POST requires the project's existing clientId, name, email and accessExpiresAt in the next 90 days. Same project/normalized email duplicates return 409 CONTACT_EXISTS; foreign/unrelated association is hidden. Customer PATCH preserves contact/email/project relationships and returns 409 VERSION_CONFLICT/currentVersion when stale. No undocumented read/delete/update contact endpoints, invitation sending or client-session API. V10 is additive and applies through Flyway; retain existing isolated database/env/signing-key setup and Hibernate validate.
 
 Exact PowerShell verification commands, response/error shapes, package design and scope are in [T12 acceptance documentation](../docs/T12_CLIENT_CONTACTS_AND_PREVIEW.md). Normal startup remains .\mvnw.cmd '-Dspring-boot.run.profiles=dev' spring-boot:run after Initialize-Local.ps1 and docker compose up -d --wait. Do not put credentials in source or VITE_ variables.
+
+
+## T13 Part 1 — team collaboration
+
+The agency API now supports owner team invitations, verified-email acceptance, reserved seats, member disable/restore/removal, password-reauthenticated ownership transfer and project assignments. Members read only assigned projects and associated customers; independent review/export flags never grant owner administration. Existing auth/session/CSRF/CORS and encrypted delivery infrastructure are reused. No real provider mail is sent by tests. V11 is additive; V1–V10 remain unchanged.
+
+Run from the project root in PowerShell:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\mvnw.cmd '-Dtest=TeamCollaborationTests' test
+if ($LASTEXITCODE -ne 0) { throw 'T13 verification failed.' }
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test
+if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS verification failed.' }
+```
+
+These tests require the existing Java 21/Maven wrapper, Docker Linux engine/PostgreSQL Testcontainers, and (for HTTPS tests) Node/frontend dependencies and Edge. Test credentials/keys/mailboxes/certificates are synthetic and isolated. Local app setup remains the existing Initialize-Local.ps1 / docker compose flow documented above. Configure the existing delivery encryption/provider environment outside version control for development delivery; never use production credentials in automated tests. Invitation links use /team-invite#token=..., expire after seven days and require the matching verified account. Revoke then reissue rather than calling an undocumented team resend route.
+
+[Complete T13 API inventory, package tree, migration/security/delivery details, exact file manifest and verification](../docs/T13_TEAM_COLLABORATION.md). T04 hosted CI, T05 provider/resend, T06 deployment and T11 collected-work reopening remain independent gates. No full MVP claim.
+
+T13 final verification (30 October 2026): **657 backend tests** (620 preserved + 37 T13), **97 frontend unit tests**, **2 real HTTPS lifecycles**, **75 responsive cases** and **1 production PWA case** passed; zero final failures/errors/skips. Strict TypeScript/build/lint/format, Flyway V1–V11, Hibernate validation, restart/concurrency/rollback and executable JAR packaging passed. T13 Part 1 Complete; M2/T11 and release gates retain their separate status. Commits: backend `aca9494`, frontend `01f06ff`; no push.

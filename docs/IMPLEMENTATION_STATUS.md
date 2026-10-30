@@ -477,7 +477,7 @@ Milestone status: In progress
 | T10  | Project creation for all three types         | Template snapshot remains independent               | Complete    |
 | T11  | Section and item editor and reorder          | Keyboard reorder and structure conflicts work       | In progress |
 | T12  | Client contacts and read-only client preview | Preview exposes no live client session              | Complete    |
-| T13  | Team invitations and project assignments     | Seat reservation and reviewer/export flags enforced | Not started |
+| T13  | Team invitations and project assignments     | Seat reservation and reviewer/export flags enforced | Complete |
 
 ### Milestone M3 Client collection
 
@@ -714,3 +714,12 @@ Failed attempts are documented and not counted as passes. New mock preview defau
 No remaining local T12 acceptance blocker. T11 remains In progress for real draft/revision reopening dependencies. T13 team invitations/assignments, T14 invitation delivery/exchange/client sessions, T15–T17 collection/review and T22 lifecycle were not implemented. T04 hosted CI, T05 provider/resend and T06 production deployment/proxy/key/retention gates remain pending. No full-MVP/provider/deployment claim or remote push. Backend foundation commit: `73aa4a4`; frontend/integration and documentation are separate commits.
 
 T12 implementation commits: `73aa4a4` backend and `f5af935` frontend/real-browser integration. Exact file manifest and final evidence are in T12_CLIENT_CONTACTS_AND_PREVIEW.md. No push.
+
+
+## T13 Part 1 — verified Complete (30 October 2026)
+
+Team invitations/verified acceptance, reserved seats, member administration/reauthenticated ownership transfer and project assignments are implemented with live tenant/session authorization, transactional audit/idempotency and the existing encrypted delivery infrastructure. V11 alone adds scoped metadata/assignment persistence; V1–V10 and supplied specifications/templates remain unchanged. The frontend uses real catalog routes and assigned-only navigation; undocumented pre-acceptance assignment staging is removed.
+
+Final acceptance passed. Full backend clean verify passed **657 tests** (620 preserved + 37 T13 cases), including the final lock-wait expiry/workspace-state cases. Frontend 97 tests and strict TypeScript/build/lint/format pass. Both real HTTPS lifecycle tests pass after fixing actual accepted-workspace routing and identity/bootstrap ordering. The final complete responsive run passed **75/75** and production PWA verification passed **1/1**. Earlier navigation/session defects and the development-reload interruption are documented with their fixes; no failed final cases remain. [Full contract, architecture, file and evidence record](T13_TEAM_COLLABORATION.md).
+
+**T13 Part 1 Complete**; no remaining local T13 blocker. Backend commit `aca9494`; frontend commit `01f06ff`; documentation follows separately. M2 remains In progress independently for T11 real collected-work reopening/revalidation dependencies (T14–T17/T22). T04 hosted CI, T05 provider/resend and T06 deployment/proxy/key/retention gates remain pending. No client collection/review workflow, full MVP/provider/deployment claim or remote push.
