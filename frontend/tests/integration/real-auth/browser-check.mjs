@@ -1622,6 +1622,7 @@ async function command(input) {
         ),
       )
       phase = 'client-attachments:remove'
+      phase = 'client-attachments:unselect'
       await field.getByRole('checkbox').uncheck()
       await expect(
         field.getByRole('status').filter({ hasText: /^Saved/ }),
@@ -1651,6 +1652,162 @@ async function command(input) {
       await expect(field.getByText('REJECTED', { exact: true })).toBeVisible()
       persisted = (await run(root + '/items/' + item, clientPage, false)).data
       assert.deepEqual(persisted.answer.value.assetIds, [])
+
+      phase = 'client-attachments:submission'
+      await field.getByLabel('Choose project files').setInputFiles({
+        name: 'submitted-history.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('Immutable submitted browser file'),
+      })
+      await expect(field.getByText('READY', { exact: true })).toBeVisible({
+        timeout: 30000,
+      })
+      await expect(
+        field.getByRole('status').filter({ hasText: /^Saved/ }),
+      ).toBeVisible()
+      const beforeSubmit = (
+        await run(root + '/items/' + item, clientPage, false)
+      ).data
+      const retained = beforeSubmit.item.assets.find(
+        (a) => a.originalName === 'submitted-history.txt',
+      )
+      assert.ok(retained)
+      await field
+        .getByRole('button', { name: 'Review and submit', exact: true })
+        .click()
+      const submittedResponse = clientPage.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname.endsWith('/items/' + item + '/submit'),
+      )
+      await field
+        .getByRole('button', { name: 'Submit for review', exact: true })
+        .click()
+      const submitted = await submittedResponse
+      assert.equal(submitted.status(), 201)
+      const revision = await submitted.json()
+      assert.equal(revision.revisionNo, 1)
+      await expect(
+        field.getByRole('button', { name: 'Withdraw to edit' }),
+      ).toBeVisible()
+      assert.equal(
+        (
+          await run(
+            {
+              url: root + '/items/' + item + '/answer',
+              method: 'PUT',
+              body: {
+                value: { assetIds: [] },
+                expectedVersion: beforeSubmit.answer.version,
+                expectedStructureVersion: current.project.structureVersion,
+                saveOperationId: crypto.randomUUID(),
+              },
+            },
+            clientPage,
+            false,
+          )
+        ).status,
+        409,
+      )
+      await clientPage.reload()
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: 'Browser attachments', exact: true })
+        .click()
+      await expect(
+        field.getByRole('button', { name: 'Withdraw to edit' }),
+      ).toBeVisible()
+      const snapshot = (
+        await run(
+          agency + '/items/' + item + '/revisions/' + revision.revisionId,
+        )
+      ).data.revision
+      assert.deepEqual(snapshot.valueSnapshot.assetIds, [retained.id])
+      assert.equal(snapshot.assets[0].id, retained.id)
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '?tab=submissions',
+      )
+      await page
+        .getByRole('region', { name: 'Submitted versions' })
+        .getByRole('combobox', { name: 'Question' })
+        .selectOption(item)
+      phase = 'client-attachments:agency-history'
+      await page.getByRole('button', { name: /Revision 1/ }).click()
+      await expect(
+        page.getByRole('heading', { name: 'Private documents · Revision 1' }),
+      ).toBeVisible()
+      phase = 'client-attachments:agency-history-file'
+      await expect(
+        page.getByText('submitted-history.txt', { exact: true }),
+      ).toBeVisible()
+      phase = 'client-attachments:withdraw'
+      await field.getByRole('button', { name: 'Withdraw to edit' }).click()
+      await expect(
+        field.getByRole('button', { name: 'Review and submit', exact: true }),
+      ).toBeVisible()
+      phase = 'client-attachments:unselect'
+      await field
+        .getByRole('checkbox', { name: /submitted-history\.txt/ })
+        .uncheck()
+      await expect(
+        field.getByRole('status').filter({ hasText: /^Saved/ }),
+      ).toBeVisible()
+      const removal = await run(
+        { url: root + '/assets/' + retained.id, method: 'DELETE' },
+        clientPage,
+        false,
+      )
+      assert.equal(removal.status, 409)
+      assert.deepEqual(
+        (
+          await run(
+            agency + '/items/' + item + '/revisions/' + revision.revisionId,
+          )
+        ).data.revision,
+        snapshot,
+      )
+      assert.equal(
+        (
+          await run(
+            {
+              url: root + '/assets/' + retained.id + '/download',
+              method: 'POST',
+              body: { variant: 'ORIGINAL' },
+            },
+            clientPage,
+            false,
+          )
+        ).status,
+        200,
+      )
+      phase = 'client-attachments:resubmit'
+      await clientPage.setViewportSize({ width: 1440, height: 1000 })
+      await field
+        .getByRole('checkbox', { name: /submitted-history\.txt/ })
+        .check()
+      await expect(
+        field.getByRole('status').filter({ hasText: /^Saved/ }),
+      ).toBeVisible()
+      await field
+        .getByRole('button', { name: 'Review and submit', exact: true })
+        .click()
+      const resubmission = clientPage.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname.endsWith('/items/' + item + '/submit'),
+      )
+      await field
+        .getByRole('button', { name: 'Submit for review', exact: true })
+        .click()
+      assert.equal((await (await resubmission).json()).revisionNo, 2)
+      await expect(
+        field.getByRole('button', { name: 'Withdraw to edit' }),
+      ).toBeVisible()
 
       break
     }
@@ -2188,7 +2345,22 @@ for await (const line of lines) {
         .getByRole('alert')
         .allTextContents()
         .catch(() => [])
+      await clientPage
+        .screenshot({
+          path: fileURLToPath(
+            new URL(
+              '../../../.artifacts/real-auth/t17-failure.png',
+              import.meta.url,
+            ),
+          ),
+          fullPage: true,
+        })
+        .catch(() => {})
       http.push({
+        failure: String(error.message)
+          .replace(/https?:\/\/[^\s]+/g, '[private URL]')
+          .replace(/[A-Za-z0-9_-]{40,}/g, '[redacted]')
+          .slice(0, 2400),
         uploadAlerts: alerts.map((text) =>
           text.replace(/https?:\/\/[^\s]+/g, '[private URL]'),
         ),

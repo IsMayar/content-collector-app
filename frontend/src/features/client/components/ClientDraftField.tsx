@@ -1,3 +1,5 @@
+import { ClientSubmissionHistory } from './ClientSubmissionHistory'
+import { SubmissionControls } from './SubmissionControls'
 import { useState, useSyncExternalStore, useEffect } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { TypedValue } from './TypedValue'
@@ -16,13 +18,16 @@ export function ClientDraftField({
   structureVersion,
   onSaved,
   canUpload = false,
+  canRespond = false,
 }: {
   item: Item
   projectId: string
   structureVersion: number
   onSaved: () => void
   canUpload?: boolean
+  canRespond?: boolean
 }) {
+  const [submitting, setSubmitting] = useState(false)
   const [save] = useSaveDraftMutation()
   const [read] = useLazyReadDraftQuery()
   const [draft] = useState(() => {
@@ -65,7 +70,11 @@ export function ClientDraftField({
     }
   }, [draft])
   return (
-    <article className="product-panel" aria-labelledby={'question-' + item.id}>
+    <article
+      id={'item-' + item.id}
+      className="product-panel"
+      aria-labelledby={'question-' + item.id}
+    >
       <h3 className="answer-title" id={'question-' + item.id}>
         {item.label}
       </h3>
@@ -103,7 +112,7 @@ export function ClientDraftField({
                 field.onChange(value)
                 draft.edit(value)
               }}
-              disabled={!item.canEdit}
+              disabled={!item.canEdit || submitting}
               root={`client/projects/${projectId}`}
               preview={!canUpload}
               liveUploads={canUpload}
@@ -123,12 +132,17 @@ export function ClientDraftField({
         )}
         {item.canEdit && (
           <div className="actions">
-            <button type="submit" className="secondary-button">
+            <button
+              type="submit"
+              className="secondary-button"
+              disabled={submitting}
+            >
               Save draft
             </button>
             <button
               type="button"
               className="secondary-button"
+              disabled={submitting}
               onClick={() => draft.edit({} as AnswerValue)}
             >
               Clear answer
@@ -159,6 +173,16 @@ export function ClientDraftField({
           </div>
         )}
       </form>
+      <SubmissionControls
+        item={item}
+        projectId={projectId}
+        structureVersion={structureVersion}
+        draft={draft}
+        canRespond={canRespond}
+        onRefresh={onSaved}
+        onBusyChange={setSubmitting}
+      />
+      <ClientSubmissionHistory projectId={projectId} itemId={item.id} />
       {state.conflict && (
         <section aria-label="Compare draft versions">
           <h4>Your unsaved answer</h4>

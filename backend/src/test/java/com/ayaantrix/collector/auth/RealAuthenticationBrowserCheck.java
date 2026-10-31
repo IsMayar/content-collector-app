@@ -122,6 +122,8 @@ class RealAuthenticationBrowserCheck {
                     io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
                     io.step(Map.of("action","client-draft-collection"));
                     io.step(Map.of("action","client-attachments"));
+                    assertThat(jdbc.queryForObject("select count(*) from collector.submission_revisions where project_id=?",Integer.class,clientProject)).isEqualTo(2);
+                    assertThat(jdbc.queryForObject("select count(*) from collector.revision_assets where project_id=?",Integer.class,clientProject)).isEqualTo(2);
                     assertThat(jdbc.queryForObject("select count(*) from collector.answers where project_id=?",Integer.class,clientProject)).isGreaterThan(0);
                     clock.advance(24*3600+1);io.step(Map.of("action","client-idle-request-link"));
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();

@@ -7,6 +7,7 @@ export const collectionSchema = base.extend({
   collection: z.literal(true),
   capabilities: z.object({
     canRespond: z.boolean(),
+    canSubmit: z.boolean().optional().default(false),
     canUpload: z.boolean().optional().default(false),
   }),
   sections: z.array(
@@ -21,6 +22,7 @@ export const collectionSchema = base.extend({
             'APPROVED',
           ]),
           canEdit: z.boolean(),
+          currentRevisionId: z.string().uuid().nullable().optional(),
           assets: z.array(
             z.object({
               id: z.string(),

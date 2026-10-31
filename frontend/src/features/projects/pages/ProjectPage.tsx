@@ -1,3 +1,5 @@
+import { env } from '@/config/env'
+import { SubmissionHistoryPanel } from '../components/SubmissionHistoryPanel'
 import { AnalyticsPanel } from '@/features/analytics/components/AnalyticsPanel'
 import { useProjectDetail } from '@/features/projects/api/projectsApi'
 import { CustomerPanel } from '@/features/clients/components/CustomerPanel'
@@ -104,9 +106,12 @@ export function ProjectPage() {
               {[
                 ['checklist', 'Content'],
                 ['activity', 'Activity'],
+                ['submissions', 'Submitted versions'],
                 ['analytics', 'Analytics'],
                 ...(owner ? [['access', 'Client access']] : []),
-                ...(p.permissions.canReview ? [['review', 'Review']] : []),
+                ...(p.permissions.canReview && env.mocksEnabled
+                  ? [['review', 'Review']]
+                  : []),
               ].map(([key, label]) => (
                 <Link
                   key={key}
@@ -223,8 +228,23 @@ export function ProjectPage() {
           )}
           {tab === 'assignments' && owner && <AssignmentsPanel root={root} />}
           {tab === 'reminders' && owner && <RemindersPanel root={root} />}
-          {tab === 'review' && p.permissions.canReview && (
-            <ReviewPanel root={root} />
+          {tab === 'review' &&
+            p.permissions.canReview &&
+            (env.mocksEnabled ? (
+              <ReviewPanel root={root} />
+            ) : (
+              <SubmissionHistoryPanel
+                key={root}
+                root={root}
+                items={data.structure.flatMap((s) => s.items)}
+              />
+            ))}
+          {tab === 'submissions' && (
+            <SubmissionHistoryPanel
+              key={root}
+              root={root}
+              items={data.structure.flatMap((s) => s.items)}
+            />
           )}
           {tab === 'activity' && <ActivityPanel root={root} />}
           {tab === 'exports' && p.permissions.canExport && (

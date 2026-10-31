@@ -1,3 +1,4 @@
+import { SubmissionValidationSummary } from './SubmissionValidationSummary'
 import { UnsavedDraftRecovery } from './UnsavedDraftRecovery'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -34,7 +35,7 @@ export function CollectionPortal({
     <>
       <Heading
         title={data.project.title}
-        description="Answers remain drafts. Check the save and file status for each question. Final submission is not available yet."
+        description="Save your answers, then submit each completed question for review. Submitted answers stay read-only until you withdraw them."
       >
         <button
           className="secondary-button"
@@ -57,6 +58,18 @@ export function CollectionPortal({
           This project is read-only. Your saved drafts remain available.
         </p>
       )}
+      <SubmissionValidationSummary
+        data={data}
+        onSelect={async (section, item) => {
+          if (!(await flush())) return
+          setSelected(section)
+          requestAnimationFrame(() => {
+            const target = document.getElementById('question-' + item)
+            target?.setAttribute('tabindex', '-1')
+            target?.focus()
+          })
+        }}
+      />
       <div className="client-workspace">
         <nav className="client-checklist" aria-label="Requested sections">
           {data.sections.map((s) => (
@@ -85,12 +98,17 @@ export function CollectionPortal({
               </h2>
               {s.items.map((item) => (
                 <ClientDraftField
-                  key={item.id}
+                  key={
+                    item.id +
+                    ':' +
+                    (item.state === 'SUBMITTED' ? 'submitted' : 'editable')
+                  }
                   item={item}
                   projectId={data.project.id}
                   structureVersion={data.project.structureVersion}
                   onSaved={onRefresh}
                   canUpload={data.capabilities.canUpload}
+                  canRespond={data.capabilities.canSubmit}
                 />
               ))}
             </section>

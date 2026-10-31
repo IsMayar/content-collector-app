@@ -1,3 +1,4 @@
+import { submissionRevisionSchema } from '../schemas/submissionSchema'
 import { z } from 'zod'
 import { savedDraftAnswer } from '../schemas/draftAnswerSchema'
 import { clientApi } from '@/services/api/clientApi'
@@ -26,9 +27,19 @@ export const clientAnswersApi = clientApi.injectEndpoints({
       }),
     }),
     readDraft: build.query<
-      { answer: Answer },
+      {
+        answer: Answer
+        revisions?: z.infer<typeof submissionRevisionSchema>[]
+      },
       { projectId: string; itemId: string }
     >({
+      transformResponse: (data: unknown) =>
+        z
+          .object({
+            answer: savedDraftAnswer,
+            revisions: z.array(submissionRevisionSchema).optional(),
+          })
+          .parse(data),
       query: ({ projectId, itemId }) =>
         `client/projects/${projectId}/items/${itemId}`,
     }),

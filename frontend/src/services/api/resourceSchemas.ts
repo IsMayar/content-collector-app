@@ -1,3 +1,7 @@
+import {
+  submissionSummarySchema,
+  submissionRevisionSchema,
+} from '@/features/client/schemas/submissionSchema'
 import { collectionSchema } from '@/features/client/schemas/collectionSchema'
 import { portalFoundationSchema } from '@/features/client/schemas/portalSchema'
 import { teamSchema } from '@/features/workspace/schemas/teamSchema'
@@ -101,6 +105,10 @@ export function validateProductRead(path: string, data: unknown) {
     schema = z.object({ data: z.array(customerSchema), page })
   if (/^workspaces\/[^/]+\/projects\/[^/]+\/contacts$/.test(route))
     schema = z.object({ data: z.array(projectContactSchema) })
+  if (/\/items\/[^/]+\/revisions$/.test(route))
+    schema = z.object({ data: z.array(submissionSummarySchema) })
+  if (/\/items\/[^/]+\/revisions\/[^/]+$/.test(route))
+    schema = z.object({ revision: submissionRevisionSchema })
   if (route.endsWith('/client-preview')) schema = previewSchema
   return schema.safeParse(data)
 }

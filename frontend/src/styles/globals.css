@@ -4,3 +4,11 @@
 @import './collection.css';
 @import './administration.css';
 @import './product-polish.css';
+
+.submission-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  padding: 1rem;
+  background: var(--color-background, #f8fafc);
+}
