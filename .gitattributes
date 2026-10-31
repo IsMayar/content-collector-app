@@ -5,3 +5,8 @@ docs/spec/** -text
 
 # Keep the packaged original template resource identical to its specification source.
 backend/src/main/resources/templates/starter_templates.json -text
+
+# Executable worker scripts and daemon configs must remain portable from Windows.
+backend/storage/**/*.sh text eol=lf
+backend/src/test/resources/attachment/*.conf text eol=lf
+backend/src/test/resources/attachment/*.hdb text eol=lf

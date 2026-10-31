@@ -1,0 +1,89 @@
+package com.ayaantrix.collector.attachment.security;
+
+import com.ayaantrix.collector.clientaccess.security.ClientAccessAuthorization;
+import com.ayaantrix.collector.collection.repository.ClientAnswerRepository;
+import com.ayaantrix.collector.common.error.ApiException;
+import com.ayaantrix.collector.project.repository.*;
+import com.ayaantrix.collector.project.security.ProjectAuthorization;
+import com.ayaantrix.collector.project.service.ProjectDraftVisibility;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.*;
+
+import tools.jackson.databind.JsonNode;
+
+import java.util.*;
+
+@Component
+@Transactional(propagation = Propagation.MANDATORY)
+public class AttachmentAuthorization {
+    private final ClientAccessAuthorization clients;
+    private final ProjectAuthorization agency;
+    private final ProjectRepository projects;
+    private final ProjectStructureRepository structures;
+    private final ClientAnswerRepository drafts;
+
+    public AttachmentAuthorization(
+            ClientAccessAuthorization clients,
+            ProjectAuthorization agency,
+            ProjectRepository projects,
+            ProjectStructureRepository structures,
+            ClientAnswerRepository drafts) {
+        this.clients = clients;
+        this.agency = agency;
+        this.projects = projects;
+        this.structures = structures;
+        this.drafts = drafts;
+    }
+
+    public ClientAccessAuthorization.Access client(String cookie, UUID project, boolean write) {
+        var a = clients.require(cookie, project);
+        if (write
+                && (!a.project().state().name().equals("ACTIVE")
+                        || !a.workspace().state().name().equals("ACTIVE")))
+            throw new ApiException(HttpStatus.CONFLICT, "READ_ONLY", "This project is read-only.");
+        return a;
+    }
+
+    public void agency(UUID workspace, UUID project) {
+        var a = agency.access(workspace, false);
+        agency.readableProject(a, project);
+        var p =
+                projects.lockForStructure(workspace, project)
+                        .orElseThrow(ProjectAuthorization::missing);
+        if (p.state().name().equals("DELETION_PENDING")) throw ProjectAuthorization.missing();
+    }
+
+    public Optional<JsonNode> visibleItem(UUID workspace, UUID project, UUID item) {
+        var all = structures.structure(workspace, project);
+        var values =
+                drafts.drafts(workspace, project).entrySet().stream()
+                        .collect(
+                                java.util.stream.Collectors.toMap(
+                                        Map.Entry::getKey, e -> e.getValue().answer().value()));
+        for (var section : all)
+            for (var field : section.path("items"))
+                if (field.path("id").asText().equals(item.toString())
+                        && ProjectDraftVisibility.visible(section, field, all, values))
+                    return Optional.of(field);
+        return Optional.empty();
+    }
+
+    public static boolean editable(JsonNode i) {
+        return Set.of("NOT_STARTED", "DRAFT", "CHANGES_REQUESTED")
+                        .contains(i.path("state").asText())
+                && i.path("currentRevisionId").isNull();
+    }
+
+    public JsonNode item(UUID workspace, UUID project, UUID item, boolean write) {
+        var field =
+                visibleItem(workspace, project, item).orElseThrow(ProjectAuthorization::missing);
+        if (write && !editable(field))
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "READ_ONLY",
+                    "This item cannot be changed without the revision workflow.");
+        return field;
+    }
+}

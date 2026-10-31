@@ -207,7 +207,7 @@ class AccountDeliveryOperationsTests {
         sender.failure=null;assertThat(resolve(job,AccountDeliveryOperations.Resolution.CONFIRMED_NOT_SENT)).isTrue();
         assertThat(worker.dispatchOne()).isTrue();assertThat(sender.messages).hasSize(1);assertThat(state()).isEqualTo("SUCCEEDED");
         assertThat(context.getBean(org.flywaydb.core.Flyway.class).validateWithResult().validationSuccessful).isTrue();
-        assertThat(context.getBean(org.flywaydb.core.Flyway.class).info().applied()).hasSize(13);
+        assertThat(context.getBean(org.flywaydb.core.Flyway.class).info().applied()).hasSize(14);
     }
     @Test void expiredLeaseAfterRestartBecomesUnknownAndIsNeverAutomaticallyResent(){
         issue();jdbc.update("update collector.outbox_jobs set state='RUNNING',lease_owner='crashed-worker',lease_expires_at=?,attempt_count=1",java.sql.Timestamp.from(clock.instant().minusSeconds(1)));

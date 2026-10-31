@@ -1,0 +1,8 @@
+<policymap>
+ <policy domain="resource" name="memory" value="256MiB"/><policy domain="resource" name="map" value="0"/>
+ <policy domain="resource" name="disk" value="64MiB"/><policy domain="resource" name="time" value="30"/>
+ <policy domain="resource" name="thread" value="1"/><policy domain="resource" name="list-length" value="2"/>
+ <policy domain="delegate" rights="none" pattern="*"/><policy domain="path" rights="none" pattern="@*"/>
+ <policy domain="coder" rights="none" pattern="*"/>
+ <policy domain="coder" rights="read|write" pattern="{PNG,JPEG}"/>
+</policymap>

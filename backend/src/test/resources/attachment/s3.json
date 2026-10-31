@@ -1,0 +1,1 @@
+{"identities":[{"name":"synthetic-collector-tests","credentials":[{"accessKey":"collector-test-key","secretKey":"synthetic-private-storage-test-key-only"}],"actions":["Admin","Read","Write","List","Tagging"]}]}

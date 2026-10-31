@@ -1,0 +1,20 @@
+# Local development only. Secrets are generated into ignored .local/storage/s3.json.
+services:
+  storage:
+    image: chrislusf/seaweedfs:4.00@sha256:dcbccdc9f33689d43ca3d1fb73d2baa319f8307c59d7923191b993ddc85ba6f8
+    command: [server, -s3, -filer, -dir=/data, -ip=127.0.0.1, -ip.bind=0.0.0.0, -s3.config=/etc/collector-s3.json, -volume.max=64, -master.volumeSizeLimitMB=32]
+    ports: ["127.0.0.1:8333:8333"]
+    volumes:
+      - storage-data:/data
+      - ./.local/storage/s3.json:/etc/collector-s3.json:ro
+    restart: "no"
+  scanner:
+    image: clamav/clamav:stable_base@sha256:a01a78acf14e356f9d95c0eeb640ac9fa48a98a59933dea877f5a4d01573a0eb
+    ports: ["127.0.0.1:13310:3310"]
+    volumes: [clam-definitions:/var/lib/clamav]
+    mem_limit: 3g
+    cpus: 1
+    restart: "no"
+volumes:
+  storage-data:
+  clam-definitions:

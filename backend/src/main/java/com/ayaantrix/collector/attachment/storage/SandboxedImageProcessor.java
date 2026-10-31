@@ -1,0 +1,110 @@
+package com.ayaantrix.collector.attachment.storage;
+
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Component;
+
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+
+/** Decodes untrusted raster files only inside a resource-limited, networkless container. */
+@Component
+public class SandboxedImageProcessor {
+    public record Variants(byte[] working, byte[] thumbnail) {}
+
+    private final String image;
+    private final String docker;
+
+    public SandboxedImageProcessor(Environment env) {
+        image = env.getProperty("IMAGE_WORKER_IMAGE", "");
+        docker = env.getProperty("IMAGE_WORKER_DOCKER", "docker");
+    }
+
+    public boolean enabled() {
+        return !image.isBlank();
+    }
+
+    public Variants process(byte[] bytes) {
+        if (!enabled()) throw new IllegalStateException("IMAGE_DECODER_UNAVAILABLE");
+        Path dir = null;
+        Process process = null;
+        String container = "collector-image-" + UUID.randomUUID();
+        boolean completed = false;
+        try {
+            dir = Files.createTempDirectory("collector-image-").toRealPath();
+            dir.toFile().setWritable(true, false);
+            dir.toFile().setReadable(true, false);
+            dir.toFile().setExecutable(true, false);
+            Files.write(dir.resolve("source"), bytes);
+            dir.resolve("source").toFile().setReadable(true, false);
+            process =
+                    new ProcessBuilder(
+                                    List.of(
+                                            docker,
+                                            "run",
+                                            "--rm",
+                                            "--name",
+                                            container,
+                                            "--network",
+                                            "none",
+                                            "--memory",
+                                            "512m",
+                                            "--cpus",
+                                            "1",
+                                            "--pids-limit",
+                                            "32",
+                                            "--read-only",
+                                            "--cap-drop",
+                                            "ALL",
+                                            "--security-opt",
+                                            "no-new-privileges",
+                                            "--user",
+                                            "65534:65534",
+                                            "--tmpfs",
+                                            "/tmp:rw,noexec,nosuid,size=64m",
+                                            "--mount",
+                                            "type=bind,source=" + dir + ",target=/work",
+                                            image))
+                            .redirectError(ProcessBuilder.Redirect.DISCARD)
+                            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                            .start();
+            if (!process.waitFor(45, TimeUnit.SECONDS) || process.exitValue() != 0)
+                throw new IllegalStateException("IMAGE_PROCESSING_FAILED");
+            completed = true;
+            Path working = dir.resolve("working.png"), thumb = dir.resolve("thumbnail.png");
+            if (Files.size(working) + Files.size(thumb) > 32 * 1048576L)
+                throw new IllegalStateException("IMAGE_VARIANT_LIMIT");
+            return new Variants(Files.readAllBytes(working), Files.readAllBytes(thumb));
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new IllegalStateException("IMAGE_PROCESSING_UNAVAILABLE");
+        } finally {
+            if (process != null && process.isAlive()) process.destroyForcibly();
+            // Killing the CLI alone does not terminate a container on a remote Docker daemon.
+            if (!completed && process != null)
+                try {
+                    var cleanup =
+                            new ProcessBuilder(docker, "rm", "-f", container)
+                                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                                    .start();
+                    if (!cleanup.waitFor(10, TimeUnit.SECONDS)) cleanup.destroyForcibly();
+                } catch (Exception e) {
+                    if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                }
+            if (dir != null)
+                try {
+                    Path root = Path.of(System.getProperty("java.io.tmpdir")).toRealPath();
+                    if (dir.startsWith(root)
+                            && !dir.equals(root)
+                            && dir.getFileName().toString().startsWith("collector-image-"))
+                        try (var paths = Files.walk(dir)) {
+                            for (Path path : paths.sorted(Comparator.reverseOrder()).toList())
+                                Files.deleteIfExists(path);
+                        }
+                } catch (Exception ignored) {
+                    /* A locked temporary file is safe to retain for host cleanup. */
+                }
+        }
+    }
+}

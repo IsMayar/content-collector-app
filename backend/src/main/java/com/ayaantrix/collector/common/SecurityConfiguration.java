@@ -63,6 +63,10 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/checklist").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/items/*").permitAll()
                         .requestMatchers(HttpMethod.PUT,"/api/v1/client/projects/*/items/*/answer").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/client/projects/*/uploads","/api/v1/client/projects/*/uploads/*/finalize","/api/v1/client/projects/*/assets/*/download").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/assets/*").permitAll()
+                        .requestMatchers(HttpMethod.DELETE,"/api/v1/client/projects/*/uploads/*","/api/v1/client/projects/*/assets/*").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects/*/assets/*/download").authenticated()
                         .anyRequest().denyAll()
                 )
 
