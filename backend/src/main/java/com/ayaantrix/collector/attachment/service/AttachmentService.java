@@ -92,7 +92,7 @@ public class AttachmentService {
                                     HttpStatus.CONFLICT,
                                     "UPLOAD_EXPIRED",
                                     "This upload attempt is no longer available. Start a new"
-                                        + " attempt.");
+                                            + " attempt.");
                     } else {
                         long count =
                                 assets.item(a.grant().workspace(), project, input.itemId()).stream()
@@ -111,7 +111,7 @@ public class AttachmentService {
                                     HttpStatus.CONFLICT,
                                     "ATTACHMENT_LIMIT",
                                     "This question has reached its attachment limit. Remove an"
-                                        + " unused file first.");
+                                            + " unused file first.");
                         UUID id = UUID.randomUUID(), upload = UUID.randomUUID();
                         String path =
                                 "staging/"
@@ -196,7 +196,7 @@ public class AttachmentService {
                     HttpStatus.CONFLICT,
                     "UPLOAD_NOT_AVAILABLE",
                     "The file has not finished transferring. Retry finalization when it is"
-                        + " uploaded.");
+                            + " uploaded.");
         }
         if (head.bytes() != original.bytes())
             throw new ApiException(
@@ -289,7 +289,7 @@ public class AttachmentService {
 
     private Map<String, String> download(UUID workspace, UUID project, UUID id, String variant) {
         var asset = assets.find(workspace, project, id).orElseThrow(ProjectAuthorization::missing);
-        auth.item(workspace, project, asset.item(), false);
+        if (!assets.retained(asset)) auth.item(workspace, project, asset.item(), false);
         if (!asset.state().equals("READY"))
             throw new ApiException(
                     HttpStatus.CONFLICT,
@@ -332,12 +332,43 @@ public class AttachmentService {
                                                     HttpStatus.UNPROCESSABLE_CONTENT,
                                                     "INVALID_ASSET_REFERENCE",
                                                     "The referenced file is unavailable in this"
-                                                        + " project."));
+                                                            + " project."));
             if (!asset.item().equals(item) || !asset.state().equals("READY"))
                 throw new ApiException(
                         HttpStatus.UNPROCESSABLE_CONTENT,
                         "INVALID_ASSET_REFERENCE",
                         "Only verified files for this question can be saved.");
+        }
+    }
+
+    /**
+     * Called under the existing project lock: READY bytes must still exist before linking history.
+     */
+    public void validateSubmissionObjects(
+            UUID workspace, UUID project, UUID item, JsonNode field, JsonNode value) {
+        validateReferences(workspace, project, item, value);
+        var ids = new HashSet<String>();
+        if (value.has("assetIds")) for (var id : value.path("assetIds")) ids.add(id.asText());
+        if (value.has("rows"))
+            for (var row : value.path("rows"))
+                for (var cell : row.path("values"))
+                    if (cell.isArray()) for (var id : cell) ids.add(id.asText());
+        for (var id : ids) {
+            var asset =
+                    assets.find(workspace, project, UUID.fromString(id))
+                            .orElseThrow(ProjectAuthorization::missing);
+            if (Set.of("IMAGE", "REPEATER").contains(field.path("type").asText())
+                    && !Set.of("image/png", "image/jpeg").contains(asset.detectedType()))
+                throw new ApiException(
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        "INVALID_ASSET_REFERENCE",
+                        "Choose a verified image for this field.");
+            try {
+                for (var path : asset.variants())
+                    if (storage.headPrivate(path.asText()).bytes() <= 0) throw unavailable();
+            } catch (RuntimeException e) {
+                throw unavailable();
+            }
         }
     }
 

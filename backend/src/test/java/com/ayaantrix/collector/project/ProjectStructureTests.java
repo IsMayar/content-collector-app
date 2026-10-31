@@ -299,7 +299,7 @@ class ProjectStructureTests {
         as(t.actor(),()->editor().patchSection(t.workspace(),p.id(),id(first),new SectionPatch("Project-only",false,1L)));var after=detail(t,p);
         context.close();open();assertThat(detail(t,p)).isEqualTo(after);assertThat(detail(t,other)).isEqualTo(untouched);
         assertThat(jdbc.queryForObject("select definition::text from collector.project_snapshots where workspace_id=? and project_id=?",String.class,t.workspace(),p.id())).isEqualTo(snapshot);assertThat(jdbc.queryForList("select definition::text from collector.template_versions order by id",String.class)).isEqualTo(catalog);
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(14);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(15);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
     }
 
     @ParameterizedTest @ValueSource(strings={"NOT_STARTED","DRAFT","SUBMITTED","APPROVED","CHANGES_REQUESTED"})
@@ -355,7 +355,7 @@ class ProjectStructureTests {
         assertThat(impact.draftItemIds()).containsExactly(draft);assertThat(impact.revisionItemIds()).containsExactly(submitted);assertThat(impact.affectedItemIds()).contains(draft,submitted);
         assertThatThrownBy(()->impact.draftItemIds().clear()).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(()->policy.requireSupported(impact,true)).isInstanceOf(ApiException.class);
-        assertThat(count(t,"answers")).isZero();assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector' and table_name in ('submission_revisions','review_decisions')",Integer.class)).isZero();
+        assertThat(count(t,"answers")).isZero();assertThat(jdbc.queryForObject("select count(*) from collector.submission_revisions",Integer.class)).isZero();
     }
     @Test void impactBoundaryRejectsHardRemovalAndStillAllowsUntouchedNewRequests(){
         var t=tenant();var p=create(t,ProjectType.WEBSITE);var before=detail(t,p).structure();var after=new ArrayList<JsonNode>();for(var s:before)after.add(s.deepCopy());

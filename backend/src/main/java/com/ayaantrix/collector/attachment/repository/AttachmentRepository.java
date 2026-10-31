@@ -177,14 +177,14 @@ public class AttachmentRepository {
         // asset.
         jdbc.update(
                 "update collector.items set state='DRAFT',version=version+1,updated_at=? where"
-                    + " workspace_id=? and project_id=? and id=?",
+                        + " workspace_id=? and project_id=? and id=?",
                 t,
                 w,
                 p,
                 item);
         jdbc.update(
                 "update collector.projects set version=version+1,updated_at=? where workspace_id=?"
-                    + " and id=?",
+                        + " and id=?",
                 t,
                 w,
                 p);
@@ -193,13 +193,13 @@ public class AttachmentRepository {
     public void finalizeUpload(Attachment a, Instant now) {
         jdbc.update(
                 "update collector.file_assets set state='PROCESSING',available_at=?,updated_at=?"
-                    + " where id=? and state='RESERVED'",
+                        + " where id=? and state='RESERVED'",
                 Timestamp.from(now),
                 Timestamp.from(now),
                 a.id());
         jdbc.update(
                 "update collector.upload_reservations set state='FINALIZED',updated_at=? where"
-                    + " asset_id=? and state='RESERVED'",
+                        + " asset_id=? and state='RESERVED'",
                 Timestamp.from(now),
                 a.id());
     }
@@ -216,8 +216,8 @@ public class AttachmentRepository {
         if (changed == 1)
             jdbc.update(
                     "update collector.workspaces set"
-                        + " storage_reserved_bytes=storage_reserved_bytes-? where id=? and"
-                        + " storage_reserved_bytes>=?",
+                            + " storage_reserved_bytes=storage_reserved_bytes-? where id=? and"
+                            + " storage_reserved_bytes>=?",
                     a.reserved(),
                     a.workspace(),
                     a.reserved());
@@ -305,7 +305,7 @@ public class AttachmentRepository {
         int released =
                 jdbc.update(
                         "update collector.upload_reservations set released_at=?,updated_at=? where"
-                            + " asset_id=? and released_at is null",
+                                + " asset_id=? and released_at is null",
                         Timestamp.from(now),
                         Timestamp.from(now),
                         a.id());
@@ -319,15 +319,31 @@ public class AttachmentRepository {
                 a.workspace());
     }
 
+    public boolean retained(Attachment a) {
+        return Boolean.TRUE.equals(
+                jdbc.queryForObject(
+                        "select exists(select 1 from collector.revision_assets where workspace_id=?"
+                            + " and project_id=? and asset_id=?)",
+                        Boolean.class,
+                        a.workspace(),
+                        a.project(),
+                        a.id()));
+    }
+
     public boolean referenced(Attachment a) {
         return Boolean.TRUE.equals(
                 jdbc.queryForObject(
                         "select exists(select 1 from collector.answers where workspace_id=? and"
-                            + " project_id=? and value_json::text like ?)",
+                            + " project_id=? and value_json::text like ?) or exists(select 1 from"
+                            + " collector.revision_assets where workspace_id=? and project_id=? and"
+                            + " asset_id=?)",
                         Boolean.class,
                         a.workspace(),
                         a.project(),
-                        "%" + a.id() + "%"));
+                        "%" + a.id() + "%",
+                        a.workspace(),
+                        a.project(),
+                        a.id()));
     }
 
     public List<Attachment> cleanup(Instant now) {
@@ -371,14 +387,14 @@ public class AttachmentRepository {
         int n =
                 jdbc.update(
                         "update collector.file_assets set cleaned_at=?,retained_bytes=case when"
-                            + " state='READY' then retained_bytes else 0 end where id=? and"
-                            + " cleaned_at is null",
+                                + " state='READY' then retained_bytes else 0 end where id=? and"
+                                + " cleaned_at is null",
                         Timestamp.from(now),
                         a.id());
         if (n == 1 && a.retained() > 0 && !a.state().equals("READY"))
             jdbc.update(
                     "update collector.workspaces set storage_used_bytes=storage_used_bytes-? where"
-                        + " id=? and storage_used_bytes>=?",
+                            + " id=? and storage_used_bytes>=?",
                     a.retained(),
                     a.workspace(),
                     a.retained());

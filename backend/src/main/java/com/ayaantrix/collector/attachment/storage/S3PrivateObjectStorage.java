@@ -161,6 +161,14 @@ public class S3PrivateObjectStorage implements PrivateObjectStorage, AutoCloseab
         return new Head(h.contentLength(), h.contentType());
     }
 
+    public Head headPrivate(String key) {
+        require();
+        var h =
+                client.headObject(
+                        HeadObjectRequest.builder().bucket(privateBucket).key(key).build());
+        return new Head(h.contentLength(), h.contentType());
+    }
+
     public byte[] read(String key, long max) {
         require();
         try (var in =

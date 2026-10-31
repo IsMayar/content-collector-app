@@ -117,7 +117,7 @@ public class ClientPortalService {
                 "progress",
                 structures.progress(p.workspaceId(), List.of(project)).get(project),
                 "capabilities",
-                Map.of("canRespond", writable, "canUpload", canUpload),
+                Map.of("canRespond", writable, "canUpload", canUpload, "canSubmit", writable && attachmentAuthorization.uploadsWritable(p.workspaceId())),
                 "collection",
                 true);
     }

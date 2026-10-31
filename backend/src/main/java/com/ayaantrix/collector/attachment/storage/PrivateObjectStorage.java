@@ -19,6 +19,8 @@ public interface PrivateObjectStorage {
 
     Head head(String key);
 
+    Head headPrivate(String key);
+
     byte[] read(String key, long maxBytes);
 
     void put(String key, byte[] bytes, String type);
