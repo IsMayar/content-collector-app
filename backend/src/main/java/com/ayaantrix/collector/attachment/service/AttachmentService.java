@@ -95,16 +95,8 @@ public class AttachmentService {
                                             + " attempt.");
                     } else {
                         long count =
-                                assets.item(a.grant().workspace(), project, input.itemId()).stream()
-                                        .filter(
-                                                x ->
-                                                        Set.of(
-                                                                        "RESERVED",
-                                                                        "UPLOADED",
-                                                                        "PROCESSING",
-                                                                        "READY")
-                                                                .contains(x.state()))
-                                        .count();
+                                assets.blockingSlots(
+                                        a.grant().workspace(), project, input.itemId());
                         int limit = field.path("validation").path("maxFiles").asInt(0);
                         if (limit > 0 && count >= limit)
                             throw new ApiException(
@@ -257,7 +249,8 @@ public class AttachmentService {
                         throw new ApiException(
                                 HttpStatus.CONFLICT,
                                 "ASSET_IN_USE",
-                                "Unselect this file and save its answer before deleting it.");
+                                "This file is used by a saved answer or retained submission."
+                                        + " Submitted files remain available in history.");
                     assets.release(asset, "DELETED", null, clock.instant());
                     audit.writeClient(
                             asset.workspace(),

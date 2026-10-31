@@ -473,7 +473,7 @@ class SubmissionTests {
         var row =
                 jdbc.queryForMap(
                         "select id,encrypted_payload,encryption_key_id from collector.outbox_jobs"
-                            + " where payload_json->>'tokenId'=?",
+                                + " where payload_json->>'tokenId'=?",
                         id.toString());
         return context.getBean(com.ayaantrix.collector.auth.delivery.TokenDeliveryCipher.class)
                 .decrypt(
@@ -600,7 +600,7 @@ class SubmissionTests {
                         () ->
                                 jdbc.update(
                                         "update collector.submission_revisions set revision_no=20"
-                                            + " where id=?",
+                                                + " where id=?",
                                         r.revisionId()))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
         assertThatThrownBy(
@@ -922,11 +922,11 @@ class SubmissionTests {
         long logs = count(f.tenant(), "audit_logs");
         jdbc.execute(
                 "create function collector.test_submission_audit() returns trigger language plpgsql"
-                    + " as $$ begin if new.action='CLIENT_ITEM_SUBMITTED' then raise exception"
-                    + " 'synthetic audit failure'; end if; return new; end $$");
+                        + " as $$ begin if new.action='CLIENT_ITEM_SUBMITTED' then raise exception"
+                        + " 'synthetic audit failure'; end if; return new; end $$");
         jdbc.execute(
                 "create trigger test_submission_audit before insert on collector.audit_logs for"
-                    + " each row execute function collector.test_submission_audit()");
+                        + " each row execute function collector.test_submission_audit()");
         try {
             assertThatThrownBy(() -> submit(f, c, i, 1, "rollback")).isInstanceOf(Exception.class);
             assertThat(count(f.tenant(), "submission_revisions")).isZero();
@@ -1171,5 +1171,67 @@ class SubmissionTests {
                                 .asBoolean())
                 .isFalse();
         assertThat(count(f.tenant(), "submission_revisions")).isZero();
+    }
+
+    @Test
+    void conditionalSubmissionFreezesEffectiveVisibilityAndLaterDraftsCannotRewriteIt() {
+        var f = fixture();
+        var section = emptySection(f.tenant(), f.project());
+        UUID control =
+                id(
+                        add(
+                                f.tenant(),
+                                f.project(),
+                                section,
+                                field("conditional.control", "SINGLE_SELECT")));
+        var child = field("conditional.child", "SHORT_TEXT");
+        child.putObject("visibleWhen")
+                .put("dependsOnItemKey", "conditional.control")
+                .put("operator", "EQUALS")
+                .put("optionKey", "yes");
+        UUID dependent = id(add(f.tenant(), f.project(), section, child));
+        String c = enter(f).credential();
+        save(f, c, control, json.createObjectNode().put("optionKey", "yes"), 0);
+        save(f, c, dependent, text("Submitted conditional content"), 0);
+        var r = submit(f, c, dependent, 1, "conditional-submit");
+        var snapshot =
+                as(
+                        f.tenant().actor(),
+                        () ->
+                                submissions()
+                                        .detail(
+                                                f.tenant().workspace(),
+                                                f.project().id(),
+                                                dependent,
+                                                r.revisionId()));
+        assertThat(json.valueToTree(snapshot).at("/revision/schemaSnapshot/visible").asBoolean())
+                .isTrue();
+        var frozen =
+                json.readTree(
+                        jdbc.queryForObject(
+                                "select structure_snapshot::text from"
+                                    + " collector.submission_revisions where id=?",
+                                String.class,
+                                r.revisionId()));
+        boolean found = false;
+        for (var sec : frozen)
+            for (var item : sec.path("items"))
+                if (item.path("id").asText().equals(dependent.toString())) {
+                    assertThat(item.path("visible").asBoolean()).isTrue();
+                    found = true;
+                }
+        assertThat(found).isTrue();
+        save(f, c, control, json.createObjectNode().put("optionKey", ""), 1);
+        assertThat(
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        submissions()
+                                                .detail(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        dependent,
+                                                        r.revisionId())))
+                .isEqualTo(snapshot);
     }
 }

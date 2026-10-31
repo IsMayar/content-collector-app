@@ -129,6 +129,9 @@ public class SubmissionService {
         }
         UUID r = UUID.randomUUID();
         int n = revisions.next(w, p, i);
+        var effective = effectiveStructure(all, rows);
+        var submittedSchema = item.deepCopy();
+        ((tools.jackson.databind.node.ObjectNode) submittedSchema).put("visible", true);
         revisions.insert(
                 w,
                 p,
@@ -139,9 +142,9 @@ public class SubmissionService {
                 version,
                 a.grant().contact(),
                 clock.instant(),
-                item,
+                submittedSchema,
                 value,
-                all,
+                effective,
                 manifest);
         audit.writeClient(w, p, a.grant().contact(), "CLIENT_ITEM_SUBMITTED", r, clock.instant());
         var result = new Submitted(r, n, item.path("version").asLong() + 1, "SUBMITTED");
@@ -220,6 +223,25 @@ public class SubmissionService {
                 if (item.path("id").asText().equals(i.toString())
                         && ProjectDraftVisibility.visible(s, item, all, values)) return item;
         throw ProjectAuthorization.missing();
+    }
+
+    /**
+     * Freeze the same evaluated visibility used for this authorized submission, not initial UI
+     * hints.
+     */
+    private List<JsonNode> effectiveStructure(
+            List<JsonNode> all, Map<UUID, ClientAnswerRepository.Draft> rows) {
+        var values = new HashMap<UUID, JsonNode>();
+        rows.forEach((id, d) -> values.put(id, d.answer().value()));
+        var frozen = new ArrayList<JsonNode>();
+        for (var section : all) {
+            var copy = (tools.jackson.databind.node.ObjectNode) section.deepCopy();
+            for (var item : copy.path("items"))
+                ((tools.jackson.databind.node.ObjectNode) item)
+                        .put("visible", ProjectDraftVisibility.visible(section, item, all, values));
+            frozen.add(copy);
+        }
+        return frozen;
     }
 
     private void collect(JsonNode value, Set<UUID> ids) {

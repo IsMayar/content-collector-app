@@ -1672,7 +1672,7 @@ class AttachmentStorageTests {
         assertThat(
                         jdbc.queryForObject(
                                 "select uploaded_by_contact_id from collector.file_assets where"
-                                    + " id=?",
+                                        + " id=?",
                                 UUID.class,
                                 r.assetId()))
                 .isEqualTo(f.contact());
@@ -1724,12 +1724,190 @@ class AttachmentStorageTests {
         }
     }
 
-    com.ayaantrix.collector.submission.service.SubmissionService submissions(){return context.getBean(com.ayaantrix.collector.submission.service.SubmissionService.class);}
-    com.ayaantrix.collector.submission.dto.SubmissionDtos.Submitted submit(Target t,long v){return submissions().submit(t.cookie(),t.f().project().id(),t.item(),new com.ayaantrix.collector.submission.dto.SubmissionDtos.Submit(v,t.structure()),UUID.randomUUID().toString());}
-    void draftAssets(Target t,java.util.UUID... ids){var value=json.createObjectNode();var list=value.putArray("assetIds");for(var id:ids)list.add(id.toString());long version=context.getBean(com.ayaantrix.collector.collection.repository.ClientAnswerRepository.class).drafts(t.f().tenant().workspace(),t.f().project().id()).getOrDefault(t.item(),new com.ayaantrix.collector.collection.repository.ClientAnswerRepository.Draft(new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Answer(t.item(),json.createObjectNode(),0,null),null,null,null)).answer().version();context.getBean(com.ayaantrix.collector.collection.service.ClientAnswerService.class).save(t.cookie(),t.f().project().id(),t.item(),new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(value,version,t.structure(),UUID.randomUUID()));}
-    @Test void submittedFilesSurviveWithdrawalDraftRemovalAndCleanup() throws Exception{
-      var t=target("FILE");var r=reserve(t,"history.txt","text/plain",text());transfer(r,text());finish(t,r);draftAssets(t,r.assetId());var revision=submit(t,1);submissions().withdraw(t.cookie(),t.f().project().id(),t.item(),new com.ayaantrix.collector.submission.dto.SubmissionDtos.Withdraw(revision.itemVersion()),"withdraw-history");draftAssets(t);denial(()->files().remove(t.cookie(),t.f().project().id(),r.assetId(),false),"ASSET_IN_USE");assertThatThrownBy(()->jdbc.update("update collector.file_assets set state='DELETED' where id=?",r.assetId())).isInstanceOf(org.springframework.dao.DataAccessException.class);context.getBean(TestClock.class).time=NOW.plusSeconds(86401);worker().cleanup();context.getBean(TestClock.class).time=NOW;var url=files().clientDownload(t.cookie(),t.f().project().id(),r.assetId(),"ORIGINAL").get("url");assertThat(java.net.http.HttpClient.newHttpClient().send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).GET().build(),java.net.http.HttpResponse.BodyHandlers.ofByteArray()).body()).containsExactly(text());var data=as(t.f().tenant().actor(),()->submissions().detail(t.f().tenant().workspace(),t.f().project().id(),t.item(),revision.revisionId()));assertThat(json.valueToTree(data).at("/revision/valueSnapshot/assetIds/0").asText()).isEqualTo(r.assetId().toString());
+    com.ayaantrix.collector.submission.service.SubmissionService submissions() {
+        return context.getBean(com.ayaantrix.collector.submission.service.SubmissionService.class);
     }
-    @Test void unverifiedUploadsCannotBeSubmittedEvenWhenUnselected(){var t=target("FILE");reserve(t,"pending.txt","text/plain",text());draftAssets(t);denial(()->submit(t,1),"UPLOAD_INCOMPLETE");assertThat(count(t.f().tenant(),"submission_revisions")).isZero();}
-    @Test void missingCanonicalObjectRejectsSubmissionAtomically() throws Exception{var t=target("FILE");var r=reserve(t,"lost.txt","text/plain",text());transfer(r,text());finish(t,r);draftAssets(t,r.assetId());String key=jdbc.queryForObject("select canonical_key from collector.file_assets where id=?",String.class,r.assetId());context.getBean(com.ayaantrix.collector.attachment.storage.PrivateObjectStorage.class).deletePrivate(key);denial(()->submit(t,1),"STORAGE_UNAVAILABLE");assertThat(count(t.f().tenant(),"submission_revisions")).isZero();assertThat(count(t.f().tenant(),"revision_assets")).isZero();}
+
+    com.ayaantrix.collector.submission.dto.SubmissionDtos.Submitted submit(Target t, long v) {
+        return submissions()
+                .submit(
+                        t.cookie(),
+                        t.f().project().id(),
+                        t.item(),
+                        new com.ayaantrix.collector.submission.dto.SubmissionDtos.Submit(
+                                v, t.structure()),
+                        UUID.randomUUID().toString());
+    }
+
+    void draftAssets(Target t, java.util.UUID... ids) {
+        var value = json.createObjectNode();
+        var list = value.putArray("assetIds");
+        for (var id : ids) list.add(id.toString());
+        long version =
+                context.getBean(
+                                com.ayaantrix.collector.collection.repository.ClientAnswerRepository
+                                        .class)
+                        .drafts(t.f().tenant().workspace(), t.f().project().id())
+                        .getOrDefault(
+                                t.item(),
+                                new com.ayaantrix.collector.collection.repository
+                                        .ClientAnswerRepository.Draft(
+                                        new com.ayaantrix.collector.collection.dto.ClientAnswerDtos
+                                                .Answer(t.item(), json.createObjectNode(), 0, null),
+                                        null,
+                                        null,
+                                        null))
+                        .answer()
+                        .version();
+        context.getBean(com.ayaantrix.collector.collection.service.ClientAnswerService.class)
+                .save(
+                        t.cookie(),
+                        t.f().project().id(),
+                        t.item(),
+                        new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(
+                                value, version, t.structure(), UUID.randomUUID()));
+    }
+
+    @Test
+    void submittedFilesSurviveWithdrawalDraftRemovalAndCleanup() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "history.txt", "text/plain", text());
+        transfer(r, text());
+        finish(t, r);
+        draftAssets(t, r.assetId());
+        var revision = submit(t, 1);
+        submissions()
+                .withdraw(
+                        t.cookie(),
+                        t.f().project().id(),
+                        t.item(),
+                        new com.ayaantrix.collector.submission.dto.SubmissionDtos.Withdraw(
+                                revision.itemVersion()),
+                        "withdraw-history");
+        draftAssets(t);
+        denial(
+                () -> files().remove(t.cookie(), t.f().project().id(), r.assetId(), false),
+                "ASSET_IN_USE");
+        assertThatThrownBy(
+                        () ->
+                                jdbc.update(
+                                        "update collector.file_assets set state='DELETED' where"
+                                            + " id=?",
+                                        r.assetId()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        context.getBean(TestClock.class).time = NOW.plusSeconds(86401);
+        worker().cleanup();
+        context.getBean(TestClock.class).time = NOW;
+        var url =
+                files().clientDownload(t.cookie(), t.f().project().id(), r.assetId(), "ORIGINAL")
+                        .get("url");
+        assertThat(
+                        java.net.http.HttpClient.newHttpClient()
+                                .send(
+                                        java.net.http.HttpRequest.newBuilder(
+                                                        java.net.URI.create(url))
+                                                .GET()
+                                                .build(),
+                                        java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+                                .body())
+                .containsExactly(text());
+        var data =
+                as(
+                        t.f().tenant().actor(),
+                        () ->
+                                submissions()
+                                        .detail(
+                                                t.f().tenant().workspace(),
+                                                t.f().project().id(),
+                                                t.item(),
+                                                revision.revisionId()));
+        assertThat(json.valueToTree(data).at("/revision/valueSnapshot/assetIds/0").asText())
+                .isEqualTo(r.assetId().toString());
+    }
+
+    @Test
+    void unverifiedUploadsCannotBeSubmittedEvenWhenUnselected() {
+        var t = target("FILE");
+        reserve(t, "pending.txt", "text/plain", text());
+        draftAssets(t);
+        denial(() -> submit(t, 1), "UPLOAD_INCOMPLETE");
+        assertThat(count(t.f().tenant(), "submission_revisions")).isZero();
+    }
+
+    @Test
+    void missingCanonicalObjectRejectsSubmissionAtomically() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "lost.txt", "text/plain", text());
+        transfer(r, text());
+        finish(t, r);
+        draftAssets(t, r.assetId());
+        String key =
+                jdbc.queryForObject(
+                        "select canonical_key from collector.file_assets where id=?",
+                        String.class,
+                        r.assetId());
+        context.getBean(com.ayaantrix.collector.attachment.storage.PrivateObjectStorage.class)
+                .deletePrivate(key);
+        denial(() -> submit(t, 1), "STORAGE_UNAVAILABLE");
+        assertThat(count(t.f().tenant(), "submission_revisions")).isZero();
+        assertThat(count(t.f().tenant(), "revision_assets")).isZero();
+    }
+
+    @Test
+    void withdrawnHistoryDoesNotConsumeReplacementSlotsButStillConsumesStorage() throws Exception {
+        var f = fixture();
+        var section = emptySection(f.tenant(), f.project());
+        var definition = field("single.replacement", "FILE");
+        definition
+                .withObject("validation")
+                .put("minFiles", 1)
+                .put("maxFiles", 1)
+                .putArray("allowedExtensions")
+                .add("txt");
+        UUID i = id(add(f.tenant(), f.project(), section, definition));
+        var t =
+                new Target(
+                        f,
+                        i,
+                        enter(f).credential(),
+                        detail(f.tenant(), f.project()).project().structureVersion());
+        var first = reserve(t, "original.txt", "text/plain", text());
+        transfer(first, text());
+        finish(t, first);
+        draftAssets(t, first.assetId());
+        var revision = submit(t, 1);
+        submissions()
+                .withdraw(
+                        t.cookie(),
+                        f.project().id(),
+                        i,
+                        new com.ayaantrix.collector.submission.dto.SubmissionDtos.Withdraw(
+                                revision.itemVersion()),
+                        "withdraw-for-replacement");
+        draftAssets(t);
+        var second = reserve(t, "replacement.txt", "text/plain", text());
+        transfer(second, text());
+        finish(t, second);
+        draftAssets(t, second.assetId());
+        var newer = submit(t, 3);
+        assertThat(newer.revisionNo()).isEqualTo(2);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select storage_used_bytes from collector.workspaces where id=?",
+                                Long.class,
+                                f.tenant().workspace()))
+                .isEqualTo(text().length * 2L);
+        assertThat(
+                        files().clientDownload(
+                                        t.cookie(), f.project().id(), first.assetId(), "ORIGINAL"))
+                .containsKey("url");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.revision_assets where"
+                                    + " workspace_id=? and asset_id=?",
+                                Long.class,
+                                f.tenant().workspace(),
+                                first.assetId()))
+                .isEqualTo(1);
+    }
 }

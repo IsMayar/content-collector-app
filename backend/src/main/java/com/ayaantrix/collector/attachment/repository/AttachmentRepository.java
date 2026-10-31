@@ -319,11 +319,26 @@ public class AttachmentRepository {
                 a.workspace());
     }
 
+    /** Retained historical files consume storage, but not a later draft's empty selection slots. */
+    public long blockingSlots(UUID workspace, UUID project, UUID item) {
+        return jdbc.queryForObject(
+                """
+                select count(*) from collector.file_assets a
+                where a.workspace_id=? and a.project_id=? and a.item_id=?
+                  and (a.state in ('RESERVED','UPLOADED','PROCESSING') or
+                    (a.state='READY' and (not exists(select 1 from collector.revision_assets r
+                       where r.workspace_id=a.workspace_id and r.project_id=a.project_id and r.asset_id=a.id)
+                      or exists(select 1 from collector.answers d where d.workspace_id=a.workspace_id
+                       and d.project_id=a.project_id and d.item_id=a.item_id and d.value_json::text like '%'||a.id::text||'%'))))
+                """,
+                Long.class, workspace, project, item);
+    }
+
     public boolean retained(Attachment a) {
         return Boolean.TRUE.equals(
                 jdbc.queryForObject(
                         "select exists(select 1 from collector.revision_assets where workspace_id=?"
-                            + " and project_id=? and asset_id=?)",
+                                + " and project_id=? and asset_id=?)",
                         Boolean.class,
                         a.workspace(),
                         a.project(),
