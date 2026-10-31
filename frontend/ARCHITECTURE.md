@@ -101,3 +101,8 @@ The collection feature reuses T14 client session authorization for exact item GE
 ## T16 real file fields
 
 The established `features/client` feature owns real client collection; no duplicate `client-portal` feature is created. UploadQueue and TypedValue use the existing RTK Query command/read transport, with XHR only for signed object byte progress. Collection explicitly supplies live upload permission, field rules, metadata refresh, latest draft values and save-before-delete coordination. Only server-confirmed READY UUIDs enter the existing serialized autosave engine. Preview stays read-only. See [T16 report](../docs/T16_PRIVATE_ATTACHMENTS.md).
+
+
+## T17 submission ownership
+
+The existing client feature owns SubmissionControls, SubmissionValidationSummary, ClientSubmissionHistory and submissionSchema; existing clientAnswersApi retains the one client transport. SubmittedAnswer is shared read-only presentation, and projects/SubmissionHistoryPanel owns agency snapshot reads. Current editors remain feature-owned; no parallel client-portal directory, new HTTP stack, auth model or UI redesign. Submission waits for saves/verified files and confirms only the server result; historical content is rendered without raw identifiers. [T17 contracts and verification](../docs/T17_CLIENT_SUBMISSIONS.md).

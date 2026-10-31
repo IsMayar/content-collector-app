@@ -339,3 +339,8 @@ The collection feature reuses T14 client session authorization for exact item GE
 ## T16 private attachment boundary
 
 Attachment HTTP/service/repository/entity/dto/security/storage subpackages follow the existing feature convention. V14 adds private metadata/reservations, durable leased scan jobs and cleanup ledgers. Workspace-before-project database locks protect quota, access and final publication; provider work occurs outside transactions. ClamAV and sandboxed image verification precede READY. Expired crash leases share the bounded attempt policy; worker outputs use bounded non-following regular-file reads. Existing subscription write rules apply to upload intents and publication. Streaming SVG/DOCX parsing avoids a document-sized DOM. Collection references are exact project/item-scoped UUIDs. See [T16 report](../docs/T16_PRIVATE_ATTACHMENTS.md) for lifecycle, tests and deployment restrictions. No submissions/reviews were added.
+
+
+## T17 immutable submissions
+
+The submission feature uses controller/dto/repository/service subpackages and reuses existing client/agency authorization and scoped collection/attachment persistence. V15 adds append-only item revisions, revision-file retention and content-free integration events. Project locks serialize submission/withdrawal with draft/structure/grant changes; T11 semantic reopening remains fail-closed. See [T17 contracts, package trees, immutability and evidence](../docs/T17_CLIENT_SUBMISSIONS.md). No approval/review decisions or project lifecycle endpoints are added.

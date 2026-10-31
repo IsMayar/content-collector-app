@@ -488,7 +488,7 @@ Milestone status: In progress
 | T14  | Invitation email, fragment exchange and client session | A passive GET cannot consume access                    | Complete |
 | T15  | Typed client item editors and repeaters                | Server and browser enforce the same schema semantics   | Complete |
 | T16  | Autosave and conflict UI                               | Two-tab edits produce a safe conflict                  | Not started |
-| T17  | Submission versions and withdraw                       | Immutable revision and exact asset references recorded | Not started |
+| T17  | Submission versions and withdraw                       | Immutable revision and exact asset references recorded | Complete |
 
 ### Milestone M4 Files review and exports
 
@@ -755,3 +755,16 @@ Final results: **808 backend tests** (728 preserved + 80 new; zero failures/erro
 Remaining T16 gates: live production storage/IAM/CORS/lifecycle and scanner monitoring, deployed WebP/HEIC/HEIF decoder/device acceptance, and an agreed agency file-library data-list/detail contract absent from the supplied catalog. No undocumented public endpoint or production mock fallback was added. Future immutable revision retention/reopening/publication must integrate with the existing fail-closed boundaries. T04 hosted CI, T05 provider/resend, T06 deployment/TLS, T11 reopening and T22 publication remain pending. No T17 submissions/review workflow was implemented. The original roadmap labels/history and supplied specifications remain unchanged.
 
 See [T16 report, exact files, APIs and evidence](T16_PRIVATE_ATTACHMENTS.md) and [backend setup commands](../backend/README.md).
+
+
+## M3 / T17 Part 1 — immutable item submissions — 31 October 2026
+
+**T17 Part 1 Complete for the documented submission/withdrawal and immutable-history acceptance; M3 remains In progress.** The guide/catalog item-level submit and withdraw contracts now persist immutable revision/schema/value/structure snapshots, exact retained READY file links, contact/time attribution and content-free transactional integration events. V15 alone is additive; V1–V14 and supplied specifications/templates remain unchanged. Existing scoped auth, CSRF, PostgreSQL locks, optimistic versions, audit and actor-bound idempotency are preserved. T11 semantic changes remain409 REOPEN_REQUIRED; no later review-decision, project-reopen, approval or export feature is implemented.
+
+Backend clean verify: **863 passed, 0 failures/errors/skips** (808 preserved +55 new). Focused submission/storage run: **91 passed** (36 previous storage +55 new). Frontend: **161 tests across9 files passed** (144 preserved +17 new); strict TypeScript/production build/lint/format passed. **2 real HTTPS lifecycles with MSW disabled, 75 responsive cases in one complete final run, and1 production PWA case passed**, all with zero final failures. The earlier complete responsive run had72 passes/3 failures from stripped legacy mock snapshot fields; compatibility was corrected and the full75-case suite rerun without skipped assertions or increased timeouts. The existing bundle-size advisory remains. Earlier failing stages are recorded in the focused report and are not counted as passes.
+
+Client final confirmation waits for autosaves/verified uploads, uses one in-flight idempotent action, preserves errors/drafts, and reloads authoritative read-only state. Withdrawal preserves history. Agency assigned readers can see exact submitted versions; queue review access is separately protected. [Exact contracts, package trees, migration, validation, immutable retention, file manifest and verification](T17_CLIENT_SUBMISSIONS.md).
+
+Independent gates remain open: T04 hosted CI, T05 real provider/resend, T06 deployment/TLS/retention, T11 collected/approved reopening/draft revalidation, T16 production storage/scanner/codec/camera and agency file-library contract, and T22 publication/lifecycle. T16 and M2/M3 remain In progress. Original T01–T16 evidence and roadmap labels are preserved. No production provider or full-MVP claim; no push.
+
+T17 implementation commits: `616acb5` and `ae0183d`; frontend/integration: `0d41e8e`. Final documentation commit and clean working tree are reported separately. No push.

@@ -526,3 +526,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
 ```
 
 See [T16 implementation and evidence](../docs/T16_PRIVATE_ATTACHMENTS.md) for APIs, migration, state machine, quarantine, draft integration, restrictions and current acceptance status. Existing T04/T05/T06/T11/T22 gates are unchanged. Final submissions/reviews/exports are unavailable in this task.
+
+
+## T17 client submission and withdrawal
+
+Run the existing backend/private-storage setup above; Flyway applies V15 automatically and Hibernate remains validate. Clients submit one saved visible item using expectedAnswerVersion and expectedStructureVersion, then can explicitly withdraw the current submitted version. Immutable history and retained private files survive later draft edits. Assigned readers can use the Submitted versions project tab; the review queue separately requires review permission. No approval/export/project-reopen workflow is enabled. [API inventory, local commands, focused tests and actual evidence](../docs/T17_CLIENT_SUBMISSIONS.md).
