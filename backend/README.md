@@ -482,3 +482,47 @@ Owner invitation/revocation, explicit fragment exchange, generic fresh links, se
 ## T15 Part 1 — persistent client drafts
 
 The collection feature reuses T14 client session authorization for exact item GET/answer PUT routes. V13 adds project-shared mutable answers with contact attribution and independent answer versions. Existing project locks serialize writes, audit/state/version updates roll back together, and ProjectDraftVisibility drives portal/progress visibility without deleting hidden drafts. The existing client frontend feature adds server-confirmed serialized autosave, bounded retries, conflict comparison and volatile recovery; uploads/submissions remain deferred. T11 semantic changes to DRAFT collected items still fail closed pending revalidation/reopening. [Detailed contracts, feature trees, migration, file manifest, commands and final evidence](../docs/T15_CLIENT_DRAFTS.md). Original roadmap and T04–T06/T11/T22 gates remain independent.
+
+## T16 private storage: isolated local setup
+
+Java 21, Docker Desktop Linux containers and the existing Maven wrapper are required. Existing PostgreSQL, JWT keys and auth setup remain required. No frontend secret/VITE variable is added. The development service is SeaweedFS with authenticated S3 access; production may supply private S3-compatible endpoints and least-privilege credentials. No production provider verification is claimed.
+
+Run from a fresh PowerShell session. Keep Docker running. The helper preserves existing `.env` values and writes its generated S3 identity only under ignored `.local/storage/`.
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+.\scripts\Initialize-Local.ps1
+.\scripts\Initialize-PrivateStorage.ps1
+docker compose -f compose.yaml -f compose.storage.yaml up -d --wait --wait-timeout 600
+if ($LASTEXITCODE -ne 0) { throw 'Local services failed to start.' }
+docker compose -f compose.yaml -f compose.storage.yaml ps
+# The wait above requires a healthy scanner; first startup downloads definitions.
+docker compose -f compose.yaml -f compose.storage.yaml logs --tail 30 scanner
+docker build -t collector-image-worker:t16 .\storage\image-worker
+if ($LASTEXITCODE -ne 0) { throw 'Image sandbox build failed.' }
+.\mvnw.cmd dependency:build-classpath '-Dmdep.outputFile=target/storage-classpath.txt'
+if ($LASTEXITCODE -ne 0) { throw 'Storage tool classpath failed.' }
+$storageClasspath = (Get-Content -LiteralPath '.\target\storage-classpath.txt' -Raw).Trim()
+java -cp $storageClasspath .\storage\InitializeBuckets.java
+if ($LASTEXITCODE -ne 0) { throw 'Private bucket initialization failed.' }
+# Explicitly enable only after bucket initialization and healthy scanner.
+$env:PRIVATE_STORAGE_ENABLED = 'true'
+$env:PRIVATE_STORAGE_WORKER_ENABLED = 'true'
+.\mvnw.cmd '-Dspring-boot.run.profiles=dev' spring-boot:run
+```
+
+Bucket initialization restricts CORS to `APP_BASE_URL`'s exact origin (default `http://127.0.0.1:5173`). Set the existing property to the actual local HTTPS frontend origin when using the secure-cookie harness, then rerun bucket initialization. Never use production customer data with these development credentials. The test fixture uses random isolated ports and exact loopback origins; those are not the production bucket policy.
+
+Do not start a second scanner on port 13310 if another local scanner already occupies it. Use that compatible isolated scanner or stop only your known development container first. Keep ClamAV definitions updated; scanner failure blocks READY. Rebuild and rerun decoder smoke tests before changing the worker image. The API can start with storage disabled; no unconfigured upload becomes available.
+
+```powershell
+# Focused real PostgreSQL/S3/clamd checks (test-only tiny signature DB by default):
+.\mvnw.cmd '-Dtest=AttachmentStorageTests,AttachmentValidationTests,SandboxedImageProcessorTests' test
+if ($LASTEXITCODE -ne 0) { throw 'Attachment verification failed.' }
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+# Full-definition local scanner at loopback 13310; real HTTPS and MSW disabled:
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' '-Dcollector.test.clam-port=13310' test
+```
+
+See [T16 implementation and evidence](../docs/T16_PRIVATE_ATTACHMENTS.md) for APIs, migration, state machine, quarantine, draft integration, restrictions and current acceptance status. Existing T04/T05/T06/T11/T22 gates are unchanged. Final submissions/reviews/exports are unavailable in this task.

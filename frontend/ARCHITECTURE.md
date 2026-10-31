@@ -97,3 +97,7 @@ Project contacts expose safe accessInitializedAt metadata so eligible contacts c
 ## T15 Part 1 — persistent client drafts
 
 The collection feature reuses T14 client session authorization for exact item GET/answer PUT routes. V13 adds project-shared mutable answers with contact attribution and independent answer versions. Existing project locks serialize writes, audit/state/version updates roll back together, and ProjectDraftVisibility drives portal/progress visibility without deleting hidden drafts. The existing client frontend feature adds server-confirmed serialized autosave, bounded retries, conflict comparison and volatile recovery; uploads/submissions remain deferred. T11 semantic changes to DRAFT collected items still fail closed pending revalidation/reopening. [Detailed contracts, feature trees, migration, file manifest, commands and final evidence](../docs/T15_CLIENT_DRAFTS.md). Original roadmap and T04–T06/T11/T22 gates remain independent.
+
+## T16 real file fields
+
+The established `features/client` feature owns real client collection; no duplicate `client-portal` feature is created. UploadQueue and TypedValue use the existing RTK Query command/read transport, with XHR only for signed object byte progress. Collection explicitly supplies live upload permission, field rules, metadata refresh, latest draft values and save-before-delete coordination. Only server-confirmed READY UUIDs enter the existing serialized autosave engine. Preview stays read-only. See [T16 report](../docs/T16_PRIVATE_ATTACHMENTS.md).

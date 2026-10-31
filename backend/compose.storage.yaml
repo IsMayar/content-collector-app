@@ -7,6 +7,13 @@ services:
     volumes:
       - storage-data:/data
       - ./.local/storage/s3.json:/etc/collector-s3.json:ro
+    healthcheck:
+      # A healthy gateway refuses anonymous bucket listing with403.
+      test: ["CMD-SHELL", "wget -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q 'HTTP/1.1 403'"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
     restart: "no"
   scanner:
     image: clamav/clamav:stable_base@sha256:a01a78acf14e356f9d95c0eeb640ac9fa48a98a59933dea877f5a4d01573a0eb
