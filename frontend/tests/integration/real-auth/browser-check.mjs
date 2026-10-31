@@ -23,8 +23,13 @@ let serviceWorkerResponse = false
 const http = []
 const response = (ok, kind = '') =>
   process.stdout.write(
-    JSON.stringify({ ok, phase, kind, http: ok ? [] : http.slice(-12) }) +
-      String.fromCharCode(10),
+    JSON.stringify({
+      ok,
+      phase,
+      kind,
+      origin,
+      http: ok ? [] : http.slice(-12),
+    }) + String.fromCharCode(10),
   )
 async function waitState(expected, target = page) {
   await expect
@@ -40,6 +45,24 @@ async function waitState(expected, target = page) {
     .toBe(expected)
 }
 function observe(target) {
+  target.on('console', (message) => {
+    if (message.type() === 'error' && phase.startsWith('client-attachments'))
+      http.push({
+        browserError: message
+          .text()
+          .replace(/https?:\/\/[^\s]+/g, '[private URL]'),
+      })
+  })
+
+  target.on('requestfailed', (request) => {
+    const url = new URL(request.url())
+    http.push({
+      path: url.pathname.startsWith('/api/') ? url.pathname : 'private-object',
+      method: request.method(),
+      failure: request.failure()?.errorText,
+    })
+  })
+
   target.on('request', (request) => {
     if (new URL(request.url()).pathname === '/api/v1/auth/refresh') refreshes++
   })
@@ -1462,6 +1485,175 @@ async function command(input) {
       ).data.answer.version
       break
     }
+    case 'client-attachments': {
+      phase = 'client-attachments:setup'
+      const root = 'client/projects/' + settings.previewProject
+      const agency =
+        'workspaces/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject
+      let current = (await run(agency)).data
+      const sectionResponse = await run({
+        url: agency + '/sections',
+        method: 'POST',
+        body: {
+          title: 'Browser attachments',
+          expectedStructureVersion: current.project.structureVersion,
+        },
+      })
+      assert.equal(sectionResponse.status, 201)
+      current = (await run(agency)).data
+      const created = await run({
+        url: agency + '/sections/' + sectionResponse.data.section.id + '/items',
+        method: 'POST',
+        body: {
+          expectedStructureVersion: current.project.structureVersion,
+          definition: {
+            key: 'browser.attachments',
+            label: 'Private documents',
+            type: 'FILE',
+            instructions: 'Synthetic files only',
+            example: '',
+            enabled: true,
+            required: false,
+            validation: { maxFiles: 2, allowedExtensions: ['txt'] },
+          },
+        },
+      })
+      assert.equal(created.status, 201)
+      const item = created.data.item.id
+      settings.attachmentItem = item
+      await clientPage.reload()
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: 'Browser attachments', exact: true })
+        .click()
+      const field = clientPage.locator('article').filter({
+        has: clientPage.getByRole('heading', {
+          name: 'Private documents',
+          exact: true,
+        }),
+      })
+      phase = 'client-attachments:upload'
+      await field.getByLabel('Choose project files').setInputFiles({
+        name: 'browser-private.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('Synthetic private browser document'),
+      })
+      await expect(
+        field.getByRole('progressbar', {
+          name: 'browser-private.txt upload progress',
+        }),
+      ).toBeVisible()
+      await expect(field.getByText('READY', { exact: true })).toBeVisible({
+        timeout: 30000,
+      })
+      await expect(
+        field.getByRole('status').filter({ hasText: /^Saved/ }),
+      ).toBeVisible()
+      let persisted = (await run(root + '/items/' + item, clientPage, false))
+        .data
+      assert.equal(persisted.item.assets.length, 1)
+      const asset = persisted.item.assets[0]
+      assert.equal(persisted.answer.value.assetIds[0], asset.id)
+      phase = 'client-attachments:reload'
+      await clientPage.reload()
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: 'Browser attachments', exact: true })
+        .click()
+      await expect(
+        field.getByText('browser-private.txt', { exact: true }).first(),
+      ).toBeVisible()
+      phase = 'client-attachments:client-download'
+      const clientDownload = clientPage.waitForEvent('download')
+      await field.getByRole('button', { name: 'Download', exact: true }).click()
+      const clientFile = await clientDownload
+      assert.equal(clientFile.suggestedFilename(), 'browser-private.txt')
+      assert.equal(
+        readFileSync(await clientFile.path(), 'utf8'),
+        'Synthetic private browser document',
+      )
+      await clientFile.delete()
+      phase = 'client-attachments:agency-download'
+      const signed = await run({
+        url: agency + '/assets/' + asset.id + '/download',
+        method: 'POST',
+        body: { variant: 'ORIGINAL' },
+      })
+      assert.equal(signed.status, 200)
+      const deniedContext = await browser.newContext({
+        ignoreHTTPSErrors: true,
+      })
+      const deniedPage = await deniedContext.newPage()
+      observe(deniedPage)
+      const ownerEmail = settings.email
+      try {
+        settings.email = settings.teammateEmail
+        await signin(deniedPage)
+        phase = 'client-attachments:denied-agency'
+        const denied = await run(
+          {
+            url: agency + '/assets/' + asset.id + '/download',
+            method: 'POST',
+            body: { variant: 'ORIGINAL' },
+          },
+          deniedPage,
+        )
+        assert.equal(denied.status, 404)
+      } finally {
+        settings.email = ownerEmail
+        await deniedContext.close()
+      }
+      phase = 'client-attachments:agency-download'
+
+      const downloaded = await context.request.get(signed.data.url)
+      assert.equal(downloaded.status(), 200)
+      assert.equal(
+        await downloaded.text(),
+        'Synthetic private browser document',
+      )
+      const unsigned = new URL(signed.data.url)
+      unsigned.search = ''
+      assert.ok(
+        [401, 403].includes(
+          (await context.request.get(unsigned.toString())).status(),
+        ),
+      )
+      phase = 'client-attachments:remove'
+      await field.getByRole('checkbox').uncheck()
+      await expect(
+        field.getByRole('status').filter({ hasText: /^Saved/ }),
+      ).toBeVisible()
+      await field.getByRole('button', { name: 'Delete', exact: true }).click()
+      await expect(
+        field.getByText('browser-private.txt', { exact: true }),
+      ).toHaveCount(0)
+      persisted = (await run(root + '/items/' + item, clientPage, false)).data
+      assert.deepEqual(persisted.answer.value.assetIds, [])
+      phase = 'client-attachments:validation'
+      await field.getByLabel('Choose project files').setInputFiles({
+        name: 'empty.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.alloc(0),
+      })
+      await expect(field.getByText(/is empty/)).toBeVisible()
+      phase = 'client-attachments:rejection'
+      await field.getByLabel('Choose project files').setInputFiles({
+        name: 'invalid.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from([255, 0]),
+      })
+      await expect(
+        field.getByText('INVALID_FILE', { exact: true }),
+      ).toBeVisible({ timeout: 30000 })
+      await expect(field.getByText('REJECTED', { exact: true })).toBeVisible()
+      persisted = (await run(root + '/items/' + item, clientPage, false)).data
+      assert.deepEqual(persisted.answer.value.assetIds, [])
+
+      break
+    }
     case 'client-idle-request-link': {
       const root = 'client/projects/' + settings.previewProject + '/checklist'
       assert.equal((await run(root, clientPage, false)).status, 401)
@@ -1563,6 +1755,23 @@ async function command(input) {
         ).status,
         401,
       )
+      const uploadDenied = await run(
+        {
+          url: 'client/projects/' + settings.previewProject + '/uploads',
+          method: 'POST',
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          body: {
+            itemId: settings.attachmentItem,
+            originalName: 'revoked.txt',
+            contentType: 'text/plain',
+            bytes: 10,
+            keepOriginal: true,
+          },
+        },
+        clientPage,
+        false,
+      )
+      assert.equal(uploadDenied.status, 401)
       const response = clientPage.waitForResponse(
         (res) =>
           new URL(res.url()).pathname.endsWith('/checklist') &&
@@ -1974,6 +2183,17 @@ for await (const line of lines) {
     response(true)
     if (input.action === 'stop') break
   } catch (error) {
+    if (phase.startsWith('client-attachments') && clientPage) {
+      const alerts = await clientPage
+        .getByRole('alert')
+        .allTextContents()
+        .catch(() => [])
+      http.push({
+        uploadAlerts: alerts.map((text) =>
+          text.replace(/https?:\/\/[^\s]+/g, '[private URL]'),
+        ),
+      })
+    }
     response(false, error.name)
   }
 }

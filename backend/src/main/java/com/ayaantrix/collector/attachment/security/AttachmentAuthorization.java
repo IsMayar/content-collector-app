@@ -23,27 +23,41 @@ public class AttachmentAuthorization {
     private final ProjectRepository projects;
     private final ProjectStructureRepository structures;
     private final ClientAnswerRepository drafts;
+    private final com.ayaantrix.collector.workspace.repository.WorkspaceSubscriptionRepository
+            plans;
+    private final java.time.Clock clock;
 
     public AttachmentAuthorization(
             ClientAccessAuthorization clients,
             ProjectAuthorization agency,
             ProjectRepository projects,
             ProjectStructureRepository structures,
-            ClientAnswerRepository drafts) {
+            ClientAnswerRepository drafts,
+            com.ayaantrix.collector.workspace.repository.WorkspaceSubscriptionRepository plans,
+            java.time.Clock clock) {
         this.clients = clients;
         this.agency = agency;
         this.projects = projects;
         this.structures = structures;
         this.drafts = drafts;
+        this.plans = plans;
+        this.clock = clock;
     }
 
     public ClientAccessAuthorization.Access client(String cookie, UUID project, boolean write) {
         var a = clients.require(cookie, project);
         if (write
                 && (!a.project().state().name().equals("ACTIVE")
-                        || !a.workspace().state().name().equals("ACTIVE")))
+                        || !a.workspace().state().name().equals("ACTIVE")
+                        || !uploadsWritable(a.grant().workspace())))
             throw new ApiException(HttpStatus.CONFLICT, "READ_ONLY", "This project is read-only.");
         return a;
+    }
+
+    public boolean uploadsWritable(UUID workspace) {
+        return plans.lockedForWorkspace(workspace)
+                .filter(plan -> plan.writable(clock.instant()))
+                .isPresent();
     }
 
     public void agency(UUID workspace, UUID project) {

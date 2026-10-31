@@ -479,7 +479,7 @@ class AttachmentStorageTests {
         var row =
                 jdbc.queryForMap(
                         "select id,encrypted_payload,encryption_key_id from collector.outbox_jobs"
-                            + " where payload_json->>'tokenId'=?",
+                                + " where payload_json->>'tokenId'=?",
                         id.toString());
         return context.getBean(com.ayaantrix.collector.auth.delivery.TokenDeliveryCipher.class)
                 .decrypt(
@@ -1095,7 +1095,7 @@ class AttachmentStorageTests {
                 .containsKey("url");
         jdbc.update(
                 "delete from collector.project_members where workspace_id=? and project_id=? and"
-                    + " workspace_member_id=?",
+                        + " workspace_member_id=?",
                 f.tenant().workspace(),
                 f.project().id(),
                 m.id());
@@ -1251,13 +1251,13 @@ class AttachmentStorageTests {
                         UUID.randomUUID().toString());
         jdbc.execute(
                 "create function collector.test_reject_ready() returns trigger language plpgsql as"
-                    + " $$ begin if new.id='"
+                        + " $$ begin if new.id='"
                         + r.assetId()
                         + "'::uuid and new.state='READY' then raise exception 'synthetic rollback"
                         + " test'; end if; return new; end $$");
         jdbc.execute(
                 "create trigger test_reject_ready before update on collector.file_assets for each"
-                    + " row execute function collector.test_reject_ready()");
+                        + " row execute function collector.test_reject_ready()");
         try {
             worker().dispatchOne();
             assertThat(files().read(t.cookie(), t.f().project().id(), r.assetId()).state())
@@ -1266,7 +1266,7 @@ class AttachmentStorageTests {
             assertThat(
                             jdbc.queryForObject(
                                     "select storage_used_bytes from collector.workspaces where"
-                                        + " id=?",
+                                            + " id=?",
                                     Long.class,
                                     t.f().tenant().workspace()))
                     .isZero();
@@ -1315,5 +1315,412 @@ class AttachmentStorageTests {
                                 r.assetId()))
                 .isEqualTo("FAILED");
         assertThat(reserved(t)).isZero();
+    }
+
+    @Test
+    void signedPutPreflightAllowsLocalHttpsBrowser() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "notes.txt", "text/plain", text());
+        var request =
+                java.net.http.HttpRequest.newBuilder(java.net.URI.create(r.putUrl()))
+                        .method("OPTIONS", java.net.http.HttpRequest.BodyPublishers.noBody())
+                        .header("Origin", "https://127.0.0.1:5173")
+                        .header("Access-Control-Request-Method", "PUT")
+                        .header(
+                                "Access-Control-Request-Headers",
+                                String.join(",", r.requiredHeaders().keySet()))
+                        .build();
+        var response =
+                java.net.http.HttpClient.newHttpClient()
+                        .send(request, java.net.http.HttpResponse.BodyHandlers.discarding());
+        assertThat(response.statusCode()).isBetween(200, 299);
+        assertThat(response.headers().firstValue("Access-Control-Allow-Origin").orElse(""))
+                .isEqualTo("https://127.0.0.1:5173");
+    }
+
+    @Test
+    void crossProjectAndDisabledItemUploadIntentsAreDenied() {
+        var t = target("FILE");
+        var other = target("FILE");
+        denial(
+                () ->
+                        files().reserve(
+                                        other.cookie(),
+                                        t.f().project().id(),
+                                        input(t, "notes.txt", "text/plain", 10),
+                                        UUID.randomUUID().toString()),
+                "NOT_FOUND");
+        jdbc.update("update collector.items set enabled=false where id=?", t.item());
+        denial(() -> reserve(t, "notes.txt", "text/plain", text()), "NOT_FOUND");
+        assertThat(reserved(t)).isZero();
+    }
+
+    @Test
+    void expiredClientSessionCannotCreateAnotherReservation() {
+        var t = target("FILE");
+        context.getBean(TestClock.class).time = NOW.plus(Duration.ofHours(25));
+        denial(() -> reserve(t, "notes.txt", "text/plain", text()), "CLIENT_ACCESS_UNAVAILABLE");
+        assertThat(reserved(t)).isZero();
+    }
+
+    @Test
+    void simultaneousQuestionCountLimitSerializesInPostgres() throws Exception {
+        var t = target("FILE");
+        jdbc.update(
+                "update collector.items set"
+                    + " schema_json=jsonb_set(schema_json,'{validation,maxFiles}','1'::jsonb) where"
+                    + " id=?",
+                t.item());
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var ready = new CountDownLatch(2);
+            var go = new CountDownLatch(1);
+            var futures = new ArrayList<Future<String>>();
+            for (int n = 0; n < 2; n++)
+                futures.add(
+                        pool.submit(
+                                () -> {
+                                    ready.countDown();
+                                    go.await();
+                                    try {
+                                        reserve(t, "notes.txt", "text/plain", text());
+                                        return "reserved";
+                                    } catch (ApiException e) {
+                                        return e.getCode();
+                                    }
+                                }));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            var outcomes = new ArrayList<String>();
+            for (var future : futures) outcomes.add(future.get(30, TimeUnit.SECONDS));
+            assertThat(outcomes).containsExactlyInAnyOrder("reserved", "ATTACHMENT_LIMIT");
+            assertThat(reserved(t)).isEqualTo(text().length);
+        }
+    }
+
+    @Test
+    void staleAttachmentAnswerCannotOverwritePersistedSelection() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "notes.txt", "text/plain", text());
+        transfer(r, text());
+        finish(t, r);
+        var answers =
+                context.getBean(
+                        com.ayaantrix.collector.collection.service.ClientAnswerService.class);
+        var selected = json.createObjectNode();
+        selected.putArray("assetIds").add(r.assetId().toString());
+        answers.save(
+                t.cookie(),
+                t.f().project().id(),
+                t.item(),
+                new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(
+                        selected, 0L, t.structure(), UUID.randomUUID()));
+        var empty = json.createObjectNode();
+        empty.putArray("assetIds");
+        denial(
+                () ->
+                        answers.save(
+                                t.cookie(),
+                                t.f().project().id(),
+                                t.item(),
+                                new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(
+                                        empty, 0L, t.structure(), UUID.randomUUID())),
+                "ANSWER_VERSION_CONFLICT");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select value_json::text from collector.answers where item_id=?",
+                                String.class,
+                                t.item()))
+                .contains(r.assetId().toString());
+    }
+
+    @Test
+    void collectedFilesProtectStableStructureIdsAndOriginalTemplateSnapshot() {
+        var t = target("FILE");
+        var before = detail(t.f().tenant(), t.f().project());
+        reserve(t, "notes.txt", "text/plain", text());
+        JsonNode item = null;
+        for (var section : before.structure())
+            for (var candidate : section.path("items"))
+                if (id(candidate).equals(t.item())) item = candidate;
+        var change = definition(item);
+        change.withObject("validation").put("maxFiles", 1);
+        var patch = new ItemPatch(change, before.project().structureVersion(), false);
+        denial(
+                () ->
+                        as(
+                                t.f().tenant().actor(),
+                                () ->
+                                        editor().patchItem(
+                                                        t.f().tenant().workspace(),
+                                                        t.f().project().id(),
+                                                        t.item(),
+                                                        patch)),
+                "REOPEN_REQUIRED");
+        var after = detail(t.f().tenant(), t.f().project());
+        assertThat(after.project().structureVersion())
+                .isEqualTo(before.project().structureVersion());
+        var ids = new HashSet<UUID>();
+        for (var section : after.structure())
+            for (var candidate : section.path("items")) ids.add(id(candidate));
+        assertThat(ids).contains(t.item());
+    }
+
+    @Test
+    void repeatedProcessCrashesCannotRestartVerificationForever() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "notes.txt", "text/plain", text());
+        transfer(r, text());
+        files().finalizeUpload(
+                        t.cookie(),
+                        t.f().project().id(),
+                        r.uploadId(),
+                        UUID.randomUUID().toString());
+        jdbc.update(
+                "update collector.file_assets set attempts=3,lease_owner=?,lease_until=? where"
+                        + " id=?",
+                UUID.randomUUID(),
+                java.sql.Timestamp.from(NOW.minusSeconds(1)),
+                r.assetId());
+        worker().dispatchOne();
+        var a = files().read(t.cookie(), t.f().project().id(), r.assetId());
+        assertThat(a.state()).isEqualTo("FAILED");
+        assertThat(a.rejectionCode()).isEqualTo("PROCESSING_ATTEMPTS_EXHAUSTED");
+        assertThat(reserved(t)).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select attempts from collector.file_assets where id=?",
+                                Integer.class,
+                                r.assetId()))
+                .isEqualTo(3);
+        denial(
+                () ->
+                        files().clientDownload(
+                                        t.cookie(), t.f().project().id(), r.assetId(), "ORIGINAL"),
+                "ASSET_NOT_READY");
+    }
+
+    @Test
+    void readOnlyPlanBlocksNewUploadsAndWorkerReleaseButKeepsReadyDownloads() throws Exception {
+        var t = target("FILE");
+        var ready = reserve(t, "ready.txt", "text/plain", text());
+        transfer(ready, text());
+        finish(t, ready);
+        var pending = reserve(t, "pending.txt", "text/plain", text());
+        transfer(pending, text());
+        files().finalizeUpload(
+                        t.cookie(),
+                        t.f().project().id(),
+                        pending.uploadId(),
+                        UUID.randomUUID().toString());
+        jdbc.update(
+                "update collector.subscriptions set state='READ_ONLY' where workspace_id=?",
+                t.f().tenant().workspace());
+        denial(() -> reserve(t, "new.txt", "text/plain", text()), "READ_ONLY");
+        assertThat(
+                        files().clientDownload(
+                                        t.cookie(),
+                                        t.f().project().id(),
+                                        ready.assetId(),
+                                        "ORIGINAL"))
+                .containsKey("url");
+        var checklist = portal().checklist(t.cookie(), t.f().project().id());
+        assertThat(json.valueToTree(checklist).path("capabilities").path("canUpload").asBoolean())
+                .isFalse();
+        worker().dispatchOne();
+        assertThat(files().read(t.cookie(), t.f().project().id(), pending.assetId()).state())
+                .isEqualTo("FAILED");
+        assertThat(reserved(t)).isZero();
+    }
+
+    @Test
+    void downloadAndRemovalRacePreservesTheShortCapabilityBoundary() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "notes.txt", "text/plain", text());
+        transfer(r, text());
+        finish(t, r);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var ready = new CountDownLatch(2);
+            var go = new CountDownLatch(1);
+            var download =
+                    pool.submit(
+                            () -> {
+                                ready.countDown();
+                                go.await();
+                                try {
+                                    return files().clientDownload(
+                                                    t.cookie(),
+                                                    t.f().project().id(),
+                                                    r.assetId(),
+                                                    "ORIGINAL");
+                                } catch (ApiException e) {
+                                    return Map.of("error", e.getCode());
+                                }
+                            });
+            var remove =
+                    pool.submit(
+                            () -> {
+                                ready.countDown();
+                                go.await();
+                                files().remove(
+                                                t.cookie(),
+                                                t.f().project().id(),
+                                                r.assetId(),
+                                                false);
+                                return true;
+                            });
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            assertThat(remove.get(30, TimeUnit.SECONDS)).isTrue();
+            var outcome = download.get(30, TimeUnit.SECONDS);
+            if (outcome.containsKey("error"))
+                assertThat(outcome.get("error")).isEqualTo("ASSET_NOT_READY");
+            else {
+                String expiry =
+                        Arrays.stream(
+                                        java.net
+                                                .URI
+                                                .create(outcome.get("url"))
+                                                .getRawQuery()
+                                                .split("&"))
+                                .filter(value -> value.startsWith("X-Amz-Expires="))
+                                .map(value -> value.substring("X-Amz-Expires=".length()))
+                                .findFirst()
+                                .orElse("");
+                assertThat(expiry).isEqualTo("60");
+            }
+        }
+        denial(
+                () ->
+                        files().clientDownload(
+                                        t.cookie(), t.f().project().id(), r.assetId(), "ORIGINAL"),
+                "ASSET_NOT_READY");
+        assertThat(reserved(t)).isZero();
+    }
+
+    @Test
+    void sessionLogoutDuringTransferPreventsFinalization() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "notes.txt", "text/plain", text());
+        transfer(r, text());
+        access().logout(t.cookie());
+        denial(
+                () ->
+                        files().finalizeUpload(
+                                        t.cookie(),
+                                        t.f().project().id(),
+                                        r.uploadId(),
+                                        UUID.randomUUID().toString()),
+                "CLIENT_ACCESS_UNAVAILABLE");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.file_assets where id=?",
+                                String.class,
+                                r.assetId()))
+                .isEqualTo("RESERVED");
+        context.getBean(TestClock.class).time = NOW.plus(Duration.ofHours(25));
+        worker().cleanup();
+        assertThat(reserved(t)).isZero();
+    }
+
+    @Test
+    void twoAuthorizedClientContactsShareOnlyTheSameProjectAssetAndDraftVersion() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "notes.txt", "text/plain", text());
+        transfer(r, text());
+        finish(t, r);
+        var f = t.f();
+        var contact =
+                as(
+                        f.tenant().actor(),
+                        () ->
+                                context.getBean(
+                                                com.ayaantrix.collector.project.service
+                                                        .ProjectClientService.class)
+                                        .createContact(
+                                                f.tenant().workspace(),
+                                                f.project().id(),
+                                                new com.ayaantrix.collector.project.dto
+                                                        .ProjectClientDtos.ContactCreate(
+                                                        f.tenant().client(),
+                                                        "Second synthetic client",
+                                                        "second-"
+                                                                + UUID.randomUUID()
+                                                                + "@example.test",
+                                                        NOW.plus(Duration.ofDays(90)))));
+        var second = enter(new Fixture(f.tenant(), f.project(), contact.id())).credential();
+        assertThat(files().read(second, f.project().id(), r.assetId()).state()).isEqualTo("READY");
+        var value = json.createObjectNode();
+        value.putArray("assetIds").add(r.assetId().toString());
+        var answers =
+                context.getBean(
+                        com.ayaantrix.collector.collection.service.ClientAnswerService.class);
+        answers.save(
+                second,
+                f.project().id(),
+                t.item(),
+                new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(
+                        value, 0L, t.structure(), UUID.randomUUID()));
+        denial(
+                () ->
+                        answers.save(
+                                t.cookie(),
+                                f.project().id(),
+                                t.item(),
+                                new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(
+                                        value, 0L, t.structure(), UUID.randomUUID())),
+                "ANSWER_VERSION_CONFLICT");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select uploaded_by_contact_id from collector.file_assets where"
+                                    + " id=?",
+                                UUID.class,
+                                r.assetId()))
+                .isEqualTo(f.contact());
+    }
+
+    @Test
+    void stalledStorageRequestsHaveABoundedDeadline() throws Exception {
+        var release = new CountDownLatch(1);
+        var accepted = new CountDownLatch(1);
+        var executor = Executors.newCachedThreadPool();
+        var server =
+                com.sun.net.httpserver.HttpServer.create(
+                        new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.setExecutor(executor);
+        server.createContext(
+                "/",
+                exchange -> {
+                    accepted.countDown();
+                    try {
+                        release.await(60, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    } finally {
+                        exchange.close();
+                    }
+                });
+        server.start();
+        var env =
+                new org.springframework.mock.env.MockEnvironment()
+                        .withProperty("collector.storage.enabled", "true")
+                        .withProperty(
+                                "S3_ENDPOINT", "http://127.0.0.1:" + server.getAddress().getPort())
+                        .withProperty("S3_ACCESS_KEY", StorageFixture.ACCESS)
+                        .withProperty("S3_SECRET_KEY", StorageFixture.SECRET)
+                        .withProperty("S3_BUCKET_STAGING", StorageFixture.STAGING)
+                        .withProperty("S3_BUCKET_PRIVATE", StorageFixture.PRIVATE);
+        try (var storage =
+                new com.ayaantrix.collector.attachment.storage.S3PrivateObjectStorage(env)) {
+            long started = System.nanoTime();
+            assertThatThrownBy(() -> storage.head("synthetic-stalled-object"))
+                    .isInstanceOf(software.amazon.awssdk.core.exception.SdkClientException.class);
+            assertThat(accepted.getCount()).isZero();
+            assertThat(Duration.ofNanos(System.nanoTime() - started))
+                    .isLessThan(Duration.ofSeconds(55));
+        } finally {
+            release.countDown();
+            server.stop(0);
+            executor.shutdownNow();
+        }
     }
 }

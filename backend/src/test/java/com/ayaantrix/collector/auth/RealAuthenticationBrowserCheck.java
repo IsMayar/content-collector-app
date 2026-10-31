@@ -58,12 +58,13 @@ class RealAuthenticationBrowserCheck {
             .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start();
         assertThat(cert.waitFor(30,TimeUnit.SECONDS)).as("Local test certificate generation").isTrue();assertThat(cert.exitValue()).isZero();
         var keys=SigningKeyFixture.create(directory.resolve("signing"),"browser-only");byte[] bytes=new byte[32];new java.security.SecureRandom().nextBytes(bytes);String pepper=Base64.getEncoder().encodeToString(bytes);
-        try(ConfigurableApplicationContext app=new SpringApplicationBuilder(CollectorApplication.class,Configuration.class).profiles("test").run(
+        var storage=new com.ayaantrix.collector.attachment.StorageFixture();storage.start();
+        try(storage;ConfigurableApplicationContext app=new SpringApplicationBuilder(CollectorApplication.class,Configuration.class).profiles("test").run(java.util.stream.Stream.concat(java.util.stream.Stream.of(
             "--server.port=0","--server.address=127.0.0.1","--spring.datasource.url="+POSTGRES.getJdbcUrl(),
             "--spring.datasource.username="+POSTGRES.getUsername(),"--spring.datasource.password="+POSTGRES.getPassword(),
             "--collector.jwt.private-key="+keys.privateFile(),"--collector.jwt.public-keys="+keys.publicFile(),"--collector.jwt.key-id="+keys.kid(),
             "--collector.delivery.encryption-key="+pepper,"--collector.delivery.encryption-key-id=browser-test","--collector.jwt.issuer=https://browser.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+pepper,
-            "--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false")) {
+            "--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false"),java.util.Arrays.stream(storage.args()).map(v->v.equals("--collector.storage.worker-enabled=false")?"--collector.storage.worker-enabled=true":v)).toArray(String[]::new))) {
             var clock=app.getBean(AccountRegistrationWorkflowTests.TestClock.class);var users=app.getBean(UserAccountRepository.class);
             UserAccount user=null;
             if(!onboarding){user=new UserAccount(email,"Synthetic Browser User",app.getBean(PasswordEncoder.class).encode(password),clock.instant());user.markVerified(clock.instant());users.saveAndFlush(user);}
@@ -73,7 +74,8 @@ class RealAuthenticationBrowserCheck {
             builder.environment().remove("DEBUG");builder.environment().remove("PWDEBUG");
             Process process=builder.start();
             try(var io=new BrowserProtocol(process)) {
-                io.step(Map.of("action","start","backend","http://127.0.0.1:"+port,"email",email,"password",password,"certificate",certificate.toString(),"certificatePassword",certificatePassword,"onboarding",Boolean.toString(onboarding)));
+                String browserOrigin=io.step(Map.of("action","start","backend","http://127.0.0.1:"+port,"email",email,"password",password,"certificate",certificate.toString(),"certificatePassword",certificatePassword,"onboarding",Boolean.toString(onboarding)));
+                storage.allowBrowserOrigin(browserOrigin);
                 if(onboarding){
                     io.step(Map.of("action","workspace-register"));
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
@@ -119,6 +121,7 @@ class RealAuthenticationBrowserCheck {
                     var clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
                     io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
                     io.step(Map.of("action","client-draft-collection"));
+                    io.step(Map.of("action","client-attachments"));
                     assertThat(jdbc.queryForObject("select count(*) from collector.answers where project_id=?",Integer.class,clientProject)).isGreaterThan(0);
                     clock.advance(24*3600+1);io.step(Map.of("action","client-idle-request-link"));
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
@@ -165,12 +168,13 @@ class RealAuthenticationBrowserCheck {
         private final Process process;private final BufferedWriter writer;private final BufferedReader reader;
         private final ExecutorService waiting=Executors.newSingleThreadExecutor();private final JsonMapper json=JsonMapper.builder().build();
         BrowserProtocol(Process process){this.process=process;writer=new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),StandardCharsets.UTF_8));reader=new BufferedReader(new InputStreamReader(process.getInputStream(),StandardCharsets.UTF_8));}
-        void step(Map<String,String> command) throws Exception {
+        String step(Map<String,String> command) throws Exception {
             writer.write(json.writeValueAsString(command));writer.newLine();writer.flush();
             String line=waiting.submit((Callable<String>)reader::readLine).get(120,TimeUnit.SECONDS);
             assertThat(line).as("Browser process response for %s",command.get("action")).isNotNull();
             var result=json.readTree(line);assertThat(result.get("ok").asBoolean()).as("Browser stage %s (%s)",result.get("phase").asText(),result.get("kind").asText()+" "+result.get("http")).isTrue();
             System.out.println("PASS real HTTPS browser: "+command.get("action"));
+            return result.path("origin").asText();
         }
         public void close() throws Exception {
             if(!process.waitFor(5,TimeUnit.SECONDS)){

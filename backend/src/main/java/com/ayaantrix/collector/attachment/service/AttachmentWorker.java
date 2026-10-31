@@ -51,6 +51,7 @@ public class AttachmentWorker {
     private boolean eligible(Attachment a) {
         var access = grants.available(a.workspace(), a.project(), a.contact(), false);
         return access.isPresent()
+                && auth.uploadsWritable(a.workspace())
                 && access.get().project().state().name().equals("ACTIVE")
                 && access.get().workspace().state().name().equals("ACTIVE")
                 && auth.visibleItem(a.workspace(), a.project(), a.item())
@@ -78,6 +79,16 @@ public class AttachmentWorker {
                                             fresh,
                                             "FAILED",
                                             "ACCESS_OR_PROJECT_CHANGED",
+                                            clock.instant());
+                                    return null;
+                                }
+                                // A process crash can bypass the normal failure handler. Bound
+                                // expired-lease recovery as well as caught provider failures.
+                                if (fresh.attempts() >= 3) {
+                                    assets.release(
+                                            fresh,
+                                            "FAILED",
+                                            "PROCESSING_ATTEMPTS_EXHAUSTED",
                                             clock.instant());
                                     return null;
                                 }

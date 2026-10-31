@@ -90,8 +90,8 @@ public final class StorageFixture implements AutoCloseable {
                                             .corsRules(
                                                     CORSRule.builder()
                                                             .allowedOrigins(
-                                                                    "https://localhost:*",
-                                                                    "https://127.0.0.1:*",
+                                                                    "https://localhost:5173",
+                                                                    "https://127.0.0.1:5173",
                                                                     "http://127.0.0.1:5173")
                                                             .allowedMethods("PUT", "GET", "HEAD")
                                                             .allowedHeaders("*")
@@ -101,6 +101,30 @@ public final class StorageFixture implements AutoCloseable {
                                             .build())
                             .build());
         }
+    }
+
+    public void allowBrowserOrigin(String origin) {
+        var uri = URI.create(origin);
+        if (!"https".equals(uri.getScheme())
+                || !Set.of("127.0.0.1", "localhost").contains(uri.getHost()))
+            throw new IllegalArgumentException("Isolated HTTPS browser origin required");
+        for (String bucket : List.of(STAGING, PRIVATE))
+            client.putBucketCors(
+                    PutBucketCorsRequest.builder()
+                            .bucket(bucket)
+                            .corsConfiguration(
+                                    CORSConfiguration.builder()
+                                            .corsRules(
+                                                    CORSRule.builder()
+                                                            .allowedOrigins(origin)
+                                                            .allowedMethods("PUT", "GET", "HEAD")
+                                                            .allowedHeaders("*")
+                                                            .exposeHeaders(
+                                                                    "ETag", "Content-Disposition")
+                                                            .maxAgeSeconds(60)
+                                                            .build())
+                                            .build())
+                            .build());
     }
 
     public String endpoint() {
@@ -138,11 +162,6 @@ public final class StorageFixture implements AutoCloseable {
     }
 
     public void close() {
-        java.nio.file.Path log = java.nio.file.Path.of("target-t16-s3-diagnostic.log");
-        try {
-            java.nio.file.Files.writeString(log, s3.getLogs());
-        } catch (Exception ignored) {
-        }
         if (client != null) client.close();
         if (clam != null) clam.stop();
         s3.stop();

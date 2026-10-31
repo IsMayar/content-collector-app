@@ -210,4 +210,78 @@ class AttachmentValidationTests {
         }
         denied(() -> validation.verify(out.toByteArray(), "application/pdf"), "ENCRYPTED_FILE");
     }
+
+    @Test
+    void validPdfParsesWithoutRenderingOrExecutingContent() throws Exception {
+        var out = new ByteArrayOutputStream();
+        try (var doc = new org.apache.pdfbox.pdmodel.PDDocument()) {
+            doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            doc.save(out);
+        }
+        assertThatCode(() -> validation.verify(out.toByteArray(), "application/pdf"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void constrainedDocxContainerIsAccepted() throws Exception {
+        var out = new ByteArrayOutputStream();
+        try (var zip = new ZipOutputStream(out)) {
+            zip.putNextEntry(new ZipEntry("[Content_Types].xml"));
+            zip.write(
+                    "<Types xmlns='http://schemas.openxmlformats.org/package/2006/content-types'><Default Extension='xml' ContentType='application/xml'/><Override PartName='/word/document.xml' ContentType='application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'/></Types>"
+                            .getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            zip.write(
+                    "<w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'><w:body><w:p/></w:body></w:document>"
+                            .getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        assertThatCode(
+                        () ->
+                                validation.verify(
+                                        out.toByteArray(),
+                                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void namespacedSvgScriptsCannotBypassParsedContentChecks() {
+        denied(
+                () ->
+                        validation.verify(
+                                "<svg xmlns='http://www.w3.org/2000/svg' xmlns:x='http://www.w3.org/2000/svg'><x:script/></svg>"
+                                        .getBytes(StandardCharsets.UTF_8),
+                                "image/svg+xml"),
+                "ACTIVE_CONTENT");
+    }
+
+    @Test
+    void svgExternalResourceReferencesAreRejected() {
+        denied(
+                () ->
+                        validation.verify(
+                                "<svg xmlns='http://www.w3.org/2000/svg'><image href='https://example.test/private-tracker'/></svg>"
+                                        .getBytes(StandardCharsets.UTF_8),
+                                "image/svg+xml"),
+                "ACTIVE_CONTENT");
+    }
+
+    @Test
+    void fabricatedDocxManifestAndBodyAreRejected() throws Exception {
+        var out = new ByteArrayOutputStream();
+        try (var zip = new ZipOutputStream(out)) {
+            for (String name : java.util.List.of("[Content_Types].xml", "word/document.xml")) {
+                zip.putNextEntry(new ZipEntry(name));
+                zip.write("<fabricated/>".getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
+        }
+        denied(
+                () ->
+                        validation.verify(
+                                out.toByteArray(),
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+                "INVALID_DOCUMENT");
+    }
 }

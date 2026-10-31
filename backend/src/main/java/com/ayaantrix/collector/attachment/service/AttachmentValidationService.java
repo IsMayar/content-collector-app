@@ -14,7 +14,7 @@ import java.nio.charset.*;
 import java.util.*;
 import java.util.zip.*;
 
-import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.SAXParserFactory;
 
 @Component
 public class AttachmentValidationService {
@@ -132,13 +132,10 @@ public class AttachmentValidationService {
                 case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ->
                         docx(bytes);
                 case "image/svg+xml" -> {
-                    var root = xml(bytes).getDocumentElement();
-                    if (!root.getLocalName().equals("svg"))
+                    var root = xml(bytes, true);
+                    if (!root.name().equals("svg")
+                            || !root.namespace().equals("http://www.w3.org/2000/svg"))
                         invalid("CONTENT_TYPE_MISMATCH", "The file is not an SVG.");
-                    String text =
-                            new String(bytes, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
-                    if (text.contains("<script") || text.matches("(?s).*\\son[a-z]+\\s*=.*"))
-                        invalid("ACTIVE_CONTENT", "Active SVG content is not accepted.");
                 }
                 case "text/plain" -> {
                     String t =
@@ -183,17 +180,64 @@ public class AttachmentValidationService {
         }
     }
 
-    private org.w3c.dom.Document xml(byte[] bytes) throws Exception {
-        var f = DocumentBuilderFactory.newInstance();
-        f.setNamespaceAware(true);
-        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        f.setFeature("http://xml.org/sax/features/external-general-entities", false);
-        f.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-        f.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "");
-        f.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "");
-        var builder = f.newDocumentBuilder();
-        builder.setErrorHandler(new org.xml.sax.helpers.DefaultHandler());
-        return builder.parse(new ByteArrayInputStream(bytes));
+    private record XmlRoot(String name, String namespace) {}
+
+    // Streaming validation avoids constructing a document-sized DOM for untrusted XML.
+    private XmlRoot xml(byte[] bytes, boolean svg) throws Exception {
+        var factory = SAXParserFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        var parser = factory.newSAXParser();
+        parser.setProperty(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        parser.setProperty(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        XmlRoot[] root = new XmlRoot[1];
+        parser.parse(
+                new ByteArrayInputStream(bytes),
+                new org.xml.sax.helpers.DefaultHandler() {
+                    private int depth;
+
+                    public void startElement(
+                            String uri,
+                            String local,
+                            String qualified,
+                            org.xml.sax.Attributes attributes)
+                            throws org.xml.sax.SAXException {
+                        if (++depth > 256) throw new org.xml.sax.SAXException("XML nesting limit");
+                        if (root[0] == null) root[0] = new XmlRoot(local, uri);
+                        if (!svg) return;
+                        if (Set.of(
+                                        "script",
+                                        "foreignobject",
+                                        "iframe",
+                                        "object",
+                                        "embed",
+                                        "set",
+                                        "animate",
+                                        "animatemotion",
+                                        "animatetransform")
+                                .contains(local.toLowerCase(Locale.ROOT)))
+                            invalid("ACTIVE_CONTENT", "Active SVG content is not accepted.");
+                        for (int i = 0; i < attributes.getLength(); i++) {
+                            String name = attributes.getLocalName(i).toLowerCase(Locale.ROOT);
+                            String value = attributes.getValue(i).strip().toLowerCase(Locale.ROOT);
+                            if (name.startsWith("on")
+                                    || (name.equals("href")
+                                            && !value.isEmpty()
+                                            && !value.startsWith("#")))
+                                invalid(
+                                        "ACTIVE_CONTENT",
+                                        "Active or external SVG references are not accepted.");
+                        }
+                    }
+
+                    public void endElement(String uri, String local, String qualified) {
+                        depth--;
+                    }
+                });
+        return root[0];
     }
 
     private void docx(byte[] bytes) throws Exception {
@@ -235,10 +279,28 @@ public class AttachmentValidationService {
                 }
                 if (out.size() > 0) {
                     var part = out.toByteArray();
-                    xml(part);
+                    var root = xml(part, false);
+                    if (name.equals("[Content_Types].xml")
+                            && (!root.name().equals("Types")
+                                    || !root.namespace()
+                                            .equals(
+                                                    "http://schemas.openxmlformats.org/package/2006/content-types")))
+                        invalid(
+                                "INVALID_DOCUMENT",
+                                "The document content-type manifest is invalid.");
+                    if (name.equals("word/document.xml")
+                            && (!root.name().equals("document")
+                                    || !Set.of(
+                                                    "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+                                                    "http://purl.oclc.org/ooxml/wordprocessingml/main")
+                                            .contains(root.namespace())))
+                        invalid("INVALID_DOCUMENT", "The document body is invalid.");
                     if (new String(part, StandardCharsets.UTF_8).contains("macroEnabled"))
                         invalid("ACTIVE_CONTENT", "Macros are not accepted.");
                 }
+                if ((name.equals("[Content_Types].xml") || name.equals("word/document.xml"))
+                        && out.size() == 0)
+                    invalid("INVALID_DOCUMENT", "A required document part is empty.");
                 content |= name.equals("[Content_Types].xml");
                 document |= name.equals("word/document.xml");
             }

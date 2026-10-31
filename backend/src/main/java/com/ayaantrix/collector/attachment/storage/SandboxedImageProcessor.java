@@ -72,9 +72,10 @@ public class SandboxedImageProcessor {
                 throw new IllegalStateException("IMAGE_PROCESSING_FAILED");
             completed = true;
             Path working = dir.resolve("working.png"), thumb = dir.resolve("thumbnail.png");
-            if (Files.size(working) + Files.size(thumb) > 32 * 1048576L)
+            byte[] workingBytes = readOutput(working), thumbnailBytes = readOutput(thumb);
+            if ((long) workingBytes.length + thumbnailBytes.length > 32 * 1048576L)
                 throw new IllegalStateException("IMAGE_VARIANT_LIMIT");
-            return new Variants(Files.readAllBytes(working), Files.readAllBytes(thumb));
+            return new Variants(workingBytes, thumbnailBytes);
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new IllegalStateException("IMAGE_PROCESSING_UNAVAILABLE");
@@ -105,6 +106,23 @@ public class SandboxedImageProcessor {
                 } catch (Exception ignored) {
                     /* A locked temporary file is safe to retain for host cleanup. */
                 }
+        }
+    }
+
+    // The decoder is isolated precisely because it handles untrusted inputs. Never
+    // follow a worker-created link back into the host or read a special device/FIFO.
+    static byte[] readOutput(Path file) throws java.io.IOException {
+        final int limit = 32 * 1048576;
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.size(file) > limit)
+            throw new java.io.IOException("Unsafe image worker output");
+        try (var input = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
+            byte[] bytes = input.readNBytes(limit + 1);
+            byte[] signature = {(byte) 137, 80, 78, 71, 13, 10, 26, 10};
+            if (bytes.length > limit
+                    || bytes.length < signature.length
+                    || !Arrays.equals(Arrays.copyOf(bytes, signature.length), signature))
+                throw new java.io.IOException("Invalid image worker output");
+            return bytes;
         }
     }
 }
