@@ -151,15 +151,19 @@ export function UploadQueue({
           `${root}/assets/${reservation.assetId}`,
           client,
         )
-        state = result?.state || 'FAILED'
-        if (state === 'REJECTED' || state === 'FAILED')
+        state = result?.state || 'PROCESSING'
+        if (state === 'REJECTED' || state === 'FAILED' || state === 'DELETED')
           throw Error(result?.rejectionCode || 'File processing failed.')
       }
       if (controller.signal.aborted) throw Error('Upload cancelled.')
-      if (state !== 'READY')
-        throw Error(
-          'Processing is taking longer than expected. Retry status later.',
-        )
+      if (state !== 'READY') {
+        patch(t.id, {
+          state: 'processing',
+          error:
+            'Verification is still pending. Refresh file status; do not upload this file again.',
+        })
+        return
+      }
       patch(t.id, { state: 'ready' })
       if (onReady) onReady(reservation.assetId)
       else onChange([...new Set([...selectedRef.current, reservation.assetId])])
@@ -181,6 +185,33 @@ export function UploadQueue({
       started.current.delete(t.id)
       if (!unmounted.current) setQueue((q) => [...q])
     }
+  }
+  async function refreshProcessing() {
+    for (const t of queueRef.current) {
+      if (t.state !== 'processing' || !t.assetId || started.current.has(t.id))
+        continue
+      const result = await fetchLatestAsset(
+        `${root}/assets/${t.assetId}`,
+        client,
+      )
+      if (unmounted.current) return
+      if (result?.state === 'READY') {
+        patch(t.id, { state: 'ready', error: undefined })
+        if (onReady) onReady(t.assetId)
+        else onChange([...new Set([...selectedRef.current, t.assetId])])
+      } else if (
+        result &&
+        ['FAILED', 'REJECTED', 'DELETED'].includes(result.state)
+      ) {
+        patch(t.id, {
+          state: 'failed',
+          error:
+            result.rejectionCode ||
+            'This upload is unavailable. Retry to start a new upload.',
+        })
+      }
+    }
+    if (!unmounted.current) onRefresh?.()
   }
   const startTransfer = useEffectEvent((t: Transfer) => void transfer(t))
   useEffect(() => {
@@ -324,7 +355,11 @@ export function UploadQueue({
         Only verified ready files can be saved in your draft.
       </small>
       {live && (
-        <button type="button" className="secondary-button" onClick={onRefresh}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => void refreshProcessing()}
+        >
           Refresh file status
         </button>
       )}
@@ -353,6 +388,7 @@ export function UploadQueue({
           {['failed', 'cancelled'].includes(t.state) && (
             <button
               className="secondary-button"
+              disabled={disabled}
               onClick={() => {
                 cancelled.current.delete(t.id)
                 if (live)
@@ -436,17 +472,21 @@ export function UploadQueue({
               <button
                 className="text-link"
                 onClick={async () => {
+                  const variant = a.availableVariants.includes('WORKING')
+                    ? 'WORKING'
+                    : 'ORIGINAL'
                   const result = await command.run<{ url: string }>(
                     `${root}/assets/${a.id}/download`,
-                    {
-                      variant: a.availableVariants.includes('WORKING')
-                        ? 'WORKING'
-                        : 'ORIGINAL',
-                    },
+                    { variant },
                   )
                   if (result) {
                     try {
-                      await downloadFile(result.url, a.originalName)
+                      await downloadFile(
+                        result.url,
+                        live && variant === 'WORKING'
+                          ? a.originalName.replace(/\.[^.]+$/, '') + '.png'
+                          : a.originalName,
+                      )
                     } catch (e) {
                       setError(
                         e instanceof Error ? e.message : 'Download failed.',

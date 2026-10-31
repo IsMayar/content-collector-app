@@ -1,9 +1,14 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { UploadQueue } from '@/features/client/components/UploadQueue'
 import type { AssetSummary } from '@/features/projects/types/file.types'
-const mocks = vi.hoisted(() => ({ run: vi.fn(), latest: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  run: vi.fn(),
+  latest: vi.fn(),
+  download: vi.fn(),
+}))
+vi.mock('@/shared/utils/download', () => ({ downloadFile: mocks.download }))
 vi.mock('@/shared/hooks/useCommand', () => ({
   useCommand: () => ({ run: mocks.run, error: '', pending: false }),
 }))
@@ -51,11 +56,15 @@ class Transfer {
 }
 beforeEach(() => {
   mocks.run.mockReset()
+  mocks.download.mockReset()
   mocks.latest.mockReset()
   Transfer.sent = []
   vi.stubGlobal('XMLHttpRequest', Transfer)
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 function mount(props: Partial<Parameters<typeof UploadQueue>[0]> = {}) {
   return render(
     <UploadQueue
@@ -172,4 +181,90 @@ it('offers no delete action while a file is selected in the answer', () => {
   expect(
     screen.queryByRole('button', { name: 'Delete' }),
   ).not.toBeInTheDocument()
+})
+
+it('keeps retry disabled when upload access becomes read-only', async () => {
+  mocks.run.mockResolvedValue(undefined)
+  const view = mount()
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'notes.txt', { type: 'text/plain' }),
+  )
+  await screen.findByRole('button', { name: 'Retry' })
+  view.rerender(
+    <UploadQueue
+      root="client/projects/synthetic"
+      itemId={id}
+      image={false}
+      assets={[]}
+      selected={[]}
+      onChange={vi.fn()}
+      disabled
+      live
+      allowedExtensions={['txt']}
+      maxFiles={2}
+    />,
+  )
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled()
+  expect(screen.getByLabelText('Choose project files')).toBeDisabled()
+})
+it('downloads a live PNG working copy with its actual format extension', async () => {
+  mocks.run.mockResolvedValue({ url: 'https://storage.example.test/private' })
+  mocks.download.mockResolvedValue(undefined)
+  mount({
+    image: true,
+    assets: [
+      {
+        ...asset,
+        originalName: 'camera.jpg',
+        contentType: 'image/jpeg',
+        keepOriginal: false,
+        availableVariants: ['WORKING', 'THUMBNAIL'],
+      },
+    ],
+  })
+  await userEvent.click(screen.getByRole('button', { name: 'Download' }))
+  await waitFor(() =>
+    expect(mocks.download).toHaveBeenCalledWith(
+      'https://storage.example.test/private',
+      'camera.png',
+    ),
+  )
+})
+
+it('refreshes a slow finalized job instead of allocating a duplicate upload', async () => {
+  vi.useFakeTimers()
+  mocks.run
+    .mockResolvedValueOnce({
+      assetId: id,
+      uploadId: 'upload',
+      putUrl: 'https://storage.example.test/signed',
+      requiredHeaders: {},
+    })
+    .mockResolvedValueOnce({ state: 'PROCESSING' })
+  mocks.latest.mockResolvedValue({ ...asset, state: 'PROCESSING' })
+  const ready = vi.fn()
+  mount({ onReady: ready })
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Choose project files'), {
+      target: {
+        files: [new File(['data'], 'notes.txt', { type: 'text/plain' })],
+      },
+    })
+  })
+  expect(mocks.run).toHaveBeenCalledTimes(2)
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(25000)
+  })
+  expect(screen.getByText(/Verification is still pending/)).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Retry' }),
+  ).not.toBeInTheDocument()
+  expect(ready).not.toHaveBeenCalled()
+  mocks.latest.mockResolvedValue({ ...asset, state: 'READY' })
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh file status' }))
+  })
+  expect(ready).toHaveBeenCalledWith(id)
+  expect(mocks.run).toHaveBeenCalledTimes(2)
 })
