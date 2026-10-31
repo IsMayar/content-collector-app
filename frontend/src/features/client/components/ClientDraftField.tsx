@@ -15,11 +15,13 @@ export function ClientDraftField({
   projectId,
   structureVersion,
   onSaved,
+  canUpload = false,
 }: {
   item: Item
   projectId: string
   structureVersion: number
   onSaved: () => void
+  canUpload?: boolean
 }) {
   const [save] = useSaveDraftMutation()
   const [read] = useLazyReadDraftQuery()
@@ -102,8 +104,12 @@ export function ClientDraftField({
                 draft.edit(value)
               }}
               disabled={!item.canEdit}
-              root=""
-              preview
+              root={`client/projects/${projectId}`}
+              preview={!canUpload}
+              liveUploads={canUpload}
+              currentValue={() => draft.state.value}
+              onFilesChanged={onSaved}
+              beforeDelete={() => draft.flush()}
             />
           )}
         />

@@ -34,7 +34,7 @@ export function CollectionPortal({
     <>
       <Heading
         title={data.project.title}
-        description="Answers remain drafts. Check the save status for each question. Final submission and uploads are not available yet."
+        description="Answers remain drafts. Check the save and file status for each question. Final submission is not available yet."
       >
         <button
           className="secondary-button"
@@ -90,6 +90,7 @@ export function CollectionPortal({
                   projectId={data.project.id}
                   structureVersion={data.project.structureVersion}
                   onSaved={onRefresh}
+                  canUpload={data.capabilities.canUpload}
                 />
               ))}
             </section>

@@ -21,6 +21,12 @@ export function UploadQueue({
   selected,
   onChange,
   disabled,
+  live = false,
+  allowedExtensions,
+  maxFiles,
+  onRefresh,
+  onReady,
+  beforeDelete,
 }: {
   client?: boolean
   root: string
@@ -30,6 +36,12 @@ export function UploadQueue({
   selected: string[]
   onChange: (ids: string[]) => void
   disabled: boolean
+  live?: boolean
+  allowedExtensions?: string[]
+  maxFiles?: number
+  onRefresh?: () => void
+  onReady?: (id: string) => void
+  beforeDelete?: () => Promise<boolean>
 }) {
   const command = useCommand(client)
   const [queue, setQueue] = useState<Transfer[]>([])
@@ -58,17 +70,24 @@ export function UploadQueue({
     active.current++
     patch(t.id, { state: 'uploading', error: undefined, progress: 0 })
     let reservation: UploadReservation | undefined
+    let finalized = false
     try {
-      reservation = await command.run<UploadReservation>(`${root}/uploads`, {
-        itemId,
-        originalName: t.file.name,
-        contentType: t.file.type || 'application/octet-stream',
-        bytes: t.file.size,
-        keepOriginal: keep,
-      })
+      reservation = await command.run<UploadReservation>(
+        `${root}/uploads`,
+        {
+          itemId,
+          originalName: t.file.name,
+          contentType: t.file.type || 'application/octet-stream',
+          bytes: t.file.size,
+          keepOriginal: image ? keep : true,
+        },
+        'POST',
+        live ? { 'Idempotency-Key': t.id } : undefined,
+      )
       if (!reservation)
         throw Error('Reservation failed. Check type, size and workspace quota.')
-      if (cancelled.current.has(t.id)) throw Error('Upload cancelled.')
+      if (cancelled.current.has(t.id) || unmounted.current)
+        throw Error('Upload cancelled.')
       patch(t.id, {
         assetId: reservation.assetId,
         uploadId: reservation.uploadId,
@@ -78,6 +97,9 @@ export function UploadQueue({
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.open('PUT', reservation!.putUrl)
+        xhr.timeout = 120000
+        xhr.ontimeout = () =>
+          reject(Error('Transfer timed out. Retry this file.'))
         Object.entries(reservation!.requiredHeaders).forEach(([k, v]) =>
           xhr.setRequestHeader(k, v),
         )
@@ -107,9 +129,13 @@ export function UploadQueue({
         !(await command.run(
           `${root}/uploads/${reservation.uploadId}/finalize`,
           {},
+          'POST',
+          live ? { 'Idempotency-Key': t.id + '-finalize' } : undefined,
         ))
       )
         throw Error('Could not finalize the upload.')
+      finalized = true
+      onRefresh?.()
       patch(t.id, { state: 'processing', progress: 100 })
       let state = 'PROCESSING'
       for (
@@ -135,13 +161,16 @@ export function UploadQueue({
           'Processing is taking longer than expected. Retry status later.',
         )
       patch(t.id, { state: 'ready' })
-      onChange([...new Set([...selectedRef.current, reservation.assetId])])
+      if (onReady) onReady(reservation.assetId)
+      else onChange([...new Set([...selectedRef.current, reservation.assetId])])
+      onRefresh?.()
     } catch (e) {
+      if (finalized && !unmounted.current) onRefresh?.()
       patch(t.id, {
         state: cancelled.current.has(t.id) ? 'cancelled' : 'failed',
         error: e instanceof Error ? e.message : 'Upload failed.',
       })
-      if (reservation)
+      if (reservation && !finalized)
         await command.run(
           `${root}/uploads/${reservation.uploadId}`,
           undefined,
@@ -170,8 +199,48 @@ export function UploadQueue({
       return
     }
     const valid: Transfer[] = []
+    if (
+      live &&
+      maxFiles &&
+      assets.filter((a) =>
+        ['RESERVED', 'UPLOADED', 'PROCESSING', 'READY'].includes(a.state),
+      ).length +
+        queue.filter(
+          (t) =>
+            ['queued', 'uploading'].includes(t.state) &&
+            !assets.some((a) => a.id === t.assetId),
+        ).length +
+        files.length >
+        maxFiles
+    ) {
+      setError(`Choose no more than ${maxFiles} files for this question.`)
+      return
+    }
     for (const file of files) {
-      if (file.size > (image ? 50 : 100) * 1024 * 1024) {
+      if (
+        live &&
+        allowedExtensions?.length &&
+        !allowedExtensions.includes(
+          file.name.split('.').pop()?.toLowerCase() || '',
+        )
+      ) {
+        setError('This file extension is not permitted for this question.')
+        continue
+      }
+
+      if (file.size === 0) {
+        setError(`${file.name} is empty. Choose a file containing data.`)
+        continue
+      }
+      if (
+        file.size >
+        (image ||
+        (file.type.startsWith('image/') && file.type !== 'image/svg+xml')
+          ? 50
+          : 100) *
+          1024 *
+          1024
+      ) {
         setError(`${file.name} exceeds ${image ? 50 : 100} MiB.`)
         continue
       }
@@ -198,8 +267,10 @@ export function UploadQueue({
         <strong>{image ? 'Add images' : 'Add project files'}</strong>
         <span>
           {image
-            ? 'JPEG, PNG, WebP, HEIC/HEIF · 50 MiB each'
-            : 'Images, PDF, DOCX, TXT, SVG · 100 MiB each'}
+            ? live
+              ? 'JPEG and PNG · 50 MiB each'
+              : 'JPEG, PNG, WebP, HEIC/HEIF · 50 MiB each'
+            : 'JPEG/PNG images · 50 MiB; PDF, DOCX, TXT, SVG · 100 MiB'}
         </span>
         <input
           aria-label={
@@ -210,9 +281,14 @@ export function UploadQueue({
           type="file"
           multiple
           accept={
-            image
-              ? '.jpg,.jpeg,.png,.webp,.heic,.heif'
-              : '.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf,.docx,.txt,.svg'
+            live
+              ? allowedExtensions?.map((x) => '.' + x).join(',') ||
+                (image
+                  ? '.jpg,.jpeg,.png'
+                  : '.jpg,.jpeg,.png,.pdf,.docx,.txt,.svg')
+              : image
+                ? '.jpg,.jpeg,.png,.webp,.heic,.heif'
+                : '.jpg,.jpeg,.png,.webp,.heic,.heif,.pdf,.docx,.txt,.svg'
           }
           disabled={disabled}
           onChange={(e) => {
@@ -232,19 +308,26 @@ export function UploadQueue({
           />
         </Field>
       )}
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={keep}
-          disabled={disabled}
-          onChange={(e) => setKeep(e.target.checked)}
-        />
-        Keep originals for this upload
-      </label>
+      {image && (
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={keep}
+            disabled={disabled}
+            onChange={(e) => setKeep(e.target.checked)}
+          />
+          Keep originals for this upload
+        </label>
+      )}
       <small>
-        Turning this off saves space. Discarded originals cannot be recovered.
-        Only ready files can be submitted.
+        {image ? 'Discarded originals cannot be recovered. ' : ''}
+        Only verified ready files can be saved in your draft.
       </small>
+      {live && (
+        <button type="button" className="secondary-button" onClick={onRefresh}>
+          Refresh file status
+        </button>
+      )}
       <ErrorNotice error={error || command.error} />
       {queue.some((t) => t.state === 'failed') && (
         <Notice error>
@@ -272,7 +355,22 @@ export function UploadQueue({
               className="secondary-button"
               onClick={() => {
                 cancelled.current.delete(t.id)
-                patch(t.id, { state: 'queued' })
+                if (live)
+                  setQueue((q) =>
+                    q.map((row) =>
+                      row.id === t.id
+                        ? {
+                            ...row,
+                            id: crypto.randomUUID(),
+                            state: 'queued',
+                            assetId: undefined,
+                            uploadId: undefined,
+                            progress: 0,
+                          }
+                        : row,
+                    ),
+                  )
+                else patch(t.id, { state: 'queued' })
               }}
             >
               Retry
@@ -340,7 +438,11 @@ export function UploadQueue({
                 onClick={async () => {
                   const result = await command.run<{ url: string }>(
                     `${root}/assets/${a.id}/download`,
-                    { variant: 'WORKING' },
+                    {
+                      variant: a.availableVariants.includes('WORKING')
+                        ? 'WORKING'
+                        : 'ORIGINAL',
+                    },
                   )
                   if (result) {
                     try {
@@ -359,13 +461,16 @@ export function UploadQueue({
             {!disabled && !selected.includes(a.id) && (
               <button
                 className="danger-link"
-                onClick={() =>
-                  void command.run(
+                disabled={command.pending}
+                onClick={async () => {
+                  if (beforeDelete && !(await beforeDelete())) return
+                  const result = await command.run(
                     `${root}/assets/${a.id}`,
                     undefined,
                     'DELETE',
                   )
-                }
+                  if (result) onRefresh?.()
+                }}
               >
                 Delete
               </button>

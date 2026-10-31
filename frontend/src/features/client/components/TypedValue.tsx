@@ -11,6 +11,10 @@ export function TypedValue({
   disabled,
   root,
   preview = false,
+  liveUploads = false,
+  currentValue,
+  onFilesChanged,
+  beforeDelete,
 }: {
   item: Pick<ClientItem, 'id' | 'label' | 'type' | 'validation' | 'assets'>
   value: AnswerValue
@@ -18,6 +22,10 @@ export function TypedValue({
   disabled: boolean
   root: string
   preview?: boolean
+  liveUploads?: boolean
+  currentValue?: () => AnswerValue
+  onFilesChanged?: () => void
+  beforeDelete?: () => Promise<boolean>
 }) {
   const data = value as unknown as Record<string, unknown>
   const rules = item.validation
@@ -120,6 +128,27 @@ export function TypedValue({
         root={root}
         itemId={item.id}
         image={item.type === 'IMAGE'}
+        live={liveUploads}
+        allowedExtensions={
+          liveUploads
+            ? rules.allowedExtensions?.filter((e) =>
+                ['jpg', 'jpeg', 'png', 'pdf', 'docx', 'txt', 'svg'].includes(e),
+              )
+            : undefined
+        }
+        maxFiles={rules.maxFiles}
+        onRefresh={onFilesChanged}
+        beforeDelete={beforeDelete}
+        onReady={
+          currentValue
+            ? (id) => {
+                const latest = currentValue() as { assetIds?: string[] }
+                onChange({
+                  assetIds: [...new Set([...(latest.assetIds || []), id])],
+                })
+              }
+            : undefined
+        }
         assets={item.assets}
         selected={(data.assetIds as string[]) || []}
         onChange={(assetIds) => onChange({ assetIds })}
@@ -155,6 +184,46 @@ export function TypedValue({
                       root={root}
                       itemId={item.id}
                       image
+                      live={liveUploads}
+                      onRefresh={onFilesChanged}
+                      beforeDelete={beforeDelete}
+                      allowedExtensions={
+                        liveUploads ? ['jpg', 'jpeg', 'png'] : undefined
+                      }
+                      onReady={
+                        currentValue
+                          ? (id) => {
+                              const latest = currentValue() as Extract<
+                                AnswerValue,
+                                { rows: unknown }
+                              >
+                              onChange({
+                                rows: (latest.rows || []).map((r) =>
+                                  r.rowId === row.rowId
+                                    ? {
+                                        ...r,
+                                        values: {
+                                          ...r.values,
+                                          [column.key]: [
+                                            ...new Set([
+                                              ...(Array.isArray(
+                                                r.values[column.key],
+                                              )
+                                                ? (r.values[
+                                                    column.key
+                                                  ] as string[])
+                                                : []),
+                                              id,
+                                            ]),
+                                          ],
+                                        },
+                                      }
+                                    : r,
+                                ),
+                              })
+                            }
+                          : undefined
+                      }
                       assets={item.assets}
                       selected={Array.isArray(cell) ? cell : []}
                       onChange={update}

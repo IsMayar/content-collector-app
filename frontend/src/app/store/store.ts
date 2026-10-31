@@ -47,7 +47,8 @@ export const createAppStore = () => {
   })
   sessionListener.startListening({
     predicate: (action) =>
-      action.type === `${clientApi.reducerPath}/executeQuery/rejected` &&
+      (action.type === `${clientApi.reducerPath}/executeQuery/rejected` ||
+        action.type === `${clientApi.reducerPath}/executeMutation/rejected`) &&
       (action as { payload?: { status?: unknown } }).payload?.status === 401,
     effect: (_action, api) => {
       api.dispatch(clientAccessUnavailable())
