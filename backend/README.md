@@ -571,3 +571,22 @@ if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS checks failed.' }
 ```
 
 T19 final local evidence:110 focused attachment,889 backend,162 frontend unit,2 real HTTPS (MSW off),75/75 complete responsive and1/1 fresh production PWA passed; TypeScript/build/lint/format and Flyway/Hibernate/JAR checks passed. A reproduced frontend regression now separates initial anonymous agency bootstrap from explicit sign-out so an independent client exchange is not canceled; confirmed logout/authenticated expiry still clear both caches. T19 is Complete locally; M3/M4 and independent release gates remain In progress. Earlier failed stages and unresolved diagnostic risk are recorded in the T19 report.
+
+
+## T21 review decisions and comments
+
+V16 adds scoped append-only decisions/comments automatically through Flyway; never edit V1–V15. Owners and live assigned canReview members can decide the current SUBMITTED revision of an ACTIVE/writable project. Assigned readers can comment without review/export permission; client comments always have CLIENT visibility. REQUEST_CHANGES requires feedback and restores a separate editable draft. APPROVE records the exact revision; history is immutable. T22 publication/reopening/completion/archive remains unavailable. Existing trusted ACTIVE test fixtures are not a publication API.
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+# Requires Java21 and a running Docker Desktop Linux engine for PostgreSQL tests.
+.\mvnw.cmd '-Dtest=SubmissionTests#review*' test
+if ($LASTEXITCODE -ne 0) { throw 'Review checks failed.' }
+# Optional full CI/release regression; do not repeat it unnecessarily during focused work.
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsWorkspaceOnboardingWithoutMocks' test
+if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS review acceptance failed.' }
+```
+
+The HTTPS command requires existing frontend dependencies/Edge and local private storage/scanner/image-worker fixtures documented above; MSW remains disabled. [Full T21 contract inventory, exact evidence and blockers](../docs/T21_REVIEW_DECISIONS.md). Recorded backend evidence is896 passing full-run cases plus17 corrected migration checks passing on focused verify (913 distinct cases covered), not a claimed subsequent full green run. Final44 targeted frontend tests and1 real HTTPS lifecycle passed. T20 real-device and existing hosted/provider/deployment gates remain open.

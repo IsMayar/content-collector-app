@@ -499,7 +499,7 @@ Milestone status: In progress
 | T18  | Private upload reservations and quota       | Concurrent reservations remain within allowance              | Complete |
 | T19  | Scanner, canonical copy and image variants  | Unsafe staging bytes never become public READY content       | Complete |
 | T20  | Phone upload queue and original option      | Real-device photo and error journeys pass                    | In progress |
-| T21  | Comments and review decisions               | Internal comments never reach clients; decision race handled | Not started |
+| T21  | Comments and review decisions               | Internal comments never reach clients; decision race handled | Complete |
 | T22  | Project completion, reopening and archive   | Progress and lifecycle guards use the same evaluator         | Not started |
 | T23  | Immutable approved export manifest and jobs | Partial exports labeled; all three formats match snapshots   | Not started |
 
@@ -795,3 +795,14 @@ Existing `features/client/` and T16–T19 APIs/storage are reused. A bounded thr
 Final current-source evidence: **21 focused frontend upload tests / 1 file**, strict TypeScript/production build, changed-file zero-warning lint/format, **1 real HTTPS lifecycle with MSW disabled (0 failures/errors/skips)** and **3/3 focused responsive upload cases** (1440/768/360) passed. Desktop/phone screenshots inspected. Earlier HTTPS selector ambiguity and missing rejection-metadata refresh were corrected before the final complete selected run. Existing bundle-size advisory remains. Full889 backend, unrelated frontend tests, full75 responsive and PWA were intentionally not rerun because their production areas did not change. Historical T19 results are not represented as T20 reruns.
 
 [Exact files, retry/cancel/original/security behavior, commands, evidence and device checklist](T20_PHONE_UPLOAD_QUEUE.md). Implementation commit `12292a8`; final documentation commit reported separately. T04/T05/T06/T11/T16/T22 and production/device gates remain open. No push.
+
+
+## M4 / T21 Part 1 — comments and review decisions — 1 November 2026
+
+**T21 Complete for original-roadmap local acceptance; M4 remains In progress.** The original title includes comments as well as decisions, so both agency/client discussion and strict internal-note isolation are implemented. Existing T17 immutable submissions and T13 independent review/export permissions are reused. V16 alone adds append-only decisions/comments with scoped FKs, actor/visibility constraints and unique exact-revision decisions; V1–V15 and supplied specifications/templates remain unchanged. ACTIVE/writable project review transitions SUBMITTED to APPROVED or CHANGES_REQUESTED; change requests copy the exact snapshot to a separate versioned draft and atomically record client-visible feedback, reviewer identity/time, audit and idempotent response. No T22 lifecycle/reopen/completion API.
+
+Live Review navigation, queue/history, explicit exact-version confirmation, stable retry keys, historical-decision display, client feedback/replies and agency/internal notes use existing RTK transport. SQL filters internal comments before client serialization; real collected-content schemas accept safe feedback while owner preview remains unchanged/read-only.
+
+Evidence:23 initial focused review checks passed; full backend executed913 cases (889 preserved +24 review):896 passed and17 failed only on stale schema totals. Exact expectations were updated to16 migrations/30 tables; all17 failed cases then passed via focused Maven verify, including Boot JAR packaging. **This is passing coverage across the full run plus targeted correction, not a subsequent one-shot913 green run.** A prior engine-unavailable attempt reported288 tests/16 infrastructure errors and is not counted as successful. No production backend edits occurred between the913 run and17-case repair. Final frontend44 tests /3 files, strict TypeScript/build, changed-file zero-warning lint/format and1 actual HTTPS lifecycle with MSW disabled passed. HTTPS demonstrated internal-note exclusion, revision2 feedback, client resubmission3, historical denial and exact approval with unchanged previous snapshot. The initial empty-only client-comment schema failure was fixed and regression-tested before the final passing lifecycle. Unrelated responsive/PWA/frontend suites were intentionally not rerun.
+
+[Exact contracts, concurrency/security, tests, limitations, commands and file manifest](T21_REVIEW_DECISIONS.md). Backend `817c206`; frontend `4e93b88`; documentation commit reported separately. T20 physical-device acceptance, T04/T05/T06/T11/T16/T22 and production gates remain pending. No push or full-MVP claim.
