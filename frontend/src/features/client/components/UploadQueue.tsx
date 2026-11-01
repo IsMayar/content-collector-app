@@ -1,17 +1,14 @@
 import type {} from '@/features/client/api/clientApi'
-import { fetchLatestAsset } from '@/features/client/api/clientApi'
+import { useUploadQueue, raster } from '@/features/client/hooks/useUploadQueue'
 import type { Transfer } from '@/features/client/types/upload.types'
-import type {
-  AssetSummary,
-  UploadReservation,
-} from '@/features/projects/types/file.types'
+import type { AssetSummary } from '@/features/projects/types/file.types'
 import { Notice } from '@/shared/components/Feedback'
 import { Badge, ErrorNotice, Field } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { formatBytes } from '@/shared/utils/domain'
 import { downloadFile } from '@/shared/utils/download'
 import { FileText, FolderOpen } from 'lucide-react'
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useState } from 'react'
 export function UploadQueue({
   client = true,
   root,
@@ -44,187 +41,22 @@ export function UploadQueue({
   beforeDelete?: () => Promise<boolean>
 }) {
   const command = useCommand(client)
-  const [queue, setQueue] = useState<Transfer[]>([])
   const [keep, setKeep] = useState(true)
   const [error, setError] = useState('')
-  const active = useRef(0)
-  const started = useRef(new Set<string>())
-  const cancelled = useRef(new Set<string>())
-  const queueRef = useRef(queue)
-  queueRef.current = queue
-  const selectedRef = useRef(selected)
-  selectedRef.current = selected
-  const unmounted = useRef(false)
-  useEffect(() => {
-    unmounted.current = false
-    return () => {
-      unmounted.current = true
-      for (const t of queueRef.current) t.controller?.abort()
-    }
-  }, [])
-  function patch(id: string, changes: Partial<Transfer>) {
-    if (!unmounted.current)
-      setQueue((q) => q.map((t) => (t.id === id ? { ...t, ...changes } : t)))
-  }
-  async function transfer(t: Transfer) {
-    active.current++
-    patch(t.id, { state: 'uploading', error: undefined, progress: 0 })
-    let reservation: UploadReservation | undefined
-    let finalized = false
-    try {
-      reservation = await command.run<UploadReservation>(
-        `${root}/uploads`,
-        {
-          itemId,
-          originalName: t.file.name,
-          contentType: t.file.type || 'application/octet-stream',
-          bytes: t.file.size,
-          keepOriginal: image ? keep : true,
-        },
-        'POST',
-        live ? { 'Idempotency-Key': t.id } : undefined,
-      )
-      if (!reservation)
-        throw Error('Reservation failed. Check type, size and workspace quota.')
-      if (cancelled.current.has(t.id) || unmounted.current)
-        throw Error('Upload cancelled.')
-      patch(t.id, {
-        assetId: reservation.assetId,
-        uploadId: reservation.uploadId,
-      })
-      const controller = new AbortController()
-      patch(t.id, { controller })
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('PUT', reservation!.putUrl)
-        xhr.timeout = 120000
-        xhr.ontimeout = () =>
-          reject(Error('Transfer timed out. Retry this file.'))
-        Object.entries(reservation!.requiredHeaders).forEach(([k, v]) =>
-          xhr.setRequestHeader(k, v),
-        )
-        xhr.upload.onprogress = (e) =>
-          patch(t.id, {
-            progress: e.lengthComputable
-              ? Math.round((e.loaded / e.total) * 90)
-              : 40,
-          })
-        xhr.onload = () =>
-          xhr.status >= 200 && xhr.status < 300
-            ? resolve()
-            : reject(
-                Error(
-                  xhr.status === 403
-                    ? 'Upload link expired. Retry for a fresh link.'
-                    : 'Transfer failed.',
-                ),
-              )
-        xhr.onerror = () =>
-          reject(Error('Connection interrupted. Retry this file.'))
-        xhr.onabort = () => reject(Error('Upload cancelled.'))
-        controller.signal.addEventListener('abort', () => xhr.abort())
-        xhr.send(t.file)
-      })
-      if (
-        !(await command.run(
-          `${root}/uploads/${reservation.uploadId}/finalize`,
-          {},
-          'POST',
-          live ? { 'Idempotency-Key': t.id + '-finalize' } : undefined,
-        ))
-      )
-        throw Error('Could not finalize the upload.')
-      finalized = true
-      onRefresh?.()
-      patch(t.id, { state: 'processing', progress: 100 })
-      let state = 'PROCESSING'
-      for (
-        let attempts = 0;
-        attempts < 40 &&
-        state === 'PROCESSING' &&
-        !unmounted.current &&
-        !controller.signal.aborted;
-        attempts++
-      ) {
-        await new Promise((r) => setTimeout(r, 600))
-        const result = await fetchLatestAsset(
-          `${root}/assets/${reservation.assetId}`,
-          client,
-        )
-        state = result?.state || 'PROCESSING'
-        if (state === 'REJECTED' || state === 'FAILED' || state === 'DELETED')
-          throw Error(result?.rejectionCode || 'File processing failed.')
-      }
-      if (controller.signal.aborted) throw Error('Upload cancelled.')
-      if (state !== 'READY') {
-        patch(t.id, {
-          state: 'processing',
-          error:
-            'Verification is still pending. Refresh file status; do not upload this file again.',
-        })
-        return
-      }
-      patch(t.id, { state: 'ready' })
-      if (onReady) onReady(reservation.assetId)
-      else onChange([...new Set([...selectedRef.current, reservation.assetId])])
-      onRefresh?.()
-    } catch (e) {
-      if (finalized && !unmounted.current) onRefresh?.()
-      patch(t.id, {
-        state: cancelled.current.has(t.id) ? 'cancelled' : 'failed',
-        error: e instanceof Error ? e.message : 'Upload failed.',
-      })
-      if (reservation && !finalized)
-        await command.run(
-          `${root}/uploads/${reservation.uploadId}`,
-          undefined,
-          'DELETE',
-        )
-    } finally {
-      active.current--
-      started.current.delete(t.id)
-      if (!unmounted.current) setQueue((q) => [...q])
-    }
-  }
-  async function refreshProcessing() {
-    for (const t of queueRef.current) {
-      if (t.state !== 'processing' || !t.assetId || started.current.has(t.id))
-        continue
-      const result = await fetchLatestAsset(
-        `${root}/assets/${t.assetId}`,
-        client,
-      )
-      if (unmounted.current) return
-      if (result?.state === 'READY') {
-        patch(t.id, { state: 'ready', error: undefined })
-        if (onReady) onReady(t.assetId)
-        else onChange([...new Set([...selectedRef.current, t.assetId])])
-      } else if (
-        result &&
-        ['FAILED', 'REJECTED', 'DELETED'].includes(result.state)
-      ) {
-        patch(t.id, {
-          state: 'failed',
-          error:
-            result.rejectionCode ||
-            'This upload is unavailable. Retry to start a new upload.',
-        })
-      }
-    }
-    if (!unmounted.current) onRefresh?.()
-  }
-  const startTransfer = useEffectEvent((t: Transfer) => void transfer(t))
-  useEffect(() => {
-    for (const t of queue) {
-      if (active.current >= 3) break
-      if (t.state === 'queued' && !started.current.has(t.id)) {
-        started.current.add(t.id)
-        startTransfer(t)
-      }
-    }
-  }, [queue])
+  const uploads = useUploadQueue({
+    root,
+    client,
+    itemId,
+    disabled,
+    selected,
+    onChange,
+    onReady,
+    onRefresh,
+  })
+  const { queue } = uploads
   function add(files: FileList | null) {
-    if (!files) return
+    if (!files || disabled) return
+    setError('')
     if (queue.length + files.length > 50) {
       setError('Choose no more than 50 files in a batch.')
       return
@@ -233,8 +65,10 @@ export function UploadQueue({
     if (
       live &&
       maxFiles &&
-      assets.filter((a) =>
-        ['RESERVED', 'UPLOADED', 'PROCESSING', 'READY'].includes(a.state),
+      assets.filter(
+        (a) =>
+          ['RESERVED', 'UPLOADED', 'PROCESSING'].includes(a.state) ||
+          (a.state === 'READY' && selected.includes(a.id)),
       ).length +
         queue.filter(
           (t) =>
@@ -251,11 +85,18 @@ export function UploadQueue({
       if (
         live &&
         allowedExtensions?.length &&
-        !allowedExtensions.includes(
-          file.name.split('.').pop()?.toLowerCase() || '',
-        )
+        !allowedExtensions
+          .map((x) => (x === 'jpeg' ? 'jpg' : x))
+          .includes(
+            (file.name.split('.').pop()?.toLowerCase() || '').replace(
+              /^jpeg$/,
+              'jpg',
+            ),
+          )
       ) {
-        setError('This file extension is not permitted for this question.')
+        setError(
+          'This file format is not permitted. Choose a supported format for this question.',
+        )
         continue
       }
 
@@ -263,26 +104,21 @@ export function UploadQueue({
         setError(`${file.name} is empty. Choose a file containing data.`)
         continue
       }
-      if (
-        file.size >
-        (image ||
-        (file.type.startsWith('image/') && file.type !== 'image/svg+xml')
-          ? 50
-          : 100) *
-          1024 *
-          1024
-      ) {
-        setError(`${file.name} exceeds ${image ? 50 : 100} MiB.`)
+      if (file.size > (image || raster(file) ? 50 : 100) * 1024 * 1024) {
+        setError(
+          `${file.name} exceeds ${image || raster(file) ? 50 : 100} MiB.`,
+        )
         continue
       }
       valid.push({
         id: crypto.randomUUID(),
         file,
+        keepOriginal: raster(file) ? keep : true,
         progress: 0,
         state: 'queued',
       })
     }
-    setQueue((q) => [...q, ...valid])
+    uploads.add(valid)
   }
   return (
     <div className="upload-area">
@@ -313,7 +149,11 @@ export function UploadQueue({
           multiple
           accept={
             live
-              ? allowedExtensions?.map((x) => '.' + x).join(',') ||
+              ? allowedExtensions
+                  ?.flatMap((x) =>
+                    x === 'jpg' || x === 'jpeg' ? ['.jpg', '.jpeg'] : ['.' + x],
+                  )
+                  .join(',') ||
                 (image
                   ? '.jpg,.jpeg,.png'
                   : '.jpg,.jpeg,.png,.pdf,.docx,.txt,.svg')
@@ -328,42 +168,71 @@ export function UploadQueue({
           }}
         />
       </label>
-      {image && (
+      {(image ||
+        allowedExtensions?.some((x) => ['jpg', 'jpeg', 'png'].includes(x))) && (
         <Field label="Take a photo">
           <input
             type="file"
-            accept="image/*"
+            accept={live ? 'image/jpeg,image/png' : 'image/*'}
             capture="environment"
             disabled={disabled}
-            onChange={(e) => add(e.target.files)}
+            onChange={(e) => {
+              add(e.target.files)
+              e.target.value = ''
+            }}
           />
         </Field>
       )}
-      {image && (
-        <label className="check-row">
-          <input
-            type="checkbox"
-            checked={keep}
-            disabled={disabled}
-            onChange={(e) => setKeep(e.target.checked)}
-          />
-          Keep originals for this upload
-        </label>
-      )}
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={keep}
+          disabled={disabled}
+          onChange={(e) => setKeep(e.target.checked)}
+        />
+        Keep originals for this upload
+      </label>
       <small>
-        {image ? 'Discarded originals cannot be recovered. ' : ''}
-        Only verified ready files can be saved in your draft.
+        {keep
+          ? 'Original image bytes stay private and count toward storage. '
+          : 'Discarded originals cannot be recovered. '}
+        This choice applies to images selected next; documents always retain
+        their originals. Only verified ready files can be saved in your draft.
       </small>
       {live && (
         <button
           type="button"
           className="secondary-button"
-          onClick={() => void refreshProcessing()}
+          onClick={() => void uploads.refreshProcessing()}
+          disabled={!uploads.online}
         >
           Refresh file status
         </button>
       )}
-      <ErrorNotice error={error || command.error} />
+      {!uploads.online && (
+        <Notice error>
+          You’re offline. Selected files stay in this open page. Reconnect, then
+          retry interrupted files. Uploads do not continue after closing this
+          page.
+        </Notice>
+      )}
+      <p aria-live="polite" aria-atomic="true" className="upload-summary">
+        {queue.filter((t) => t.state === 'ready').length} ready ·{' '}
+        {
+          queue.filter((t) =>
+            ['queued', 'uploading', 'processing'].includes(t.state),
+          ).length
+        }{' '}
+        pending · Up to 3 transfers at a time
+      </p>
+      <ErrorNotice error={uploads.accessError || error || command.error} />
+      {queue.some((t) =>
+        ['ready', 'failed', 'cancelled'].includes(t.state),
+      ) && (
+        <button type="button" className="text-link" onClick={uploads.clear}>
+          Clear finished rows
+        </button>
+      )}
       {queue.some((t) => t.state === 'failed') && (
         <Notice error>
           Some files couldn’t be uploaded. Review each error and retry, or
@@ -371,75 +240,74 @@ export function UploadQueue({
         </Notice>
       )}
       {queue.map((t) => (
-        <div className="upload-row" key={t.id}>
+        <div
+          className="upload-row"
+          key={t.id}
+          role="group"
+          aria-label={`Upload ${t.file.name}`}
+        >
           <FileText size={20} />
           <div className="grow">
             <strong>{t.file.name}</strong>
             <small>
               {formatBytes(t.file.size)} · {t.state}
+              {raster(t.file)
+                ? t.keepOriginal
+                  ? ' · Original retained'
+                  : ' · Working copy only'
+                : ''}
             </small>
             <progress
-              value={t.progress}
+              value={t.progress ?? undefined}
               max={100}
               aria-label={`${t.file.name} upload progress`}
             />
+            <small>
+              {t.state === 'uploading'
+                ? t.progress === null
+                  ? 'Transferring…'
+                  : `${t.progress}% transferred`
+                : t.state === 'processing'
+                  ? 'Transfer complete. Server verification pending.'
+                  : ''}
+            </small>
             {t.error && <p role="alert">{t.error}</p>}
           </div>
           {['failed', 'cancelled'].includes(t.state) && (
             <button
+              type="button"
               className="secondary-button"
-              disabled={disabled}
-              onClick={() => {
-                cancelled.current.delete(t.id)
-                if (live)
-                  setQueue((q) =>
-                    q.map((row) =>
-                      row.id === t.id
-                        ? {
-                            ...row,
-                            id: crypto.randomUUID(),
-                            state: 'queued',
-                            assetId: undefined,
-                            uploadId: undefined,
-                            progress: 0,
-                          }
-                        : row,
-                    ),
-                  )
-                else patch(t.id, { state: 'queued' })
-              }}
+              disabled={
+                disabled ||
+                !uploads.online ||
+                !!uploads.accessError ||
+                t.retryable === false
+              }
+              onClick={() => uploads.retry(t)}
             >
               Retry
             </button>
           )}
           {['failed', 'cancelled'].includes(t.state) && (
             <button
+              type="button"
               className="text-link"
-              onClick={() =>
-                setQueue((q) => q.filter((row) => row.id !== t.id))
-              }
+              disabled={uploads.isRunning(t.id)}
+              onClick={() => uploads.remove(t.id)}
             >
               Remove
             </button>
           )}
-          {['queued', 'uploading', 'processing'].includes(t.state) && (
-            <button
-              className="secondary-button"
-              onClick={() => {
-                cancelled.current.add(t.id)
-                t.controller?.abort()
-                patch(t.id, { state: 'cancelled' })
-                if (t.uploadId)
-                  void command.run(
-                    `${root}/uploads/${t.uploadId}`,
-                    undefined,
-                    'DELETE',
-                  )
-              }}
-            >
-              Cancel
-            </button>
-          )}
+          {['queued', 'uploading'].includes(t.state) &&
+            !['finalize', 'verify'].includes(t.phase || '') && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void uploads.cancel(t)}
+              >
+                Cancel
+              </button>
+            )}
         </div>
       ))}
       {assets
@@ -470,6 +338,7 @@ export function UploadQueue({
             <Badge>{a.state}</Badge>
             {a.state === 'READY' && (
               <button
+                type="button"
                 className="text-link"
                 onClick={async () => {
                   const variant = a.availableVariants.includes('WORKING')
@@ -498,8 +367,33 @@ export function UploadQueue({
                 Download
               </button>
             )}
+            {a.state === 'READY' &&
+              a.availableVariants.includes('ORIGINAL') &&
+              a.availableVariants.includes('WORKING') && (
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={async () => {
+                    const result = await command.run<{ url: string }>(
+                      `${root}/assets/${a.id}/download`,
+                      { variant: 'ORIGINAL' },
+                    )
+                    if (result)
+                      try {
+                        await downloadFile(result.url, a.originalName)
+                      } catch {
+                        setError(
+                          'Original download failed. Check your connection and try again.',
+                        )
+                      }
+                  }}
+                >
+                  Download original
+                </button>
+              )}
             {!disabled && !selected.includes(a.id) && (
               <button
+                type="button"
                 className="danger-link"
                 disabled={command.pending}
                 onClick={async () => {

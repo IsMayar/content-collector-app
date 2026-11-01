@@ -22,7 +22,11 @@ export async function fetchLatest(
   }
 }
 
-export async function fetchLatestAsset(path: string, client = true) {
+export async function fetchLatestAsset(
+  path: string,
+  client = true,
+  throwOnError = false,
+) {
   const { store } = await import('@/app/store/store')
   const { portalApi, workspaceApi } = await import('@/services/api/resourceApi')
   const req = store.dispatch(
@@ -36,7 +40,8 @@ export async function fetchLatestAsset(path: string, client = true) {
   )
   try {
     return ((await req.unwrap()) as { asset: AssetSummary }).asset
-  } catch {
+  } catch (error) {
+    if (throwOnError) throw error
     return undefined
   } finally {
     req.unsubscribe()

@@ -1623,7 +1623,9 @@ async function command(input) {
       )
       phase = 'client-attachments:remove'
       phase = 'client-attachments:unselect'
-      await field.getByRole('checkbox').uncheck()
+      await field
+        .getByRole('checkbox', { name: /browser-private\.txt/ })
+        .uncheck()
       await expect(
         field.getByRole('status').filter({ hasText: /^Saved/ }),
       ).toBeVisible()

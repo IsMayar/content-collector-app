@@ -1,4 +1,11 @@
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
+import {
+  render,
+  screen,
+  waitFor,
+  act,
+  fireEvent,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { UploadQueue } from '@/features/client/components/UploadQueue'
@@ -7,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   run: vi.fn(),
   latest: vi.fn(),
   download: vi.fn(),
+}))
+vi.mock('@/features/client/api/uploadsApi', () => ({
+  sendUploadCommand: mocks.run,
 }))
 vi.mock('@/shared/utils/download', () => ({ downloadFile: mocks.download }))
 vi.mock('@/shared/hooks/useCommand', () => ({
@@ -30,6 +40,8 @@ const asset: AssetSummary = {
 }
 class Transfer {
   static sent: Transfer[] = []
+  static automatic = true
+  aborted = false
   upload: {
     onprogress?: (event: {
       lengthComputable: boolean
@@ -44,10 +56,12 @@ class Transfer {
   open = vi.fn()
   setRequestHeader = vi.fn()
   abort() {
+    this.aborted = true
     this.onabort?.()
   }
   send() {
     Transfer.sent.push(this)
+    if (!Transfer.automatic) return
     queueMicrotask(() => {
       this.upload.onprogress?.({ lengthComputable: true, loaded: 5, total: 10 })
       this.onload?.()
@@ -59,6 +73,7 @@ beforeEach(() => {
   mocks.download.mockReset()
   mocks.latest.mockReset()
   Transfer.sent = []
+  Transfer.automatic = true
   vi.stubGlobal('XMLHttpRequest', Transfer)
 })
 afterEach(() => {
@@ -144,13 +159,17 @@ it('does not cancel a finalized server job when scanning rejects the file', asyn
     rejectionCode: 'MALWARE_DETECTED',
   })
   const onReady = vi.fn()
-  mount({ onReady })
+  const refresh = vi.fn()
+  mount({ onReady, onRefresh: refresh })
   await userEvent.upload(
     screen.getByLabelText('Choose project files'),
     new File(['data'], 'notes.txt', { type: 'text/plain' }),
   )
-  expect(await screen.findByText('MALWARE_DETECTED')).toBeVisible()
+  expect(
+    await screen.findByText('Malware detected. This file cannot be used.'),
+  ).toBeVisible()
   expect(onReady).not.toHaveBeenCalled()
+  expect(refresh).toHaveBeenCalledTimes(2)
   expect(mocks.run.mock.calls.some((call) => call[2] === 'DELETE')).toBe(false)
 })
 it('requires the pending answer save to finish before deleting a file', async () => {
@@ -267,4 +286,272 @@ it('refreshes a slow finalized job instead of allocating a duplicate upload', as
   })
   expect(ready).toHaveBeenCalledWith(id)
   expect(mocks.run).toHaveBeenCalledTimes(2)
+})
+
+function reservations() {
+  let index = 0
+  mocks.run.mockImplementation(async (path: string) => {
+    if (path.endsWith('/uploads'))
+      return {
+        assetId: `asset-${++index}`,
+        uploadId: `upload-${index}`,
+        putUrl: 'https://storage.example.test/signed',
+        requiredHeaders: {},
+      }
+    return {}
+  })
+  mocks.latest.mockResolvedValue({ ...asset, state: 'READY' })
+}
+function row(name: string) {
+  return screen.getByRole('group', { name: `Upload ${name}` })
+}
+
+it('limits active transfers to three, freezes queued original choices and cancels pending files', async () => {
+  Transfer.automatic = false
+  reservations()
+  const view = mount({ image: true, allowedExtensions: ['png'], maxFiles: 5 })
+  await userEvent.upload(
+    screen.getByLabelText('Choose images from library or files'),
+    [1, 2, 3, 4].map(
+      (n) => new File(['image'], `photo-${n}.png`, { type: 'image/png' }),
+    ),
+  )
+  await waitFor(() => expect(Transfer.sent).toHaveLength(3))
+  await userEvent.click(screen.getByLabelText('Keep originals for this upload'))
+  expect(
+    mocks.run.mock.calls
+      .filter((c) => c[0].endsWith('/uploads'))
+      .every((c) => c[1].keepOriginal),
+  ).toBe(true)
+  await userEvent.click(
+    within(row('photo-4.png')).getByRole('button', { name: 'Cancel' }),
+  )
+  await userEvent.click(
+    within(row('photo-1.png')).getByRole('button', { name: 'Cancel' }),
+  )
+  await waitFor(() => expect(Transfer.sent[0].aborted).toBe(true))
+  expect(Transfer.sent).toHaveLength(3)
+  expect(
+    mocks.run.mock.calls.some(
+      (c) => c[2] === 'DELETE' && c[0].endsWith('upload-1'),
+    ),
+  ).toBe(true)
+  await act(async () => view.unmount())
+})
+
+it('shows real byte progress and indeterminate transfer instead of invented percentages', async () => {
+  Transfer.automatic = false
+  reservations()
+  const view = mount()
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'bytes.txt', { type: 'text/plain' }),
+  )
+  await waitFor(() => expect(Transfer.sent).toHaveLength(1))
+  act(() =>
+    Transfer.sent[0].upload.onprogress?.({
+      lengthComputable: false,
+      loaded: 0,
+      total: 0,
+    }),
+  )
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('value')
+  act(() =>
+    Transfer.sent[0].upload.onprogress?.({
+      lengthComputable: true,
+      loaded: 72,
+      total: 100,
+    }),
+  )
+  expect(screen.getByRole('progressbar')).toHaveAttribute('value', '72')
+  await act(async () => view.unmount())
+})
+
+it('retries an interrupted transfer with the same reservation intent and original choice', async () => {
+  Transfer.automatic = false
+  const reservation = {
+    assetId: id,
+    uploadId: 'upload',
+    putUrl: 'https://storage.example.test/signed',
+    requiredHeaders: {},
+  }
+  mocks.run.mockImplementation(async (path: string) =>
+    path.endsWith('/uploads') ? reservation : {},
+  )
+  mocks.latest
+    .mockResolvedValueOnce({ ...asset, state: 'RESERVED' })
+    .mockResolvedValue({ ...asset, state: 'READY' })
+  const ready = vi.fn()
+  mount({ onReady: ready })
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'retry.txt', { type: 'text/plain' }),
+  )
+  await waitFor(() => expect(Transfer.sent).toHaveLength(1))
+  act(() => Transfer.sent[0].onerror?.())
+  await userEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(Transfer.sent).toHaveLength(2))
+  const calls = mocks.run.mock.calls.filter((c) => c[0].endsWith('/uploads'))
+  expect(calls).toHaveLength(2)
+  expect(calls[0][3]).toEqual(calls[1][3])
+  expect(calls[0][1]).toEqual(calls[1][1])
+  expect(mocks.run.mock.calls.some((c) => c[2] === 'DELETE')).toBe(false)
+  act(() => Transfer.sent[1].onload?.())
+  await waitFor(() => expect(ready).toHaveBeenCalledWith(id))
+})
+
+it('reconciles an uncertain finalize response without deleting or uploading the file twice', async () => {
+  mocks.run
+    .mockResolvedValueOnce({
+      assetId: id,
+      uploadId: 'upload',
+      putUrl: 'https://storage.example.test/signed',
+      requiredHeaders: {},
+    })
+    .mockRejectedValueOnce({ status: 'FETCH_ERROR' })
+  mocks.latest.mockResolvedValue({ ...asset, state: 'READY' })
+  const ready = vi.fn()
+  mount({ onReady: ready })
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'finalize.txt', { type: 'text/plain' }),
+  )
+  await userEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(ready).toHaveBeenCalledWith(id))
+  expect(Transfer.sent).toHaveLength(1)
+  expect(mocks.run).toHaveBeenCalledTimes(2)
+})
+
+it('keeps files while offline and resumes queued work only when the connection returns', async () => {
+  reservations()
+  const ready = vi.fn()
+  mount({ onReady: ready })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'offline.txt', { type: 'text/plain' }),
+  )
+  expect(mocks.run).not.toHaveBeenCalled()
+  expect(
+    screen.getByText(/Selected files stay in this open page/),
+  ).toBeVisible()
+  act(() => window.dispatchEvent(new Event('online')))
+  await waitFor(() => expect(ready).toHaveBeenCalled())
+})
+
+it('stops unauthorized retries and preserves a clear session recovery message', async () => {
+  mocks.run.mockRejectedValue({
+    status: 401,
+    data: { code: 'CLIENT_ACCESS_UNAVAILABLE' },
+  })
+  mount()
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'private.txt', { type: 'text/plain' }),
+  )
+  expect(await screen.findByRole('button', { name: 'Retry' })).toBeDisabled()
+  expect(
+    screen.getAllByText(/Request a fresh project link/).length,
+  ).toBeGreaterThan(0)
+  expect(mocks.run).toHaveBeenCalledOnce()
+  expect(Transfer.sent).toHaveLength(0)
+})
+
+it('explains quota exhaustion and keeps the selected file for a deliberate retry', async () => {
+  mocks.run.mockRejectedValue({
+    status: 409,
+    data: { code: 'STORAGE_QUOTA_EXCEEDED' },
+  })
+  mount()
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'quota.txt', { type: 'text/plain' }),
+  )
+  expect(await screen.findByText(/Not enough workspace storage/)).toBeVisible()
+  expect(row('quota.txt')).toBeVisible()
+  expect(mocks.run).toHaveBeenCalledOnce()
+})
+
+it('snapshots opt-out for images and offers a separate original download', async () => {
+  reservations()
+  const ready = vi.fn()
+  mount({
+    onReady: ready,
+    image: true,
+    allowedExtensions: ['png'],
+    assets: [
+      {
+        ...asset,
+        originalName: 'source.png',
+        contentType: 'image/png',
+        availableVariants: ['ORIGINAL', 'WORKING'],
+      },
+    ],
+  })
+  await userEvent.click(screen.getByLabelText('Keep originals for this upload'))
+  expect(
+    screen.getByText(/Discarded originals cannot be recovered/),
+  ).toBeVisible()
+  await userEvent.upload(
+    screen.getByLabelText('Choose images from library or files'),
+    new File(['data'], 'small.png', { type: 'image/png' }),
+  )
+  await waitFor(() => expect(ready).toHaveBeenCalled())
+  expect(
+    mocks.run.mock.calls.find((c) => c[0].endsWith('/uploads'))?.[1]
+      .keepOriginal,
+  ).toBe(false)
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Download original' }),
+  )
+  expect(mocks.run.mock.calls.some((c) => c[1]?.variant === 'ORIGINAL')).toBe(
+    true,
+  )
+})
+
+it('retries an uncertain reservation with the same intent and preserves document originals', async () => {
+  reservations()
+  const reserve = mocks.run.getMockImplementation()!
+  let first = true
+  mocks.run.mockImplementation((...args) => {
+    if (first) {
+      first = false
+      return Promise.reject({ status: 'FETCH_ERROR' })
+    }
+    return reserve(...args)
+  })
+  const ready = vi.fn()
+  mount({ onReady: ready })
+  await userEvent.click(screen.getByLabelText('Keep originals for this upload'))
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'uncertain.txt', { type: 'text/plain' }),
+  )
+  await userEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+  await waitFor(() => expect(ready).toHaveBeenCalled())
+  const calls = mocks.run.mock.calls.filter((c) => c[0].endsWith('/uploads'))
+  expect(calls).toHaveLength(2)
+  expect(calls[0][1]).toEqual(calls[1][1])
+  expect(calls[0][1].keepOriginal).toBe(true)
+  expect(calls[0][3]).toEqual(calls[1][3])
+  expect(Transfer.sent).toHaveLength(1)
+})
+
+it('aborts and releases a known unfinalized transfer on unmount', async () => {
+  reservations()
+  Transfer.automatic = false
+  const view = mount()
+  await userEvent.upload(
+    screen.getByLabelText('Choose project files'),
+    new File(['data'], 'leaving.txt', { type: 'text/plain' }),
+  )
+  await waitFor(() => expect(Transfer.sent).toHaveLength(1))
+  view.unmount()
+  await waitFor(() =>
+    expect(mocks.run.mock.calls.some((c) => c[2] === 'DELETE')).toBe(true),
+  )
+  expect(Transfer.sent[0].aborted).toBe(true)
+  expect(mocks.run.mock.calls.some((c) => c[0].endsWith('/finalize'))).toBe(
+    false,
+  )
 })
