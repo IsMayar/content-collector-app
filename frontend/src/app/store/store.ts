@@ -6,6 +6,7 @@ import authReducer, {
   identityReceived,
   accessRejected,
   signedOut,
+  anonymousBootstrap,
 } from '@/features/auth/store/authSlice'
 import type { AuthState } from '@/features/auth/types/auth.types'
 import { agencyApi } from '@/services/api/baseApi'
@@ -20,6 +21,12 @@ export const createAppStore = () => {
     effect: (_action, api) => {
       api.dispatch(agencyApi.util.resetApiState())
       api.dispatch(clientApi.util.resetApiState())
+    },
+  })
+  sessionListener.startListening({
+    actionCreator: anonymousBootstrap,
+    effect: (_action, api) => {
+      api.dispatch(agencyApi.util.resetApiState())
     },
   })
   sessionListener.startListening({

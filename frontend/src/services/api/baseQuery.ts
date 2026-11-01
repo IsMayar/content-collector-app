@@ -2,6 +2,7 @@ import { env } from '@/config/env'
 import { tokenSchema } from '@/features/auth/schemas/authResponseSchemas'
 import {
   accessRejected,
+  anonymousBootstrap,
   signedOut,
   tokenReceived,
 } from '@/features/auth/store/authSlice'
@@ -63,7 +64,16 @@ export function refreshSession(api: BaseQueryApi): Promise<boolean> {
     )
     if (auth(api).generation !== generation) return false
     if (response.error) {
-      if (response.error.status === 401) api.dispatch(signedOut())
+      if (response.error.status === 401) {
+        const current = auth(api)
+        // An absent agency cookie on first load must not cancel an independent client request.
+        const initiallyAnonymous =
+          current.status === 'loading' &&
+          current.user === null &&
+          current.accessToken === null &&
+          current.memberships.length === 0
+        api.dispatch(initiallyAnonymous ? anonymousBootstrap() : signedOut())
+      }
       return false
     }
     const token = tokenSchema.safeParse(response.data)

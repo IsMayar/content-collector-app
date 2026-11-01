@@ -15,6 +15,11 @@ const initialState: AuthState = {
   workspaceId: null,
   generation: 0,
 }
+const anonymousState = (generation: number): AuthState => ({
+  ...initialState,
+  status: 'anonymous',
+  generation: generation + 1,
+})
 const slice = createSlice({
   name: 'auth',
   initialState,
@@ -32,11 +37,10 @@ const slice = createSlice({
         state.workspaceId = payload.memberships[0]?.workspaceId ?? null
     },
     signedOut(state) {
-      return {
-        ...initialState,
-        status: 'anonymous',
-        generation: state.generation + 1,
-      }
+      return anonymousState(state.generation)
+    },
+    anonymousBootstrap(state) {
+      return anonymousState(state.generation)
     },
     bootstrapFailed(state) {
       state.status = 'error'
@@ -55,6 +59,7 @@ export const {
   tokenReceived,
   identityReceived,
   signedOut,
+  anonymousBootstrap,
   bootstrapFailed,
   bootstrapStarted,
   workspaceSelected,

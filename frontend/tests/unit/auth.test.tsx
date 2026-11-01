@@ -57,6 +57,62 @@ describe('safe return destinations', () => {
       screen.queryByRole('heading', { name: 'We couldn’t check your session' }),
     ).not.toBeInTheDocument()
   })
+  it('keeps an in-flight client exchange independent of an anonymous agency bootstrap', async () => {
+    let finishRefresh!: () => void
+    let finishClientCsrf!: () => void
+    let refreshSeen!: () => void
+    let clientCsrfSeen!: () => void
+    const refreshReady = new Promise<void>((resolve) => {
+      refreshSeen = resolve
+    })
+    const clientCsrfReady = new Promise<void>((resolve) => {
+      clientCsrfSeen = resolve
+    })
+    const refreshGate = new Promise<void>((resolve) => {
+      finishRefresh = resolve
+    })
+    const clientGate = new Promise<void>((resolve) => {
+      finishClientCsrf = resolve
+    })
+    let csrfCalls = 0
+    server.use(
+      http.get('http://localhost:5173/api/v1/auth/csrf', async () => {
+        if (++csrfCalls > 1) {
+          clientCsrfSeen()
+          await clientGate
+        }
+        return HttpResponse.json({ token: mockState.csrf })
+      }),
+      http.post('http://localhost:5173/api/v1/auth/refresh', async () => {
+        refreshSeen()
+        await refreshGate
+        return HttpResponse.json(
+          { code: 'INVALID_CREDENTIALS' },
+          { status: 401 },
+        )
+      }),
+    )
+    try {
+      const { store, user } = mount('/client/access#token=client-demo')
+      await refreshReady
+      await user.click(
+        await screen.findByRole('button', { name: 'Open my project' }),
+      )
+      await clientCsrfReady
+      finishRefresh()
+      await waitFor(() =>
+        expect(store.getState().auth.status).toBe('anonymous'),
+      )
+      finishClientCsrf()
+      expect(
+        (await screen.findAllByRole('button', { name: 'Continue section' }))[0],
+      ).toBeVisible()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    } finally {
+      finishRefresh()
+      finishClientCsrf()
+    }
+  })
   it.each([
     'https://evil.test',
     '//evil.test',
