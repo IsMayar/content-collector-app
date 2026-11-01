@@ -497,7 +497,7 @@ Milestone status: In progress
 | Task | Deliverable                                 | Acceptance                                                   | Status      |
 | ---- | ------------------------------------------- | ------------------------------------------------------------ | ----------- |
 | T18  | Private upload reservations and quota       | Concurrent reservations remain within allowance              | Complete |
-| T19  | Scanner, canonical copy and image variants  | Unsafe staging bytes never become public READY content       | Not started |
+| T19  | Scanner, canonical copy and image variants  | Unsafe staging bytes never become public READY content       | Complete |
 | T20  | Phone upload queue and original option      | Real-device photo and error journeys pass                    | Not started |
 | T21  | Comments and review decisions               | Internal comments never reach clients; decision race handled | Not started |
 | T22  | Project completion, reopening and archive   | Progress and lifecycle guards use the same evaluator         | Not started |
@@ -773,3 +773,14 @@ T17 implementation commits: `616acb5` and `ae0183d`; frontend/integration: `0d41
 ## T18 original-roadmap scope reconciliation — 1 November 2026
 
 The new attachment calls T18 agency review, but explicitly requires the original specification to govern discrepancies. Section22 defines T18 as Private upload reservations and quota; comments/review decisions remain T21. Existing T16/T17 private-upload/immutable-retention work is preserved. No new review subsystem, approval, comment, export, or migration. Quota problems now include safe usedBytes/availableBytes, including outstanding reservations in the available calculation. Current focused storage suite:42 passed, zero failures/errors/skips (40 preserved +2 quota HTTP cases). Final current-code verification passed:865 backend tests (863 preserved +2 new),161 frontend unit tests, strict TypeScript/production build, zero-warning lint/formatting,2 real HTTPS lifecycles with MSW disabled,75/75 complete responsive cases and1/1 production PWA. Fresh/upgrade/restart Flyway, Hibernate validation and executable JAR packaging passed. T18 is Complete for its original private reservation/quota acceptance; no later review workflow is claimed. Implementation commit:`68a7d35`. The existing bundle-size advisory remains nonfatal. M4 remains In progress. [Exact scope, contracts and evidence](T18_AGENCY_REVIEW.md). T04/T05/T06/T11/T16/T22 gates remain open.
+
+
+## M4 / T19 — scanner, canonical copy and image variants — 1 November 2026
+
+**T19 Complete for original-roadmap local acceptance; M3 and M4 remain In progress.** Findings were recorded before production edits in [T19_IMPLEMENTATION.md](T19_IMPLEMENTATION.md). Existing private canonical writes, quota and immutable history are preserved. ClamAV requires a complete framed clean verdict; decoder outputs independently enforce bounded PNG chunks/CRCs/dimensions and stripped metadata without host pixel decompression. The matching t19 worker removes orientation metadata after normalizing pixels. Existing environments must explicitly select the rebuilt image. No new API, migration, dependency, UI redesign or later task.
+
+Final evidence:110 focused attachment tests,889 backend tests (865 preserved +24 new),162 frontend unit tests (161 preserved +1 deterministic client/agency race regression), strict TypeScript/production build, zero-warning lint/formatting,2 actual HTTPS lifecycles with MSW off,75/75 responsive cases in one complete current-source run and1/1 fresh production PWA passed. Flyway/Hibernate/restart and executable JAR checks passed. The existing bundle-size advisory remains.
+
+Earlier runs are recorded accurately:5 focused image/retry failures were fixed in the actual worker;1 full-backend catalog session setup error was addressed with deterministic fixture time without changing production security;1 initial HTTPS cross-tab error did not recur and has better redacted diagnostics; the first responsive run was74/1, then an invitation/bootstrap race was reproduced and corrected without weakening assertions/timeouts. Initial anonymous agency bootstrap now leaves the independent client API intact; explicit logout/authenticated-session loss still clear both caches. The final full responsive run passed75, not isolated reruns.
+
+T04/T05/T06/T11/T16/T22 and production storage/scanner/codec/device gates remain open. Original specifications, templates and V1–V15 are unchanged. Commits:`cab063b`, `7bd34a1`, `74f277d`, `a6b7a3b`; final documentation hash and working tree are reported separately. No push.

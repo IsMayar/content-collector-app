@@ -498,7 +498,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Local services failed to start.' }
 docker compose -f compose.yaml -f compose.storage.yaml ps
 # The wait above requires a healthy scanner; first startup downloads definitions.
 docker compose -f compose.yaml -f compose.storage.yaml logs --tail 30 scanner
-docker build -t collector-image-worker:t16 .\storage\image-worker
+docker build -t collector-image-worker:t19 .\storage\image-worker
 if ($LASTEXITCODE -ne 0) { throw 'Image sandbox build failed.' }
 .\mvnw.cmd dependency:build-classpath '-Dmdep.outputFile=target/storage-classpath.txt'
 if ($LASTEXITCODE -ne 0) { throw 'Storage tool classpath failed.' }
@@ -552,3 +552,22 @@ if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS checks failed.' }
 These use isolated disposable PostgreSQL/private-storage/scanner fixtures; they do not reuse or erase the development database. Production IAM/scanner/device acceptance remains separate.
 
 T18 final local acceptance:42 focused storage,865 backend,161 frontend unit,2 real HTTPS (MSW off),75/75 responsive and1/1 production PWA passed; TypeScript/build/lint/format passed. Executable JAR and Flyway/Hibernate checks passed. M4 and independent release gates remain In progress; see the T18 report for scope and exact evidence.
+
+
+## T19 scanner and image variants — 1 November 2026
+
+Rebuild the worker from current source as `collector-image-worker:t19`. Existing .env files are preserved by initialization; explicitly set `$env:IMAGE_WORKER_IMAGE = 'collector-image-worker:t19'` before starting the backend, or deliberately update that single local property. The previous t16 image emits orientation metadata rejected by the hardened output boundary. Scanning fails closed on incomplete replies; derivatives enforce separate working/thumbnail bounds, CRC/container integrity and stripped metadata. No migration, API, dependency or frontend change. Production provider/scanner/device gates remain independent. [Report and acceptance evidence](../docs/T19_IMPLEMENTATION.md).
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+docker build -t collector-image-worker:t19 .\storage\image-worker
+if ($LASTEXITCODE -ne 0) { throw 'Worker image build failed.' }
+.\mvnw.cmd '-Dtest=AttachmentStorageTests,AttachmentValidationTests,SandboxedImageProcessorTests,ClamAvScannerTests' test
+if ($LASTEXITCODE -ne 0) { throw 'T19 focused checks failed.' }
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test
+if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS checks failed.' }
+```
+
+T19 final local evidence:110 focused attachment,889 backend,162 frontend unit,2 real HTTPS (MSW off),75/75 complete responsive and1/1 fresh production PWA passed; TypeScript/build/lint/format and Flyway/Hibernate/JAR checks passed. A reproduced frontend regression now separates initial anonymous agency bootstrap from explicit sign-out so an independent client exchange is not canceled; confirmed logout/authenticated expiry still clear both caches. T19 is Complete locally; M3/M4 and independent release gates remain In progress. Earlier failed stages and unresolved diagnostic risk are recorded in the T19 report.
