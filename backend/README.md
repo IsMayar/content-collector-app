@@ -531,3 +531,24 @@ See [T16 implementation and evidence](../docs/T16_PRIVATE_ATTACHMENTS.md) for AP
 ## T17 client submission and withdrawal
 
 Run the existing backend/private-storage setup above; Flyway applies V15 automatically and Hibernate remains validate. Clients submit one saved visible item using expectedAnswerVersion and expectedStructureVersion, then can explicitly withdraw the current submitted version. Immutable history and retained private files survive later draft edits. Assigned readers can use the Submitted versions project tab; the review queue separately requires review permission. No approval/export/project-reopen workflow is enabled. [API inventory, local commands, focused tests and actual evidence](../docs/T17_CLIENT_SUBMISSIONS.md).
+
+
+## T18 private upload quota — 1 November 2026
+
+Original Section 22 T18 is private upload reservations/quota, not agency review. Existing private-upload setup above is reused; no new environment variable, dependency or migration. Quota rejection remains HTTP409 STORAGE_QUOTA_EXCEEDED and now includes usedBytes (retained content) and availableBytes (capacity after retained bytes and outstanding reservations), with the standard safe problem/correlation envelope. Requests are authorized before usage is inspected. [Scope correction, contracts and evidence](../docs/T18_AGENCY_REVIEW.md).
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+docker info
+if ($LASTEXITCODE -ne 0) { throw 'Start Docker Desktop and wait for the Linux engine.' }
+.\mvnw.cmd '-Dtest=AttachmentStorageTests' test
+if ($LASTEXITCODE -ne 0) { throw 'Private upload checks failed.' }
+.\mvnw.cmd clean verify
+if ($LASTEXITCODE -ne 0) { throw 'Backend verification failed.' }
+.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck' test
+if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS checks failed.' }
+```
+
+These use isolated disposable PostgreSQL/private-storage/scanner fixtures; they do not reuse or erase the development database. Production IAM/scanner/device acceptance remains separate.
+
+T18 final local acceptance:42 focused storage,865 backend,161 frontend unit,2 real HTTPS (MSW off),75/75 responsive and1/1 production PWA passed; TypeScript/build/lint/format passed. Executable JAR and Flyway/Hibernate checks passed. M4 and independent release gates remain In progress; see the T18 report for scope and exact evidence.

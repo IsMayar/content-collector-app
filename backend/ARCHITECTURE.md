@@ -344,3 +344,10 @@ Attachment HTTP/service/repository/entity/dto/security/storage subpackages follo
 ## T17 immutable submissions
 
 The submission feature uses controller/dto/repository/service subpackages and reuses existing client/agency authorization and scoped collection/attachment persistence. V15 adds append-only item revisions, revision-file retention and content-free integration events. Project locks serialize submission/withdrawal with draft/structure/grant changes; T11 semantic reopening remains fail-closed. See [T17 contracts, package trees, immutability and evidence](../docs/T17_CLIENT_SUBMISSIONS.md). No approval/review decisions or project lifecycle endpoints are added.
+
+
+## T18 original-roadmap quota acceptance — 1 November 2026
+
+The new task attachment's review title differs from original Section 22. Its precedence instruction keeps T18 scoped to private upload reservations and quota; review decisions remain T21. Existing attachment controller/service/repository/security/storage ownership and transactional workspace-before-project locking are reused. No review package, duplicate entity, route or migration is created. AttachmentRepository reads only the already-authorized locked workspace's quota figures after a failed conditional reservation; common.error.StorageQuotaException carries safe usedBytes/availableBytes into the existing problem handler. Available capacity excludes outstanding reservations. Existing session, CSRF, immutable revisions and private downloads are unchanged. [Scope, exact contract and verification](../docs/T18_AGENCY_REVIEW.md).
+
+T18 final local acceptance:42 focused storage,865 backend,161 frontend unit,2 real HTTPS (MSW off),75/75 responsive and1/1 production PWA passed; TypeScript/build/lint/format passed. Executable JAR and Flyway/Hibernate checks passed. M4 and independent release gates remain In progress; see the T18 report for scope and exact evidence.

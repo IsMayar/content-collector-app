@@ -303,3 +303,8 @@ The real canUpload flag includes live subscription write eligibility. Finalized 
 ## T17 immutable item submissions
 
 Catalog submit/withdraw routes are implemented with required Idempotency-Key, existing CSRF/client cookie, answer/structure/item version checks and standard problems. Existing item GET adds own immutable revisions; checklist adds canSubmit (defaults false on an older server). Agency revision summaries/detail require project read; review queue additionally requires canReview. No review-decision API or project reopening is implied. Submitted asset references extend T16 retention; canonical objects remain private and retained downloads still reauthorize live access. T11 semantic changes remain409 REOPEN_REQUIRED. [Complete states, contracts, package ownership, limits and actual evidence](T17_CLIENT_SUBMISSIONS.md).
+
+
+## T18 original-roadmap quota contract — 1 November 2026
+
+POST /api/v1/client/projects/{projectId}/uploads retains its existing client-cookie/CSRF/idempotency contract. Its 409 STORAGE_QUOTA_EXCEEDED problem additionally returns usedBytes and availableBytes, as required by guide Section 10.3. Available means max(0, allowance - retained bytes - outstanding reservations), read under the reservation's workspace lock. The existing frontend transport handles the unchanged problem code/detail; no second client, route, schema or UI redesign is needed. No supplied contract/specification file is edited. The task attachment's agency-review description is deferred under its explicit original-roadmap precedence rule; existing T17 revision and queue reads remain unchanged. [Full scope and evidence](T18_AGENCY_REVIEW.md).

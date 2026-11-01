@@ -1,8 +1,8 @@
 # Implementation status
 
-Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 28 October 2026.
+Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 1 November 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4 is In progress; M5–M7 remain Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -492,11 +492,11 @@ Milestone status: In progress
 
 ### Milestone M4 Files review and exports
 
-Milestone status: Not started
+Milestone status: In progress
 
 | Task | Deliverable                                 | Acceptance                                                   | Status      |
 | ---- | ------------------------------------------- | ------------------------------------------------------------ | ----------- |
-| T18  | Private upload reservations and quota       | Concurrent reservations remain within allowance              | Not started |
+| T18  | Private upload reservations and quota       | Concurrent reservations remain within allowance              | Complete |
 | T19  | Scanner, canonical copy and image variants  | Unsafe staging bytes never become public READY content       | Not started |
 | T20  | Phone upload queue and original option      | Real-device photo and error journeys pass                    | Not started |
 | T21  | Comments and review decisions               | Internal comments never reach clients; decision race handled | Not started |
@@ -768,3 +768,8 @@ Client final confirmation waits for autosaves/verified uploads, uses one in-flig
 Independent gates remain open: T04 hosted CI, T05 real provider/resend, T06 deployment/TLS/retention, T11 collected/approved reopening/draft revalidation, T16 production storage/scanner/codec/camera and agency file-library contract, and T22 publication/lifecycle. T16 and M2/M3 remain In progress. Original T01–T16 evidence and roadmap labels are preserved. No production provider or full-MVP claim; no push.
 
 T17 implementation commits: `616acb5` and `ae0183d`; frontend/integration: `0d41e8e`. Final documentation commit and clean working tree are reported separately. No push.
+
+
+## T18 original-roadmap scope reconciliation — 1 November 2026
+
+The new attachment calls T18 agency review, but explicitly requires the original specification to govern discrepancies. Section22 defines T18 as Private upload reservations and quota; comments/review decisions remain T21. Existing T16/T17 private-upload/immutable-retention work is preserved. No new review subsystem, approval, comment, export, or migration. Quota problems now include safe usedBytes/availableBytes, including outstanding reservations in the available calculation. Current focused storage suite:42 passed, zero failures/errors/skips (40 preserved +2 quota HTTP cases). Final current-code verification passed:865 backend tests (863 preserved +2 new),161 frontend unit tests, strict TypeScript/production build, zero-warning lint/formatting,2 real HTTPS lifecycles with MSW disabled,75/75 complete responsive cases and1/1 production PWA. Fresh/upgrade/restart Flyway, Hibernate validation and executable JAR packaging passed. T18 is Complete for its original private reservation/quota acceptance; no later review workflow is claimed. Implementation commit:`68a7d35`. The existing bundle-size advisory remains nonfatal. M4 remains In progress. [Exact scope, contracts and evidence](T18_AGENCY_REVIEW.md). T04/T05/T06/T11/T16/T22 gates remain open.
