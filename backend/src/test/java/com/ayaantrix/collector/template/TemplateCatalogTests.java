@@ -59,11 +59,20 @@ class TemplateCatalogTests {
     static final UUID VERSION=BuiltInTemplateSeeder.versionId(KEY,1);
     record Actor(UUID id,String access,Jwt jwt){@Override public String toString(){return "SyntheticActor[redacted]";}}
     record Tenant(Actor actor,UUID workspace) {String root(){return "/api/v1/workspaces/"+workspace;}}
+    // Catalog authorization tests do not exercise elapsed time. Keep fixture sessions
+    // independent of host clock adjustments, like the existing project integration fixtures.
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods=false)
+    static class Configuration {
+        @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
+        java.time.Clock catalogClock() {
+            return java.time.Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), java.time.ZoneOffset.UTC);
+        }
+    }
     private ConfigurableApplicationContext context;private SigningKeyFixture keys;
     private JdbcTemplate jdbc;private JsonMapper json;private MockMvc mvc;private String hash;
     @BeforeAll void start() throws Exception { keys=SigningKeyFixture.create(directory,"catalog-test");open();hash=context.getBean(PasswordEncoder.class).encode(PASSWORD); }
     ConfigurableApplicationContext start(String url){
-        return new SpringApplicationBuilder(CollectorApplication.class).profiles("test").run(
+        return new SpringApplicationBuilder(CollectorApplication.class,Configuration.class).profiles("test").run(
             "--server.port=0","--spring.datasource.url="+url,"--spring.datasource.username="+POSTGRES.getUsername(),"--spring.datasource.password="+POSTGRES.getPassword(),
             "--collector.jwt.private-key="+keys.privateFile(),"--collector.jwt.public-keys="+keys.publicFile(),"--collector.jwt.key-id="+keys.kid(),
             "--collector.jwt.issuer=https://catalog.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+Base64.getEncoder().encodeToString(new byte[32]),
