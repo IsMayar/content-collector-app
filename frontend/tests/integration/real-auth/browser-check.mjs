@@ -2366,7 +2366,12 @@ for await (const line of lines) {
         ),
       })
     }
-    response(false, error.name)
+    const diagnostic = String(error.message || '')
+      .split('\n')[0]
+      .replace(/https?:\/\/[^\s]+/g, '[private URL]')
+      .replace(/[A-Za-z0-9_-]{40,}/g, '[redacted]')
+      .slice(0, 500)
+    response(false, `${error.name}: ${diagnostic}`)
   }
 }
 await browser?.close()
