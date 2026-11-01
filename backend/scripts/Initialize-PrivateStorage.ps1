@@ -17,7 +17,7 @@ $defaults = @{
     S3_ENDPOINT='http://127.0.0.1:8333'; S3_PUBLIC_ENDPOINT='http://127.0.0.1:8333'
     S3_REGION='us-east-1'; S3_BUCKET_STAGING='collector-staging'; S3_BUCKET_PRIVATE='collector-private'
     S3_ACCESS_KEY=(New-PrivateKey); S3_SECRET_KEY=(New-PrivateKey)
-    CLAMAV_HOST='127.0.0.1'; CLAMAV_PORT='13310'; IMAGE_WORKER_IMAGE='collector-image-worker:t16'
+    CLAMAV_HOST='127.0.0.1'; CLAMAV_PORT='13310'; IMAGE_WORKER_IMAGE='collector-image-worker:t19'
 }
 foreach ($key in $defaults.Keys) {
     if (!$properties.ContainsKey($key)) {

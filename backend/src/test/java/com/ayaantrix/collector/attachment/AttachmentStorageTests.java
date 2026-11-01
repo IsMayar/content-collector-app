@@ -1016,6 +1016,95 @@ class AttachmentStorageTests {
                 .isInstanceOf(ApiException.class);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @ValueSource(strings = {"png", "jpg"})
+    void displayVariantsStripMetadataNormalizeOrientationAndNeverUpscale(String format)
+            throws Exception {
+        var t = target("IMAGE");
+        var image =
+                new java.awt.image.BufferedImage(12, 6, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        image.setRGB(0, 0, 0x00ff0000);
+        var source = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, format, source);
+        byte[] original = source.toByteArray();
+        var tagged = new java.io.ByteArrayOutputStream();
+        if (format.equals("jpg")) {
+            // EXIF orientation6 rotates the display 90 degrees; the original must remain unchanged.
+            byte[] exif = {
+                69, 120, 105, 102, 0, 0, 73, 73, 42, 0, 8, 0, 0, 0, 1, 0, 18, 1, 3, 0, 1, 0, 0, 0,
+                6, 0, 0, 0, 0, 0, 0, 0
+            };
+            tagged.write(original, 0, 2);
+            var data = new java.io.DataOutputStream(tagged);
+            data.writeShort(0xffe1);
+            data.writeShort(exif.length + 2);
+            data.write(exif);
+            tagged.write(original, 2, original.length - 2);
+        } else {
+            tagged.write(original, 0, 33);
+            var data = new java.io.DataOutputStream(tagged);
+            byte[] name = "tEXt".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+            byte[] text =
+                    "Comment\0synthetic GPS location"
+                            .getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+            data.writeInt(text.length);
+            data.write(name);
+            data.write(text);
+            var crc = new java.util.zip.CRC32();
+            crc.update(name);
+            crc.update(text);
+            data.writeInt((int) crc.getValue());
+            tagged.write(original, 33, original.length - 33);
+        }
+        byte[] bytes = tagged.toByteArray();
+        var r =
+                reserve(
+                        t,
+                        "metadata." + format,
+                        format.equals("jpg") ? "image/jpeg" : "image/png",
+                        bytes);
+        transfer(r, bytes);
+        finish(t, r);
+        var asset = files().read(t.cookie(), t.f().project().id(), r.assetId());
+        assertThat(asset.state()).isEqualTo("READY");
+        assertThat(asset.availableVariants())
+                .containsExactlyInAnyOrder("ORIGINAL", "WORKING", "THUMBNAIL");
+        for (String variant : asset.availableVariants()) {
+            var url =
+                    files().clientDownload(t.cookie(), t.f().project().id(), r.assetId(), variant)
+                            .get("url");
+            var response =
+                    java.net.http.HttpClient.newHttpClient()
+                            .send(
+                                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(url))
+                                            .GET()
+                                            .build(),
+                                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+            assertThat(response.statusCode()).isEqualTo(200);
+            if (variant.equals("ORIGINAL")) {
+                assertThat(response.body()).isEqualTo(bytes);
+                continue;
+            }
+            var decoded =
+                    javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(response.body()));
+            assertThat(decoded.getWidth()).isEqualTo(format.equals("jpg") ? 6 : 12);
+            assertThat(decoded.getHeight()).isEqualTo(format.equals("jpg") ? 12 : 6);
+            var buffer = java.nio.ByteBuffer.wrap(response.body());
+            for (int offset = 8; offset < response.body().length; ) {
+                int length = buffer.getInt(offset);
+                String chunk =
+                        new String(
+                                response.body(),
+                                offset + 4,
+                                4,
+                                java.nio.charset.StandardCharsets.US_ASCII);
+                assertThat(chunk).isNotIn("eXIf", "tEXt", "zTXt", "iTXt");
+                offset += 12 + length;
+            }
+        }
+        assertThat(reserved(t)).isZero();
+    }
+
     @Test
     void attachmentLimitCountsPendingReservations() {
         var t = target("FILE");

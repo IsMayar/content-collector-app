@@ -157,7 +157,7 @@ public final class StorageFixture implements AutoCloseable {
             "--S3_SECRET_KEY=" + SECRET,
             "--CLAMAV_HOST=" + scannerHost(),
             "--CLAMAV_PORT=" + scannerPort(),
-            "--IMAGE_WORKER_IMAGE=collector-image-worker:t16"
+            "--IMAGE_WORKER_IMAGE=collector-image-worker:t19"
         };
     }
 

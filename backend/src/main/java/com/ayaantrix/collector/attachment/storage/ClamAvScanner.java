@@ -33,8 +33,17 @@ public class ClamAvScanner implements MalwareScanner {
             out.flush();
             var in = socket.getInputStream();
             var response = new ByteArrayOutputStream();
-            for (int c; (c = in.read()) != -1 && c != 0 && response.size() < 1024; )
+            boolean terminated = false;
+            for (int c; (c = in.read()) != -1; ) {
+                if (c == 0) {
+                    terminated = true;
+                    break;
+                }
+                if (response.size() >= 1024) throw new ScanUnavailable();
                 response.write(c);
+            }
+            // zINSTREAM requires a NUL-framed reply. EOF is not a clean verdict.
+            if (!terminated) throw new ScanUnavailable();
             String result = response.toString(StandardCharsets.US_ASCII);
             if (result.endsWith(" FOUND")) throw new Infected();
             if (!result.equals("stream: OK")) throw new ScanUnavailable();

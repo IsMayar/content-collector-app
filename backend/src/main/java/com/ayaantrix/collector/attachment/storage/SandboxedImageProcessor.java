@@ -72,7 +72,8 @@ public class SandboxedImageProcessor {
                 throw new IllegalStateException("IMAGE_PROCESSING_FAILED");
             completed = true;
             Path working = dir.resolve("working.png"), thumb = dir.resolve("thumbnail.png");
-            byte[] workingBytes = readOutput(working), thumbnailBytes = readOutput(thumb);
+            byte[] workingBytes = readOutput(working, 2560),
+                    thumbnailBytes = readOutput(thumb, 480);
             if ((long) workingBytes.length + thumbnailBytes.length > 32 * 1048576L)
                 throw new IllegalStateException("IMAGE_VARIANT_LIMIT");
             return new Variants(workingBytes, thumbnailBytes);
@@ -112,6 +113,10 @@ public class SandboxedImageProcessor {
     // The decoder is isolated precisely because it handles untrusted inputs. Never
     // follow a worker-created link back into the host or read a special device/FIFO.
     static byte[] readOutput(Path file) throws java.io.IOException {
+        return readOutput(file, 2560);
+    }
+
+    static byte[] readOutput(Path file, int maxEdge) throws java.io.IOException {
         final int limit = 32 * 1048576;
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.size(file) > limit)
             throw new java.io.IOException("Unsafe image worker output");
@@ -122,7 +127,61 @@ public class SandboxedImageProcessor {
                     || bytes.length < signature.length
                     || !Arrays.equals(Arrays.copyOf(bytes, signature.length), signature))
                 throw new java.io.IOException("Invalid image worker output");
+            validatePng(bytes, maxEdge);
             return bytes;
         }
+    }
+
+    // Parse bounded container metadata only: pixel decoding stays inside the sandbox.
+    static void validatePng(byte[] bytes, int maxEdge) throws java.io.IOException {
+        var buffer = java.nio.ByteBuffer.wrap(bytes);
+        int offset = 8;
+        boolean header = false, data = false;
+        Set<String> allowed =
+                Set.of(
+                        "IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "sBIT",
+                        "bKGD", "pHYs");
+        while (offset <= bytes.length - 12) {
+            int length = buffer.getInt(offset);
+            if (length < 0 || length > bytes.length - offset - 12) throw invalidPng();
+            String type =
+                    new String(bytes, offset + 4, 4, java.nio.charset.StandardCharsets.US_ASCII);
+            if (!allowed.contains(type))
+                throw invalidPng(); // No EXIF, text, animation or unknown metadata.
+            var crc = new java.util.zip.CRC32();
+            crc.update(bytes, offset + 4, length + 4);
+            if ((int) crc.getValue() != buffer.getInt(offset + 8 + length)) throw invalidPng();
+            if (!header && !type.equals("IHDR")) throw invalidPng();
+            if (type.equals("IHDR")) {
+                if (header || length != 13) throw invalidPng();
+                int width = buffer.getInt(offset + 8), height = buffer.getInt(offset + 12);
+                if (width <= 0 || height <= 0 || width > maxEdge || height > maxEdge)
+                    throw invalidPng();
+                int depth = bytes[offset + 16] & 255, color = bytes[offset + 17] & 255;
+                boolean validDepth =
+                        switch (color) {
+                            case 0 -> Set.of(1, 2, 4, 8, 16).contains(depth);
+                            case 2, 4, 6 -> depth == 8 || depth == 16;
+                            case 3 -> Set.of(1, 2, 4, 8).contains(depth);
+                            default -> false;
+                        };
+                if (!validDepth
+                        || bytes[offset + 18] != 0
+                        || bytes[offset + 19] != 0
+                        || (bytes[offset + 20] != 0 && bytes[offset + 20] != 1)) throw invalidPng();
+                header = true;
+            } else if (type.equals("IDAT")) {
+                data |= length > 0;
+            } else if (type.equals("IEND")) {
+                if (!data || length != 0 || offset + 12 != bytes.length) throw invalidPng();
+                return;
+            }
+            offset += length + 12;
+        }
+        throw invalidPng();
+    }
+
+    private static java.io.IOException invalidPng() {
+        return new java.io.IOException("Unsafe image variant structure or metadata");
     }
 }
