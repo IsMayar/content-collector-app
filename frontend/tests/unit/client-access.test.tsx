@@ -354,6 +354,21 @@ describe('T15 persisted collection portal', () => {
     })
     return collectionSchema.parse(data)
   }
+  it('accepts client-visible feedback in a collected checklist without changing preview contracts', () => {
+    const data = collection(true)
+    data.sections[0].items[0].comments = [
+      {
+        id: '77777777-7777-4777-8777-777777777777',
+        body: 'Please clarify your services.',
+        authorDisplayName: 'Reviewer',
+        createdAt: '2026-11-01T10:00:00Z',
+        revisionId: null,
+      },
+    ]
+    expect(
+      collectionSchema.parse(data).sections[0].items[0].comments[0].body,
+    ).toBe('Please clarify your services.')
+  })
   it('renders acknowledged persisted answers and no future submit action', () => {
     clearPendingDrafts()
     const data = collection(true)

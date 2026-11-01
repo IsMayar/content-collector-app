@@ -1,4 +1,9 @@
 import {
+  reviewDecisionSchema,
+  commentSchema,
+  clientCommentSchema,
+} from '@/features/review/schemas/reviewSchema'
+import {
   submissionSummarySchema,
   submissionRevisionSchema,
 } from '@/features/client/schemas/submissionSchema'
@@ -108,7 +113,16 @@ export function validateProductRead(path: string, data: unknown) {
   if (/\/items\/[^/]+\/revisions$/.test(route))
     schema = z.object({ data: z.array(submissionSummarySchema) })
   if (/\/items\/[^/]+\/revisions\/[^/]+$/.test(route))
-    schema = z.object({ revision: submissionRevisionSchema })
+    schema = z.object({
+      revision: submissionRevisionSchema,
+      decisions: z.array(reviewDecisionSchema).optional().default([]),
+    })
+  if (route.endsWith('/comments'))
+    schema = z.object({
+      data: z.array(
+        route.startsWith('client/') ? clientCommentSchema : commentSchema,
+      ),
+    })
   if (route.endsWith('/client-preview')) schema = previewSchema
   return schema.safeParse(data)
 }

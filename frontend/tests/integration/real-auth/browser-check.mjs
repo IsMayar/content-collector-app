@@ -1813,6 +1813,193 @@ async function command(input) {
 
       break
     }
+    case 'review-decisions': {
+      phase = 'review-decisions:setup'
+      const item = settings.attachmentItem
+      const agency =
+        'workspaces/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject
+      const clientRoot = 'client/projects/' + settings.previewProject
+      const history = (await run(agency + '/items/' + item + '/revisions')).data
+        .data
+      const oldRevision = history[0].revisionId
+      const oldSnapshot = (
+        await run(agency + '/items/' + item + '/revisions/' + oldRevision)
+      ).data.revision
+      const reviewUrl =
+        origin +
+        '/app/w/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject +
+        '?tab=review'
+      await page.goto(reviewUrl.replace('?tab=review', '?tab=submissions'))
+      await page
+        .getByRole('navigation', { name: 'Project sections' })
+        .getByRole('link', { name: 'Review', exact: true })
+        .click()
+      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await expect(
+        page.getByRole('heading', {
+          name: 'Submitted revision 2',
+          exact: true,
+        }),
+      ).toBeVisible()
+      phase = 'review-decisions:internal-comment'
+      await page.getByLabel('Comment visibility').selectOption('INTERNAL')
+      await page
+        .getByLabel('Comment', { exact: true })
+        .fill('Synthetic internal review note')
+      await page
+        .getByRole('button', { name: 'Add comment', exact: true })
+        .click()
+      await expect(
+        page.getByText('Synthetic internal review note', { exact: true }),
+      ).toBeVisible()
+      const safe = (
+        await run(
+          clientRoot + '/items/' + item + '/comments',
+          clientPage,
+          false,
+        )
+      ).data
+      assert.ok(
+        !JSON.stringify(safe).includes('Synthetic internal review note'),
+      )
+      phase = 'review-decisions:request-changes'
+      await page
+        .getByRole('button', { name: 'Request changes', exact: true })
+        .click()
+      await page
+        .getByLabel('Feedback shared with the client')
+        .fill('Please confirm this is the final document.')
+      const changes = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/review-decisions'),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Send feedback', exact: true })
+        .click()
+      assert.equal((await changes).status(), 201)
+      await expect(
+        page.getByText(
+          'Changes requested. Your feedback is visible to the client.',
+          { exact: true },
+        ),
+      ).toBeVisible()
+      phase = 'review-decisions:client-feedback'
+      await clientPage.reload()
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: 'Browser attachments', exact: true })
+        .click()
+      const field = clientPage.locator('article').filter({
+        has: clientPage.getByRole('heading', {
+          name: 'Private documents',
+          exact: true,
+        }),
+      })
+      await expect(
+        field.getByText('Please confirm this is the final document.', {
+          exact: true,
+        }),
+      ).toBeVisible()
+      await expect(
+        clientPage.getByText('Synthetic internal review note', { exact: true }),
+      ).toHaveCount(0)
+      await field
+        .getByLabel('Message to your agency')
+        .fill('Confirmed, this is the final document.')
+      await field
+        .getByRole('button', { name: 'Send comment', exact: true })
+        .click()
+      await expect(
+        field.getByText('Confirmed, this is the final document.', {
+          exact: true,
+        }),
+      ).toBeVisible()
+      phase = 'review-decisions:resubmit'
+      await field
+        .getByRole('button', { name: 'Review and submit', exact: true })
+        .click()
+      const submitted = clientPage.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/submit'),
+      )
+      await field
+        .getByRole('button', { name: 'Submit for review', exact: true })
+        .click()
+      const third = await (await submitted).json()
+      assert.equal(third.revisionNo, 3)
+      phase = 'review-decisions:approve'
+      await page.reload()
+      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await expect(
+        page.getByRole('heading', {
+          name: 'Submitted revision 3',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await page
+        .getByLabel('Submitted revision', { exact: true })
+        .selectOption(oldRevision)
+      await expect(
+        page.getByRole('heading', {
+          name: 'Submitted revision 2',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: 'Approve revision', exact: true }),
+      ).toBeDisabled()
+      await page
+        .getByLabel('Submitted revision', { exact: true })
+        .selectOption(third.revisionId)
+      await expect(
+        page.getByRole('heading', {
+          name: 'Submitted revision 3',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await page
+        .getByRole('button', { name: 'Approve revision', exact: true })
+        .click()
+      const approved = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/review-decisions'),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Approve', exact: true })
+        .click()
+      assert.equal((await approved).status(), 201)
+      await expect(
+        page.getByText('Exact submitted revision approved.', { exact: true }),
+      ).toBeVisible()
+      assert.deepEqual(
+        (await run(agency + '/items/' + item + '/revisions/' + oldRevision))
+          .data.revision,
+        oldSnapshot,
+      )
+      const final = (
+        await run(clientRoot + '/items/' + item, clientPage, false)
+      ).data.item
+      assert.equal(final.state, 'APPROVED')
+      assert.equal(final.canEdit, false)
+      await expect(
+        page.getByRole('button', { name: 'Approve revision', exact: true }),
+      ).toBeDisabled()
+      await expect(
+        page.getByRole('button', { name: /Reopen approved/ }),
+      ).toHaveCount(0)
+      break
+    }
     case 'client-idle-request-link': {
       const root = 'client/projects/' + settings.previewProject + '/checklist'
       assert.equal((await run(root, clientPage, false)).status, 401)
@@ -2342,7 +2529,11 @@ for await (const line of lines) {
     response(true)
     if (input.action === 'stop') break
   } catch (error) {
-    if (phase.startsWith('client-attachments') && clientPage) {
+    if (
+      (phase.startsWith('client-attachments') ||
+        phase.startsWith('review-decisions')) &&
+      clientPage
+    ) {
       const alerts = await clientPage
         .getByRole('alert')
         .allTextContents()

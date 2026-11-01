@@ -41,6 +41,10 @@ export function errorMessage(error: unknown): string {
   if (problem.status === 429)
     return 'Too many attempts. Please wait before trying again.'
   if (problem.status === 403) return 'You do not have permission to do that.'
+  if (problem.code === 'ITEM_VERSION_CONFLICT')
+    return 'This submission changed or was already reviewed. Refresh the current revision before deciding.'
+  if (problem.code === 'REVIEW_FORBIDDEN')
+    return 'Review permission is unavailable. Contact your workspace owner.'
   if (problem.code === 'STRUCTURE_CONFLICT')
     return 'The project structure changed. Refresh the latest version, review your changes, and retry.'
   if (problem.code === 'REOPEN_REQUIRED')

@@ -1,3 +1,4 @@
+import { LiveReviewPanel } from '@/features/review/components/LiveReviewPanel'
 import { env } from '@/config/env'
 import { SubmissionHistoryPanel } from '../components/SubmissionHistoryPanel'
 import { AnalyticsPanel } from '@/features/analytics/components/AnalyticsPanel'
@@ -109,9 +110,7 @@ export function ProjectPage() {
                 ['submissions', 'Submitted versions'],
                 ['analytics', 'Analytics'],
                 ...(owner ? [['access', 'Client access']] : []),
-                ...(p.permissions.canReview && env.mocksEnabled
-                  ? [['review', 'Review']]
-                  : []),
+                ...(p.permissions.canReview ? [['review', 'Review']] : []),
               ].map(([key, label]) => (
                 <Link
                   key={key}
@@ -233,7 +232,7 @@ export function ProjectPage() {
             (env.mocksEnabled ? (
               <ReviewPanel root={root} />
             ) : (
-              <SubmissionHistoryPanel
+              <LiveReviewPanel
                 key={root}
                 root={root}
                 items={data.structure.flatMap((s) => s.items)}

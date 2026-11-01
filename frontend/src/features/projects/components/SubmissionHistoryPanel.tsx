@@ -1,3 +1,6 @@
+import { ReviewComments } from '@/features/review/components/LiveReviewPanel'
+import type { ReviewDecision } from '@/features/review/types/review.types'
+import { env } from '@/config/env'
 import { SubmittedAnswer } from '@/shared/components/SubmittedAnswer'
 import { useState } from 'react'
 import { useData } from '@/services/api/resourceApi'
@@ -29,7 +32,7 @@ export function SubmissionHistoryPanel({
     `${root}/items/${itemId}/revisions`,
     { skip: !itemId },
   )
-  const detail = useData<{ revision: Revision }>(
+  const detail = useData<{ revision: Revision; decisions?: ReviewDecision[] }>(
     `${root}/items/${itemId}/revisions/${revisionId}`,
     { skip: !itemId || !revisionId },
   )
@@ -39,8 +42,8 @@ export function SubmissionHistoryPanel({
     <section className="product-panel" aria-label="Submitted versions">
       <h2>Submitted versions</h2>
       <p>
-        Read the exact answer and files saved at submission. Review decisions
-        are not available in this release.
+        Read the exact answer and files saved at submission. Authorized
+        reviewers can make decisions from the Review tab.
       </p>
       <label>
         Question
@@ -134,6 +137,16 @@ export function SubmissionHistoryPanel({
             </article>
           )}
         </QueryState>
+      )}
+      {detail.data?.decisions?.map((d) => (
+        <p key={d.id}>
+          {d.decision} · {d.reviewerDisplayName} ·{' '}
+          {new Date(d.reviewedAt).toLocaleString()}
+          {d.reason && <span> · {d.reason}</span>}
+        </p>
+      ))}
+      {!env.mocksEnabled && itemId && (
+        <ReviewComments key={root + itemId} root={root} itemId={itemId} />
       )}
       <ErrorNotice error={command.error || error} />
     </section>

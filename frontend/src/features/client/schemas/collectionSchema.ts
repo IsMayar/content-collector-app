@@ -1,3 +1,4 @@
+import { clientCommentSchema } from '@/features/review/schemas/reviewSchema'
 import { z } from 'zod'
 import { portalFoundationSchema } from './portalSchema'
 import { savedDraftAnswer } from './draftAnswerSchema'
@@ -22,6 +23,7 @@ export const collectionSchema = base.extend({
             'APPROVED',
           ]),
           canEdit: z.boolean(),
+          comments: z.array(clientCommentSchema),
           currentRevisionId: z.string().uuid().nullable().optional(),
           assets: z.array(
             z.object({

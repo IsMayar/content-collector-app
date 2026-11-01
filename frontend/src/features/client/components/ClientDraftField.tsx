@@ -1,3 +1,4 @@
+import { ClientComments } from '@/features/review/components/ClientComments'
 import { ClientSubmissionHistory } from './ClientSubmissionHistory'
 import { SubmissionControls } from './SubmissionControls'
 import { useState, useSyncExternalStore, useEffect } from 'react'
@@ -183,6 +184,11 @@ export function ClientDraftField({
         onBusyChange={setSubmitting}
       />
       <ClientSubmissionHistory projectId={projectId} itemId={item.id} />
+      <ClientComments
+        projectId={projectId}
+        itemId={item.id}
+        canRespond={canRespond}
+      />
       {state.conflict && (
         <section aria-label="Compare draft versions">
           <h4>Your unsaved answer</h4>
