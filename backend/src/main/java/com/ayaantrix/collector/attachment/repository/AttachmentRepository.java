@@ -137,11 +137,18 @@ public class AttachmentRepository {
                         reservation,
                         w,
                         reservation);
-        if (ok != 1)
-            throw new com.ayaantrix.collector.common.error.ApiException(
-                    org.springframework.http.HttpStatus.CONFLICT,
-                    "STORAGE_QUOTA_EXCEEDED",
-                    "There is not enough workspace storage for this upload.");
+        if (ok != 1) {
+            // The caller holds the workspace lock: these figures describe the same quota decision.
+            var quota =
+                    jdbc.queryForMap(
+                            "select storage_used_bytes, greatest(0,"
+                                + " storage_limit_bytes-storage_used_bytes-storage_reserved_bytes)"
+                                + " available_bytes from collector.workspaces where id=?",
+                            w);
+            throw new com.ayaantrix.collector.common.error.StorageQuotaException(
+                    ((Number) quota.get("storage_used_bytes")).longValue(),
+                    ((Number) quota.get("available_bytes")).longValue());
+        }
         var t = Timestamp.from(now);
         jdbc.update(
                 "insert into"

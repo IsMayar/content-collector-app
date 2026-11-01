@@ -855,6 +855,54 @@ class AttachmentStorageTests {
         files().remove(t.cookie(), t.f().project().id(), r.uploadId(), true);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void quotaProblemReportsScopedUsageWithoutReservingOrLeakingStorageDetails(boolean pending)
+            throws Exception {
+        var t = target("FILE");
+        if (pending) reserve(t, "pending.txt", "text/plain", text());
+        long before = reserved(t);
+        jdbc.update(
+                "update collector.workspaces set storage_used_bytes=7, storage_limit_bytes=? where"
+                        + " id=?",
+                before + 10,
+                t.f().tenant().workspace());
+        mvc.perform(
+                        post("/api/v1/client/projects/" + t.f().project().id() + "/uploads")
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), t.cookie()))
+                                .with(csrf().asHeader())
+                                .header("Idempotency-Key", UUID.randomUUID().toString())
+                                .contentType("application/json")
+                                .content(
+                                        json.writeValueAsString(
+                                                input(t, "notes.txt", "text/plain", 4))))
+                .andExpect(status().isConflict())
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                                        "$.code")
+                                .value("STORAGE_QUOTA_EXCEEDED"))
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                                        "$.usedBytes")
+                                .value(7))
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                                        "$.availableBytes")
+                                .value(3))
+                .andExpect(
+                        org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                                        "$.traceId")
+                                .isNotEmpty());
+        assertThat(reserved(t)).isEqualTo(before);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.upload_reservations where"
+                                        + " workspace_id=?",
+                                Long.class,
+                                t.f().tenant().workspace()))
+                .isEqualTo(pending ? 1L : 0L);
+    }
+
     @Test
     void simultaneousQuotaReservationsSerializeInPostgres() throws Exception {
         var t = target("FILE");
@@ -1792,7 +1840,7 @@ class AttachmentStorageTests {
                         () ->
                                 jdbc.update(
                                         "update collector.file_assets set state='DELETED' where"
-                                            + " id=?",
+                                                + " id=?",
                                         r.assetId()))
                 .isInstanceOf(org.springframework.dao.DataAccessException.class);
         context.getBean(TestClock.class).time = NOW.plusSeconds(86401);
@@ -1904,7 +1952,7 @@ class AttachmentStorageTests {
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from collector.revision_assets where"
-                                    + " workspace_id=? and asset_id=?",
+                                        + " workspace_id=? and asset_id=?",
                                 Long.class,
                                 f.tenant().workspace(),
                                 first.assetId()))

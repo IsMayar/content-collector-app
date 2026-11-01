@@ -41,6 +41,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 exception.getMessage(), requestTrace.getTraceId(request));
         if(exception.getCurrentVersion()!=null)problem.setProperty("currentVersion",exception.getCurrentVersion());
         if(!exception.getErrors().isEmpty())problem.setProperty("errors",exception.getErrors());
+        if (exception instanceof StorageQuotaException quota) {
+            problem.setProperty("usedBytes", quota.usedBytes());
+            problem.setProperty("availableBytes", quota.availableBytes());
+        }
         var headers = new HttpHeaders();
         if (status.value() == 429 && "RATE_LIMITED".equals(exception.getCode())) {
             headers.set(HttpHeaders.RETRY_AFTER, "60");
