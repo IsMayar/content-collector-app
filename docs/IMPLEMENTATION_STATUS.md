@@ -498,7 +498,7 @@ Milestone status: In progress
 | ---- | ------------------------------------------- | ------------------------------------------------------------ | ----------- |
 | T18  | Private upload reservations and quota       | Concurrent reservations remain within allowance              | Complete |
 | T19  | Scanner, canonical copy and image variants  | Unsafe staging bytes never become public READY content       | Complete |
-| T20  | Phone upload queue and original option      | Real-device photo and error journeys pass                    | Not started |
+| T20  | Phone upload queue and original option      | Real-device photo and error journeys pass                    | In progress |
 | T21  | Comments and review decisions               | Internal comments never reach clients; decision race handled | Not started |
 | T22  | Project completion, reopening and archive   | Progress and lifecycle guards use the same evaluator         | Not started |
 | T23  | Immutable approved export manifest and jobs | Partial exports labeled; all three formats match snapshots   | Not started |
@@ -784,3 +784,14 @@ Final evidence:110 focused attachment tests,889 backend tests (865 preserved +24
 Earlier runs are recorded accurately:5 focused image/retry failures were fixed in the actual worker;1 full-backend catalog session setup error was addressed with deterministic fixture time without changing production security;1 initial HTTPS cross-tab error did not recur and has better redacted diagnostics; the first responsive run was74/1, then an invitation/bootstrap race was reproduced and corrected without weakening assertions/timeouts. Initial anonymous agency bootstrap now leaves the independent client API intact; explicit logout/authenticated-session loss still clear both caches. The final full responsive run passed75, not isolated reruns.
 
 T04/T05/T06/T11/T16/T22 and production storage/scanner/codec/device gates remain open. Original specifications, templates and V1–V15 are unchanged. Commits:`cab063b`, `7bd34a1`, `74f277d`, `a6b7a3b`; final documentation hash and working tree are reported separately. No push.
+
+
+## M4 / T20 Part 1 — phone upload queue and original option — 1 November 2026
+
+**Software changes implemented and locally verified; T20 remains In progress and M4 remains In progress.** The original acceptance remains **Real-device photo and error journeys pass**. Physical iOS/Android devices are unavailable; native camera/photo-picker, device-network recovery and deployed codec acceptance remain pending. Desktop browsers at mobile widths do not close this gate.
+
+Existing `features/client/` and T16–T19 APIs/storage are reused. A bounded three-transfer queue now reports actual XHR progress, captures per-file original choices, reconciles lost reservation/finalize acknowledgments, retries with stable keys, pauses offline, cancels unfinalized work safely, handles unmount/authorization/quota errors, refreshes terminal server states and offers separate private original downloads. No browser-termination persistence promise. No duplicate client-portal feature, HTTP client, backend change, API contract/migration/dependency change, T21+ implementation or specification edit.
+
+Final current-source evidence: **21 focused frontend upload tests / 1 file**, strict TypeScript/production build, changed-file zero-warning lint/format, **1 real HTTPS lifecycle with MSW disabled (0 failures/errors/skips)** and **3/3 focused responsive upload cases** (1440/768/360) passed. Desktop/phone screenshots inspected. Earlier HTTPS selector ambiguity and missing rejection-metadata refresh were corrected before the final complete selected run. Existing bundle-size advisory remains. Full889 backend, unrelated frontend tests, full75 responsive and PWA were intentionally not rerun because their production areas did not change. Historical T19 results are not represented as T20 reruns.
+
+[Exact files, retry/cancel/original/security behavior, commands, evidence and device checklist](T20_PHONE_UPLOAD_QUEUE.md). Implementation commit `12292a8`; final documentation commit reported separately. T04/T05/T06/T11/T16/T22 and production/device gates remain open. No push.
