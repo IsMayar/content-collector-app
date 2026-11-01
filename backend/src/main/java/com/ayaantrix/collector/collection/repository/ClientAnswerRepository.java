@@ -23,4 +23,11 @@ public class ClientAnswerRepository {
   jdbc.update("update collector.projects set version=version+1,updated_at=? where workspace_id=? and id=?",Timestamp.from(now),w,p);
   jdbc.update("update collector.items set state='DRAFT',version=version+1,updated_at=? where workspace_id=? and project_id=? and id=?",Timestamp.from(now),w,p,item);
  }
+ public void restoreSubmission(UUID w,UUID p,UUID i,UUID contact,tools.jackson.databind.JsonNode value,long structure,Instant now){
+  jdbc.update("""
+   insert into collector.answers(workspace_id,project_id,item_id,value_json,version,structure_version,updated_by_contact_id,save_operation_id,request_hash,created_at,updated_at)
+   values(?,?,?,?::jsonb,1,?,?,gen_random_uuid(),?,?,?) on conflict(item_id) do update set value_json=excluded.value_json,version=collector.answers.version+1,structure_version=excluded.structure_version,updated_by_contact_id=excluded.updated_by_contact_id,save_operation_id=excluded.save_operation_id,request_hash=excluded.request_hash,updated_at=excluded.updated_at
+   where collector.answers.workspace_id=excluded.workspace_id and collector.answers.project_id=excluded.project_id
+   """,w,p,i,value.toString(),structure,contact,com.ayaantrix.collector.common.repository.IdempotencyRepository.hash("review-restore:"+value.toString()),Timestamp.from(now),Timestamp.from(now));
+ }
 }

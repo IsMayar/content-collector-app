@@ -319,7 +319,7 @@ class ProjectFoundationTests {
     }
     @Test void cleanFlywayHibernateAndRestartPreserveProjectSnapshotAndSession() throws Exception {
         var t=tenant();var p=create(t,ProjectType.MOBILE_APP);var before=as(t.actor(),()->service().read(t.workspace(),p.id()));context.close();open();
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(15);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(16);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");assertThat(as(t.actor(),()->service().read(t.workspace(),p.id()))).isEqualTo(before);
         mvc.perform(get(t.root()+"/projects/"+p.id()).header("Authorization",bearer(t))).andExpect(status().isOk());seed().seed();assertThat(count(t,"projects")).isEqualTo(1);
     }
@@ -330,7 +330,7 @@ class ProjectFoundationTests {
         var original=seed().originals().get(0);data.update("insert into collector.templates(id,template_key,project_type,industry,title,is_builtin,version) values (?,?,'WEBSITE','PLUMBER',?,true,1)",BuiltInTemplateSeeder.templateId(KEY),KEY,original.get("title").asText());
         data.update("insert into collector.template_versions(id,template_id,version_no,schema_version,definition) values (?,?,1,1,?::jsonb)",VERSION,BuiltInTemplateSeeder.templateId(KEY),original.toString());
         try(var upgraded=start(url)){
-            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(15);assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(16);assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(data.queryForObject("select name from collector.workspaces where id=?",String.class,w)).isEqualTo("Preserved");assertThat(data.queryForObject("select password_hash from collector.users where id=?",String.class,user)).isEqualTo(hash);
             assertThat(json.readTree(data.queryForObject("select definition::text from collector.template_versions where id=?",String.class,VERSION))).isEqualTo(original);assertThat(data.queryForObject("select count(*) from collector.templates where is_builtin",Integer.class)).isEqualTo(10);
         }

@@ -433,8 +433,12 @@ class SubmissionTests {
     }
 
     Fixture fixture() {
+        return fixture(ProjectType.WEBSITE);
+    }
+
+    Fixture fixture(ProjectType type) {
         var t = tenant();
-        var p = create(t, ProjectType.WEBSITE);
+        var p = create(t, type);
         jdbc.update("update collector.projects set state='ACTIVE' where id=?", p.id());
         var c =
                 as(
@@ -1204,13 +1208,16 @@ class SubmissionTests {
                                                 f.project().id(),
                                                 dependent,
                                                 r.revisionId()));
-        assertThat(json.valueToTree(snapshot).at("/revision/schemaSnapshot/visible").asBoolean())
+        assertThat(
+                        json.<JsonNode>valueToTree(snapshot)
+                                .at("/revision/schemaSnapshot/visible")
+                                .asBoolean())
                 .isTrue();
         var frozen =
                 json.readTree(
                         jdbc.queryForObject(
                                 "select structure_snapshot::text from"
-                                    + " collector.submission_revisions where id=?",
+                                        + " collector.submission_revisions where id=?",
                                 String.class,
                                 r.revisionId()));
         boolean found = false;
@@ -1233,5 +1240,608 @@ class SubmissionTests {
                                                         dependent,
                                                         r.revisionId())))
                 .isEqualTo(snapshot);
+    }
+
+    // T21 reuses actual submission fixtures, not a second submission model.
+    com.ayaantrix.collector.review.service.ReviewService reviews() {
+        return context.getBean(com.ayaantrix.collector.review.service.ReviewService.class);
+    }
+
+    record ReviewFixture(
+            Fixture f,
+            String cookie,
+            UUID item,
+            com.ayaantrix.collector.submission.dto.SubmissionDtos.Submitted submitted) {}
+
+    ReviewFixture reviewFixture() {
+        var f = fixture();
+        String c = enter(f).credential();
+        var i = textItem(f);
+        save(f, c, i, text("Exact submitted content"), 0);
+        return new ReviewFixture(f, c, i, submit(f, c, i, 1, "submit"));
+    }
+
+    com.ayaantrix.collector.review.dto.ReviewDtos.Decide decision(ReviewFixture r, String kind) {
+        return new com.ayaantrix.collector.review.dto.ReviewDtos.Decide(
+                r.submitted().revisionId(),
+                r.submitted().itemVersion(),
+                com.ayaantrix.collector.review.dto.ReviewDtos.Decision.valueOf(kind),
+                kind.equals("REQUEST_CHANGES") ? "Please clarify services." : null);
+    }
+
+    Map<String, Object> decide(ReviewFixture r, String kind, String key) {
+        return as(
+                r.f().tenant().actor(),
+                () ->
+                        reviews()
+                                .decide(
+                                        r.f().tenant().workspace(),
+                                        r.f().project().id(),
+                                        r.item(),
+                                        decision(r, kind),
+                                        key));
+    }
+
+    @Test
+    void reviewApprovalReplayHistoryAndStaleDecision() {
+        var r = reviewFixture();
+        var f = r.f();
+        var before =
+                as(
+                                f.tenant().actor(),
+                                () ->
+                                        submissions()
+                                                .detail(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        r.item(),
+                                                        r.submitted().revisionId()))
+                        .get("revision");
+        var result = decide(r, "APPROVE", "approve");
+        assertThat(((JsonNode) result.get("item")).path("state").asText()).isEqualTo("APPROVED");
+        assertThat(json.readTree(json.writeValueAsString(decide(r, "APPROVE", "approve"))))
+                .isEqualTo(json.readTree(json.writeValueAsString(result)));
+        assertThat(
+                        as(
+                                        f.tenant().actor(),
+                                        () ->
+                                                submissions()
+                                                        .detail(
+                                                                f.tenant().workspace(),
+                                                                f.project().id(),
+                                                                r.item(),
+                                                                r.submitted().revisionId()))
+                                .get("revision"))
+                .isEqualTo(before);
+        assertThat(count(f.tenant(), "review_decisions")).isEqualTo(1);
+        code(() -> decide(r, "REQUEST_CHANGES", "loser"), "ITEM_VERSION_CONFLICT");
+        code(() -> decide(r, "REQUEST_CHANGES", "approve"), "IDEMPOTENCY_KEY_REUSED");
+        assertThatThrownBy(
+                        () ->
+                                jdbc.update(
+                                        "delete from collector.review_decisions where"
+                                                + " revision_id=?",
+                                        r.submitted().revisionId()))
+                .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    void reviewChangeRequestRestoresDraftAndRetainsPreviousRevision() {
+        var r = reviewFixture();
+        var f = r.f();
+        decide(r, "REQUEST_CHANGES", "changes");
+        var read = json.valueToTree(drafts().read(r.cookie(), f.project().id(), r.item()));
+        assertThat(read.path("item").path("state").asText()).isEqualTo("CHANGES_REQUESTED");
+        assertThat(read.path("item").path("canEdit").asBoolean()).isTrue();
+        assertThat(read.path("answer").path("value").path("text").asText())
+                .isEqualTo("Exact submitted content");
+        assertThat(read.path("item").path("comments").get(0).path("body").asText())
+                .isEqualTo("Please clarify services.");
+        save(f, r.cookie(), r.item(), text("Client updated content"), 2);
+        var next = submit(f, r.cookie(), r.item(), 3, "resubmit");
+        assertThat(next.revisionNo()).isEqualTo(2);
+        assertThat(count(f.tenant(), "submission_revisions")).isEqualTo(2);
+        code(() -> decide(r, "APPROVE", "old"), "ITEM_VERSION_CONFLICT");
+    }
+
+    @Test
+    void reviewInternalCommentsNeverEnterClientRoutesOrProjections() throws Exception {
+        var r = reviewFixture();
+        var f = r.f();
+        for (var visibility : com.ayaantrix.collector.review.dto.ReviewDtos.Visibility.values())
+            as(
+                    f.tenant().actor(),
+                    () ->
+                            reviews()
+                                    .addAgencyComment(
+                                            f.tenant().workspace(),
+                                            f.project().id(),
+                                            r.item(),
+                                            new com.ayaantrix.collector.review.dto.ReviewDtos
+                                                    .AgencyComment(
+                                                    visibility
+                                                                    == com.ayaantrix.collector
+                                                                            .review.dto.ReviewDtos
+                                                                            .Visibility.INTERNAL
+                                                            ? "INTERNAL_ONLY_SECRET"
+                                                            : "Visible feedback",
+                                                    visibility)));
+        assertThat(
+                        json.writeValueAsString(
+                                reviews().clientComments(r.cookie(), f.project().id(), r.item())))
+                .contains("Visible feedback")
+                .doesNotContain("INTERNAL_ONLY_SECRET", "visibility", "memberId");
+        assertThat(json.writeValueAsString(drafts().read(r.cookie(), f.project().id(), r.item())))
+                .doesNotContain("INTERNAL_ONLY_SECRET");
+        mvc.perform(checklist(f, r.cookie()))
+                .andExpect(status().isOk())
+                .andExpect(
+                        content()
+                                .string(
+                                        org.hamcrest.Matchers.not(
+                                                org.hamcrest.Matchers.containsString(
+                                                        "INTERNAL_ONLY_SECRET"))));
+        var path =
+                "/api/v1/client/projects/" + f.project().id() + "/items/" + r.item() + "/comments";
+        mvc.perform(
+                        post(path)
+                                .with(csrf().asHeader())
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), r.cookie()))
+                                .contentType("application/json")
+                                .content(
+                                        "{\"body\":\"Client"
+                                                + " message\",\"visibility\":\"INTERNAL\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.comment.body").value("Client message"))
+                .andExpect(jsonPath("$.comment.visibility").doesNotExist());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select visibility from collector.comments where body='Client"
+                                        + " message' and project_id=?",
+                                String.class,
+                                f.project().id()))
+                .isEqualTo("CLIENT");
+    }
+
+    @Test
+    void reviewConcurrentDecisionsHaveOneWinner() throws Exception {
+        var r = reviewFixture();
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var jobs = new ArrayList<Future<Boolean>>();
+            for (String kind : List.of("APPROVE", "REQUEST_CHANGES"))
+                jobs.add(
+                        pool.submit(
+                                () -> {
+                                    start.await();
+                                    try {
+                                        decide(r, kind, kind);
+                                        return true;
+                                    } catch (ApiException e) {
+                                        assertThat(e.getCode()).isEqualTo("ITEM_VERSION_CONFLICT");
+                                        return false;
+                                    }
+                                }));
+            start.countDown();
+            int winners = 0;
+            for (var job : jobs) if (job.get(20, TimeUnit.SECONDS)) winners++;
+            assertThat(winners).isEqualTo(1);
+        }
+        assertThat(count(r.f().tenant(), "review_decisions")).isEqualTo(1);
+    }
+
+    @Test
+    void reviewRollbackIsAtomic() {
+        var r = reviewFixture();
+        var f = r.f();
+        long audit = count(f.tenant(), "audit_logs");
+        assertThatThrownBy(
+                        () ->
+                                tx().executeWithoutResult(
+                                                s -> {
+                                                    decide(r, "REQUEST_CHANGES", "rollback");
+                                                    throw new IllegalStateException(
+                                                            "Synthetic rollback");
+                                                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(count(f.tenant(), "review_decisions")).isZero();
+        assertThat(count(f.tenant(), "comments")).isZero();
+        assertThat(count(f.tenant(), "audit_logs")).isEqualTo(audit);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.items where id=?",
+                                String.class,
+                                r.item()))
+                .isEqualTo("SUBMITTED");
+        assertThat(
+                        json.<JsonNode>valueToTree(
+                                        drafts().read(r.cookie(), f.project().id(), r.item()))
+                                .path("answer")
+                                .path("version")
+                                .asLong())
+                .isEqualTo(1);
+        decide(r, "REQUEST_CHANGES", "rollback");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "reader",
+                "exporter",
+                "reviewer",
+                "unassigned",
+                "revokedMember",
+                "revokedAssignment",
+                "revokedSession",
+                "foreign"
+            })
+    void reviewIndependentPermissions(String kind) {
+        var r = reviewFixture();
+        var f = r.f();
+        var actor = actor();
+        UUID member = UUID.randomUUID();
+        jdbc.update(
+                "insert into"
+                    + " collector.workspace_members(id,workspace_id,user_id,role,state,created_at,updated_at)"
+                    + " values(?,?,?,'MEMBER','ACTIVE',?,?)",
+                member,
+                f.tenant().workspace(),
+                actor.id(),
+                java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        if (!kind.equals("unassigned"))
+            jdbc.update(
+                    "insert into"
+                        + " collector.project_members(workspace_id,project_id,workspace_member_id,can_review,can_export,created_at,updated_at)"
+                        + " values(?,?,?,?,?,?,?)",
+                    f.tenant().workspace(),
+                    f.project().id(),
+                    member,
+                    kind.equals("reviewer") || kind.startsWith("revoked"),
+                    kind.equals("exporter"),
+                    java.sql.Timestamp.from(NOW),
+                    java.sql.Timestamp.from(NOW));
+        if (kind.equals("revokedMember"))
+            jdbc.update(
+                    "update collector.workspace_members set state='DISABLED' where id=?", member);
+        if (kind.equals("revokedAssignment"))
+            jdbc.update(
+                    "delete from collector.project_members where workspace_member_id=?", member);
+        if (kind.equals("revokedSession"))
+            context.getBean(AgencySessions.class).logoutAll(actor.jwt());
+        var chosen = kind.equals("foreign") ? actor() : actor;
+        if (kind.equals("reviewer")) {
+            as(
+                    chosen,
+                    () ->
+                            reviews()
+                                    .decide(
+                                            f.tenant().workspace(),
+                                            f.project().id(),
+                                            r.item(),
+                                            decision(r, "APPROVE"),
+                                            "member"));
+            assertThat(count(f.tenant(), "review_decisions")).isEqualTo(1);
+        } else {
+            assertThatThrownBy(
+                            () ->
+                                    as(
+                                            chosen,
+                                            () ->
+                                                    reviews()
+                                                            .decide(
+                                                                    f.tenant().workspace(),
+                                                                    f.project().id(),
+                                                                    r.item(),
+                                                                    decision(r, "APPROVE"),
+                                                                    "denied")))
+                    .isInstanceOf(ApiException.class);
+            assertThat(count(f.tenant(), "review_decisions")).isZero();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"withdraw", "newSubmission", "pause", "membership", "assignment"})
+    void reviewWaitingWriterRechecksCommittedState(String kind) throws Exception {
+        var r = reviewFixture();
+        var f = r.f();
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var reviewer = kind.equals("assignment") ? actor() : f.tenant().actor();
+        if (kind.equals("assignment")) {
+            UUID member = UUID.randomUUID();
+            jdbc.update(
+                    "insert into"
+                        + " collector.workspace_members(id,workspace_id,user_id,role,state,created_at,updated_at)"
+                        + " values(?,?,?,'MEMBER','ACTIVE',?,?)",
+                    member,
+                    f.tenant().workspace(),
+                    reviewer.id(),
+                    java.sql.Timestamp.from(NOW),
+                    java.sql.Timestamp.from(NOW));
+            jdbc.update(
+                    "insert into"
+                        + " collector.project_members(workspace_id,project_id,workspace_member_id,can_review,can_export,created_at,updated_at)"
+                        + " values(?,?,?,true,false,?,?)",
+                    f.tenant().workspace(),
+                    f.project().id(),
+                    member,
+                    java.sql.Timestamp.from(NOW),
+                    java.sql.Timestamp.from(NOW));
+        }
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var writer =
+                    pool.submit(
+                            () ->
+                                    tx().executeWithoutResult(
+                                                    s -> {
+                                                        jdbc.queryForObject(
+                                                                "select id from"
+                                                                    + " collector.workspaces where"
+                                                                    + " id=? for update",
+                                                                UUID.class,
+                                                                f.tenant().workspace());
+                                                        held.countDown();
+                                                        try {
+                                                            if (!release.await(
+                                                                    15, TimeUnit.SECONDS))
+                                                                throw new IllegalStateException(
+                                                                        "Lock deadline");
+                                                        } catch (InterruptedException e) {
+                                                            throw new IllegalStateException(e);
+                                                        }
+                                                        switch (kind) {
+                                                            case "withdraw", "newSubmission" -> {
+                                                                submissions()
+                                                                        .withdraw(
+                                                                                r.cookie(),
+                                                                                f.project().id(),
+                                                                                r.item(),
+                                                                                new com.ayaantrix
+                                                                                        .collector
+                                                                                        .submission
+                                                                                        .dto
+                                                                                        .SubmissionDtos
+                                                                                        .Withdraw(
+                                                                                        r.submitted()
+                                                                                                .itemVersion()),
+                                                                                "withdraw-race");
+                                                                if (kind.equals("newSubmission")) {
+                                                                    long structure =
+                                                                            jdbc.queryForObject(
+                                                                                    "select"
+                                                                                        + " structure_version"
+                                                                                        + " from"
+                                                                                        + " collector.projects"
+                                                                                        + " where"
+                                                                                        + " id=?",
+                                                                                    Long.class,
+                                                                                    f.project()
+                                                                                            .id());
+                                                                    drafts().save(
+                                                                                    r.cookie(),
+                                                                                    f.project()
+                                                                                            .id(),
+                                                                                    r.item(),
+                                                                                    saveCommand(
+                                                                                            text(
+                                                                                                    "New revision"),
+                                                                                            1,
+                                                                                            structure));
+                                                                    submissions()
+                                                                            .submit(
+                                                                                    r.cookie(),
+                                                                                    f.project()
+                                                                                            .id(),
+                                                                                    r.item(),
+                                                                                    new com
+                                                                                            .ayaantrix
+                                                                                            .collector
+                                                                                            .submission
+                                                                                            .dto
+                                                                                            .SubmissionDtos
+                                                                                            .Submit(
+                                                                                            2,
+                                                                                            structure),
+                                                                                    "next");
+                                                                }
+                                                            }
+                                                            case "pause" ->
+                                                                    jdbc.update(
+                                                                            "update"
+                                                                                + " collector.projects"
+                                                                                + " set state='PAUSED'"
+                                                                                + " where id=?",
+                                                                            f.project().id());
+                                                            case "membership" ->
+                                                                    jdbc.update(
+                                                                            "update"
+                                                                                + " collector.workspace_members"
+                                                                                + " set state='DISABLED'"
+                                                                                + " where"
+                                                                                + " workspace_id=?"
+                                                                                + " and user_id=?",
+                                                                            f.tenant().workspace(),
+                                                                            f.tenant()
+                                                                                    .actor()
+                                                                                    .id());
+                                                            default ->
+                                                                    jdbc.update(
+                                                                            "delete from"
+                                                                                + " collector.project_members"
+                                                                                + " where"
+                                                                                + " workspace_id=?"
+                                                                                + " and project_id=?",
+                                                                            f.tenant().workspace(),
+                                                                            f.project().id());
+                                                        }
+                                                    }));
+            assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+            var review =
+                    pool.submit(
+                            () -> {
+                                try {
+                                    as(
+                                            reviewer,
+                                            () ->
+                                                    reviews()
+                                                            .decide(
+                                                                    f.tenant().workspace(),
+                                                                    f.project().id(),
+                                                                    r.item(),
+                                                                    decision(r, "APPROVE"),
+                                                                    "waiting"));
+                                    return false;
+                                } catch (ApiException e) {
+                                    return true;
+                                }
+                            });
+            release.countDown();
+            writer.get(20, TimeUnit.SECONDS);
+            assertThat(review.get(20, TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(count(f.tenant(), "review_decisions")).isZero();
+    }
+
+    @Test
+    void reviewHttpValidationCsrfCorrelationAndBinding() throws Exception {
+        var r = reviewFixture();
+        var f = r.f();
+        String path =
+                f.tenant().root()
+                        + "/projects/"
+                        + f.project().id()
+                        + "/items/"
+                        + r.item()
+                        + "/review-decisions";
+        String body = json.writeValueAsString(decision(r, "APPROVE"));
+        mvc.perform(
+                        post(path)
+                                .header("Authorization", bearer(f.tenant()))
+                                .header("Idempotency-Key", "http")
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(
+                        post(path)
+                                .with(csrf().asHeader())
+                                .header("Idempotency-Key", "http")
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(
+                        post(path)
+                                .with(csrf().asHeader())
+                                .header("Authorization", bearer(f.tenant()))
+                                .header("Idempotency-Key", "reason")
+                                .contentType("application/json")
+                                .content(
+                                        json.writeValueAsString(
+                                                new com.ayaantrix.collector.review.dto.ReviewDtos
+                                                        .Decide(
+                                                        r.submitted().revisionId(),
+                                                        r.submitted().itemVersion(),
+                                                        com.ayaantrix.collector.review.dto
+                                                                .ReviewDtos.Decision
+                                                                .REQUEST_CHANGES,
+                                                        " "))))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(
+                        post(path)
+                                .with(csrf().asHeader())
+                                .header("Authorization", bearer(f.tenant()))
+                                .header("Idempotency-Key", "http")
+                                .header("X-Request-ID", "review-contract")
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("X-Request-ID", "review-contract"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.item.state").value("APPROVED"));
+        mvc.perform(
+                        post(path)
+                                .with(csrf().asHeader())
+                                .header("Authorization", bearer(f.tenant()))
+                                .header("Idempotency-Key", "stale")
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ITEM_VERSION_CONFLICT"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProjectType.class)
+    void reviewUsesSameExactRevisionWorkflowForEachProjectType(ProjectType type) {
+        var f = fixture(type);
+        String c = enter(f).credential();
+        UUID i = textItem(f);
+        save(f, c, i, text("Synthetic project information for the client team"), 0);
+        var submitted = submit(f, c, i, 1, "type");
+        var r = new ReviewFixture(f, c, i, submitted);
+        var before = detail(f.tenant(), f.project()).project().progress();
+        decide(r, "APPROVE", "approve-type");
+        var after = detail(f.tenant(), f.project()).project().progress();
+        assertThat(after.approvedRequired()).isEqualTo(before.approvedRequired() + 1);
+        assertThat(after.submittedRequired()).isEqualTo(before.submittedRequired());
+    }
+
+    @Test
+    void reviewRejectsForeignRevisionAndInvalidBodies() {
+        var r = reviewFixture();
+        var other = reviewFixture();
+        var input =
+                new com.ayaantrix.collector.review.dto.ReviewDtos.Decide(
+                        other.submitted().revisionId(),
+                        r.submitted().itemVersion(),
+                        com.ayaantrix.collector.review.dto.ReviewDtos.Decision.APPROVE,
+                        null);
+        code(
+                () ->
+                        as(
+                                r.f().tenant().actor(),
+                                () ->
+                                        reviews()
+                                                .decide(
+                                                        r.f().tenant().workspace(),
+                                                        r.f().project().id(),
+                                                        r.item(),
+                                                        input,
+                                                        "wrong-revision")),
+                "ITEM_VERSION_CONFLICT");
+        code(
+                () ->
+                        reviews()
+                                .addClientComment(
+                                        r.cookie(),
+                                        r.f().project().id(),
+                                        r.item(),
+                                        new com.ayaantrix.collector.review.dto.ReviewDtos
+                                                .ClientComment(" ")),
+                "VALIDATION_FAILED");
+        assertThat(count(r.f().tenant(), "review_decisions")).isZero();
+        assertThat(count(r.f().tenant(), "comments")).isZero();
+    }
+
+    @Test
+    void reviewReadOnlyPlanBlocksMutationsAndPreservesReads() {
+        var r = reviewFixture();
+        var f = r.f();
+        jdbc.update(
+                "update collector.subscriptions set state='READ_ONLY' where workspace_id=?",
+                f.tenant().workspace());
+        code(() -> decide(r, "APPROVE", "read-only"), "REVIEW_FORBIDDEN");
+        code(
+                () ->
+                        reviews()
+                                .addClientComment(
+                                        r.cookie(),
+                                        f.project().id(),
+                                        r.item(),
+                                        new com.ayaantrix.collector.review.dto.ReviewDtos
+                                                .ClientComment("Read-only message")),
+                "READ_ONLY");
+        assertThat(reviews().clientComments(r.cookie(), f.project().id(), r.item()))
+                .containsKey("data");
+        assertThat(count(f.tenant(), "review_decisions")).isZero();
     }
 }

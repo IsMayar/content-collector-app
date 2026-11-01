@@ -19,6 +19,7 @@ public class ClientPortalService {
     private final com.ayaantrix.collector.collection.repository.ClientAnswerRepository answers;
     private final com.ayaantrix.collector.project.repository.ProjectStructureRepository structures;
     private final ClientAccessAuthorization auth;
+    private final com.ayaantrix.collector.review.repository.ReviewRepository comments;
     private final ProjectContentPresentation presentation;
 
     public ClientPortalService(
@@ -30,7 +31,8 @@ public class ClientPortalService {
             com.ayaantrix.collector.attachment.repository.AttachmentRepository assets,
             com.ayaantrix.collector.attachment.storage.PrivateObjectStorage storage,
             com.ayaantrix.collector.attachment.security.AttachmentAuthorization
-                    attachmentAuthorization) {
+                    attachmentAuthorization,com.ayaantrix.collector.review.repository.ReviewRepository comments) {
+        this.comments=comments;
         this.attachmentAuthorization = attachmentAuthorization;
         this.assets = assets;
         this.storage = storage;
@@ -103,7 +105,7 @@ public class ClientPortalService {
                                         p.workspaceId(),
                                         project,
                                         UUID.fromString(item.path("id").asText()))));
-                node.putArray("comments");
+                node.set("comments",json.valueToTree(comments.comments(p.workspaceId(),project,UUID.fromString(item.path("id").asText()),true)));
                 items.add(node);
             }
             safe.add(shown);

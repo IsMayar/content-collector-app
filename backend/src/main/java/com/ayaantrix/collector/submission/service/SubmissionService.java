@@ -25,6 +25,7 @@ import java.util.*;
 @Service
 @Transactional
 public class SubmissionService {
+    private final com.ayaantrix.collector.review.repository.ReviewRepository reviews;
     private final ClientAccessAuthorization clients;
     private final ProjectAuthorization agency;
     private final ProjectRepository projects;
@@ -55,7 +56,8 @@ public class SubmissionService {
             AuditRepository audit,
             JsonMapper json,
             Clock clock,
-            com.ayaantrix.collector.workspace.repository.WorkspaceSubscriptionRepository plans) {
+            com.ayaantrix.collector.workspace.repository.WorkspaceSubscriptionRepository plans,com.ayaantrix.collector.review.repository.ReviewRepository reviews) {
+        this.reviews=reviews;
         this.plans = plans;
         this.clients = clients;
         this.agency = agency;
@@ -282,6 +284,6 @@ public class SubmissionService {
 
     public Map<String, Object> detail(UUID w, UUID p, UUID i, UUID r) {
         agency(w, p, false);
-        return Map.of("revision", revisions.detail(w, p, i, r));
+        return Map.of("revision", revisions.detail(w, p, i, r),"decisions",reviews.decisions(w,p,i,r));
     }
 }
