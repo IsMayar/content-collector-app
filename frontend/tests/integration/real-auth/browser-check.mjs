@@ -1814,6 +1814,70 @@ async function command(input) {
 
       break
     }
+    case 'client-ai-failure': {
+      phase = 'client-ai-failure'
+      const root = `client/projects/${settings.previewProject}`
+      const item = input.item
+      const before = (await run(`${root}/items/${item}`, clientPage, false))
+        .data.answer
+      const queued = await run(
+        {
+          url: `${root}/items/${item}/ai-drafts`,
+          method: 'POST',
+          body: {
+            facts: ['Family owned practice', 'Serving the local community'],
+            tone: 'Professional',
+            targetWords: 150,
+            baseAnswerVersion: before.version,
+            consent: true,
+          },
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+        },
+        clientPage,
+        false,
+      )
+      assert.equal(queued.status, 202)
+      await expect
+        .poll(
+          async () =>
+            (
+              await run(
+                `${root}/ai-drafts/${queued.data.jobId}`,
+                clientPage,
+                false,
+              )
+            ).data.job.state,
+        )
+        .toBe('FAILED')
+      const job = (
+        await run(`${root}/ai-drafts/${queued.data.jobId}`, clientPage, false)
+      ).data.job
+      assert.equal(job.failureCode, 'AI_TIMEOUT')
+      assert.equal(job.result, null)
+      const unchanged = (await run(`${root}/items/${item}`, clientPage, false))
+        .data.answer
+      assert.deepEqual(unchanged, before)
+      const checklist = (await run(root + '/checklist', clientPage, false)).data
+      const saved = await run(
+        {
+          url: `${root}/items/${item}/answer`,
+          method: 'PUT',
+          body: {
+            value: {
+              text: 'Writing manually remains available after provider failure.',
+            },
+            expectedVersion: before.version,
+            expectedStructureVersion: checklist.project.structureVersion,
+            saveOperationId: crypto.randomUUID(),
+          },
+        },
+        clientPage,
+        false,
+      )
+      assert.equal(saved.status, 200)
+      assert.equal(saved.data.answer.version, before.version + 1)
+      break
+    }
     case 'review-decisions': {
       phase = 'review-decisions:setup'
       const item = settings.attachmentItem

@@ -505,11 +505,11 @@ Milestone status: In progress
 
 ### Milestone M5 Assistance and reminders
 
-Milestone status: Not started
+Milestone status: In progress
 
 | Task | Deliverable                                | Acceptance                                           | Status      |
 | ---- | ------------------------------------------ | ---------------------------------------------------- | ----------- |
-| T24  | AI adapter, allowance reservation and job  | Provider failures preserve ordinary writing          | Not started |
+| T24  | AI adapter, allowance reservation and job  | Provider failures preserve ordinary writing          | Complete |
 | T25  | Client suggestion preview and acceptance   | No automatic submission or overwriting newer answers | Not started |
 | T26  | Reminder policy, outbox and email delivery | No chase when all remaining work is agency review    | Not started |
 | T27  | SMS consent, verification and suppression  | STOP and quiet-window sandbox cases pass             | Not started |
@@ -824,3 +824,10 @@ T23 implementation resumed from the two uncommitted private streaming-storage ad
 Focused verification: streaming1 passed; export/renderer17 passed; uncertain-commit regression1 passed; frontend export/review12 passed; TypeScript/build and changed-file lint/format passed. One real HTTPS journey with MSW disabled passed ZIP download, real files and matching JSON/Markdown snapshots; initial test-harness issues were corrected before the passing run. Full backend clean verify passed **955 tests, zero failures/errors/skips in one complete run**, preserving936 existing cases plus19 additions; Flyway V1–V18/Hibernate validation/upgrade/restart and executable JAR packaging passed. The focused existing mock artifact test also passed1 case, with24 unrelated cases intentionally filtered out. T23 is Complete for original-roadmap local acceptance. Unrelated responsive/PWA suites were intentionally skipped. Existing release/provider/device gates remain unchanged. [Contracts, file manifest, operations and evidence](T23_IMPLEMENTATION.md).
 
 T23 backend implementation commit:`f1690f6`; frontend/documentation commit and final working tree are reported separately. No push.
+
+
+## T24 AI adapter and durable allowance/job boundary — 2 November 2026
+
+Original T24 belongs to M5, not M4: **AI adapter, allowance reservation and job**, acceptance **Provider failures preserve ordinary writing**. V19 adds AI usage periods and durable client-scoped jobs; existing live grant/visibility/version/plan checks, audit/idempotency and ordinary draft persistence are reused. A concrete Responses HTTP adapter uses strict locally validated JSON, selected facts only, store=false, bounded output/body/30-second budget and at most one controlled transient retry. Worst-case cost and monthly drafts reserve atomically; unknown outcomes are conservatively charged without blind retry. No T25 acceptance/answer mutation, no paid call, no guessed production model/price and no supplied-spec/applied-migration change. M5 is In progress; prior M4 status and release/device gates are preserved.
+
+Focused verification passed15 cases, then8 affected provider/failure cases (16 distinct T24 additions). One complete real HTTPS lifecycle with MSW disabled passed AI failure/manual writing plus preserved review/reopening/export flows. Earlier review500 was traced to a concurrent collection-repository edit removing restoreSubmission; its committed method was restored while preserving unrelated formatting, followed by clean compilation and a green browser rerun. The single full backend clean verify passed **971 tests, zero failures/errors/skips**, preserving955 baseline cases plus16 T24 additions. Flyway V1–V19/upgrade/restart/Hibernate validation and executable JAR packaging passed. Changed browser-runner lint/format passed; frontend runtime code is unchanged, so frontend unit/build/responsive/PWA suites were intentionally skipped. T24 is Complete for original-roadmap local acceptance, with production model/account/pricing/privacy/grounding and existing release/device gates preserved. The two unrelated collection-file edits remain outside the T24 commit. [Exact scope, contracts, costs, production gates and files](T24_IMPLEMENTATION.md).

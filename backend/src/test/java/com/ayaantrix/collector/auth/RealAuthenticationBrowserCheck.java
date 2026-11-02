@@ -44,6 +44,8 @@ class RealAuthenticationBrowserCheck {
     }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class Configuration {
+        @Bean @Primary com.ayaantrix.collector.ai.provider.AiDraftProvider browserAiProvider(){return new com.ayaantrix.collector.ai.provider.AiDraftProvider(){public boolean available(){return true;}public Output generate(Input input,java.time.Duration remaining){throw new Failure("AI_TIMEOUT",false);}};}
+        @Bean org.springframework.web.servlet.config.annotation.WebMvcConfigurer safeBrowserDiagnostics(){return new org.springframework.web.servlet.config.annotation.WebMvcConfigurer(){public void extendHandlerExceptionResolvers(java.util.List<org.springframework.web.servlet.HandlerExceptionResolver> resolvers){resolvers.addFirst((request,response,handler,error)->{Throwable root=error;while(root.getCause()!=null)root=root.getCause();if(!(error instanceof com.ayaantrix.collector.common.error.ApiException)){System.out.println("SAFE_BROWSER_ERROR "+root.getClass().getName());java.util.Arrays.stream(root.getStackTrace()).limit(6).forEach(frame->System.out.println("SAFE_BROWSER_FRAME "+frame));}return null;});}};}
         @Bean @Primary Mailbox browserMailbox(){return new Mailbox();}
         @Bean @Primary AccountRegistrationWorkflowTests.TestClock browserClock(){var clock=new AccountRegistrationWorkflowTests.TestClock();clock.now.set(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));return clock;}
     }
@@ -64,7 +66,7 @@ class RealAuthenticationBrowserCheck {
             "--spring.datasource.username="+POSTGRES.getUsername(),"--spring.datasource.password="+POSTGRES.getPassword(),
             "--collector.jwt.private-key="+keys.privateFile(),"--collector.jwt.public-keys="+keys.publicFile(),"--collector.jwt.key-id="+keys.kid(),
             "--collector.delivery.encryption-key="+pepper,"--collector.delivery.encryption-key-id=browser-test","--collector.jwt.issuer=https://browser.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+pepper,
-            "--collector.exports.worker-enabled=true","--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false"),java.util.Arrays.stream(storage.args()).map(v->v.equals("--collector.storage.worker-enabled=false")?"--collector.storage.worker-enabled=true":v)).toArray(String[]::new))) {
+            "--collector.ai.worker-enabled=true","--AI_MODEL=synthetic-structured-fixture","--AI_INPUT_MICROUSD_PER_TOKEN=1","--AI_OUTPUT_MICROUSD_PER_TOKEN=2","--AI_MONTHLY_BUDGET_MICROUSD=10000000","--collector.workspace.trial-ai-drafts=20","--collector.exports.worker-enabled=true","--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false"),java.util.Arrays.stream(storage.args()).map(v->v.equals("--collector.storage.worker-enabled=false")?"--collector.storage.worker-enabled=true":v)).toArray(String[]::new))) {
             var clock=app.getBean(AccountRegistrationWorkflowTests.TestClock.class);var users=app.getBean(UserAccountRepository.class);
             UserAccount user=null;
             if(!onboarding){user=new UserAccount(email,"Synthetic Browser User",app.getBean(PasswordEncoder.class).encode(password),clock.instant());user.markVerified(clock.instant());users.saveAndFlush(user);}
@@ -122,6 +124,10 @@ class RealAuthenticationBrowserCheck {
                     var clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
                     io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
                     io.step(Map.of("action","client-draft-collection"));
+                    UUID aiItem=jdbc.queryForObject("select id from collector.items where project_id=? and field_type='LONG_TEXT' and state in ('NOT_STARTED','DRAFT') order by id limit 1",UUID.class,clientProject);
+                    jdbc.update("update collector.projects set ai_enabled=true where id=?",clientProject);
+                    jdbc.update("update collector.items set schema_json=jsonb_set(schema_json,'{ai}','{\"enabled\":true,\"targetWords\":150}'::jsonb) where id=?",aiItem);
+                    io.step(Map.of("action","client-ai-failure","item",aiItem.toString()));
                     io.step(Map.of("action","client-attachments"));
                     assertThat(jdbc.queryForObject("select count(*) from collector.submission_revisions where project_id=?",Integer.class,clientProject)).isEqualTo(2);
                     assertThat(jdbc.queryForObject("select count(*) from collector.revision_assets where project_id=?",Integer.class,clientProject)).isEqualTo(2);

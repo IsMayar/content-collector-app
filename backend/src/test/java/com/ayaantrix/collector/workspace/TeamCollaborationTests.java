@@ -244,7 +244,7 @@ class TeamCollaborationTests {
     }
     @Test void restartAndMigrationValidationPreserveInvitationsAndAssignments(){
       var t=tenant();var actor=actor();var member=join(t,actor);var p=create(t,ProjectType.WEBSITE);as(t.actor(),()->assignments().put(t.workspace(),p.id(),member.memberId(),flags(true,false)));var invitation=invite(t,"restart@example.test");context.close();open();
-      assertThat(as(actor,()->service().read(t.workspace(),p.id())).project().id()).isEqualTo(p.id());assertThat(as(t.actor(),()->team().list(t.workspace())).pendingInvites()).extracting(com.ayaantrix.collector.workspace.dto.WorkspaceTeamDtos.Invitation::id).contains(invitation.id());assertThat(context.getBean(Flyway.class).info().applied()).hasSize(18);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+      assertThat(as(actor,()->service().read(t.workspace(),p.id())).project().id()).isEqualTo(p.id());assertThat(as(t.actor(),()->team().list(t.workspace())).pendingInvites()).extracting(com.ayaantrix.collector.workspace.dto.WorkspaceTeamDtos.Invitation::id).contains(invitation.id());assertThat(context.getBean(Flyway.class).info().applied()).hasSize(19);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
     }
     @ParameterizedTest @ValueSource(strings={"membership","assignment"})
     void concurrentRevocationAndMemberReadSerializeWithoutRestoringAccess(String mode) throws Exception {

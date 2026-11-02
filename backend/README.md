@@ -604,3 +604,16 @@ $env:EXPORT_WORKER_ENABLED = 'true'
 ```
 
 `PRIVATE_STORAGE_ENABLED` and export workers default to false in placeholder configuration. The worker persists jobs in PostgreSQL, processes only immutable approved manifests, retries at most three times and removes expired private attempt artifacts. Downloads expire 24 hours after request and are authorized again before issuing a maximum-60-second private URL. Provide sufficient temporary disk (one bounded 2 GiB output per worker instance); stale crash files are swept after 24 hours. Production S3 lifecycle/monitoring/load validation remains an operational gate. Contracts and focused/full verification evidence: [T23 implementation](../docs/T23_IMPLEMENTATION.md).
+
+
+## T24 AI jobs (disabled by default)
+
+Configure the server-only AI_MODEL, OPENAI_API_KEY, positive reviewed integer micro-USD/token ceilings and monthly safety budget in the existing local environment setup before opting into AI_ENABLED. Do not use a model or price guessed from an example. AI_WORKER_ENABLED enables durable dispatch, unknown-outcome reconciliation and30-day content cleanup; TRIAL_AI_DRAFTS and existing project/item opt-ins also apply. No external provider SDK is added: the adapter uses the existing Java21 HTTP runtime. Production account/model/privacy/grounding checks remain required. No paid request was used for local verification.
+
+From backend/, focused local verification:
+
+```powershell
+.\mvnw.cmd '-Dtest=SubmissionTests#ai*,OpenAiResponsesProviderTests' test
+```
+
+Provider failures never block ordinary writing. T25 suggestion acceptance is not implemented. See [T24 report](../docs/T24_IMPLEMENTATION.md) for request/response contracts, conservative accounting, full verification and exact pending gates.

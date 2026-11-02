@@ -100,8 +100,38 @@ class SubmissionTests {
 
         @Bean
         @Primary
+        AiFake aiFake() {
+            return new AiFake();
+        }
+
+        @Bean
+        @Primary
         Mailbox teamMail() {
             return new Mailbox();
+        }
+    }
+
+    static class AiFake implements com.ayaantrix.collector.ai.provider.AiDraftProvider {
+        volatile String failure;
+        volatile int calls;
+        volatile int transientFailures;
+        volatile boolean available = true;
+        volatile Input received;
+
+        public boolean available() {
+            return available;
+        }
+
+        public Output generate(Input input, Duration remaining) {
+            calls++;
+            received = input;
+            if (transientFailures-- > 0) throw new Failure("AI_RATE_LIMITED", true);
+            if (failure != null) throw new Failure(failure, false);
+            return new Output(
+                    new com.ayaantrix.collector.ai.dto.AiDtos.Result(
+                            String.join(" ", input.facts()), input.facts(), List.of(), List.of()),
+                    100,
+                    50);
         }
     }
 
@@ -164,6 +194,11 @@ class SubmissionTests {
                                 "--collector.jwt.audience=collector-api",
                                 "--collector.auth.token-hash-pepper="
                                         + Base64.getEncoder().encodeToString(new byte[32]),
+                                "--AI_MODEL=synthetic-structured-fixture",
+                                "--AI_INPUT_MICROUSD_PER_TOKEN=1",
+                                "--AI_OUTPUT_MICROUSD_PER_TOKEN=2",
+                                "--AI_MONTHLY_BUDGET_MICROUSD=10000000",
+                                "--collector.workspace.trial-ai-drafts=20",
                                 "--collector.delivery.worker-enabled=false",
                                 "--collector.delivery.encryption-key="
                                         + Base64.getEncoder().encodeToString(new byte[32])));
@@ -193,7 +228,15 @@ class SubmissionTests {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        var fake = context.getBean(AiFake.class);
+        fake.failure = null;
+        fake.calls = 0;
+        fake.transientFailures = 0;
+        fake.available = true;
         context.getBean(TestClock.class).time = NOW;
+        jdbc.update(
+                "update collector.ai_draft_jobs set state='FAILED',failure_code='TEST_END' where"
+                        + " state='QUEUED'");
         jdbc.update(
                 "update collector.export_jobs set state='CANCELLED',lease_id=null,lease_until=null"
                         + " where state in ('QUEUED','RUNNING')");
@@ -1291,6 +1334,360 @@ class SubmissionTests {
                                         r.item(),
                                         decision(r, kind),
                                         key));
+    }
+
+    record AiFixture(Fixture f, String cookie, UUID item) {}
+
+    AiFixture aiFixture(ProjectType type) {
+        var f = fixture(type);
+        String cookie = enter(f).credential();
+        var field = field("ai_text", "LONG_TEXT");
+        ((ObjectNode) field).putObject("ai").put("enabled", true).put("targetWords", 150);
+        var all = as(f.tenant().actor(), () -> detail(f.tenant(), f.project()));
+        UUID item =
+                UUID.fromString(
+                        all.structure().getFirst().path("items").get(0).path("id").asText());
+        jdbc.update(
+                "update collector.items set field_type='LONG_TEXT',schema_json=?::jsonb where id=?",
+                field.toString(),
+                item);
+        jdbc.update("update collector.projects set ai_enabled=true where id=?", f.project().id());
+        return new AiFixture(f, cookie, item);
+    }
+
+    com.ayaantrix.collector.ai.service.AiService ai() {
+        return context.getBean(com.ayaantrix.collector.ai.service.AiService.class);
+    }
+
+    com.ayaantrix.collector.ai.dto.AiDtos.Create aiInput(long version) {
+        return new com.ayaantrix.collector.ai.dto.AiDtos.Create(
+                List.of("Family owned practice", "Serving our local community"),
+                "Professional",
+                150,
+                version,
+                true);
+    }
+
+    UUID aiCreate(AiFixture f, String key) {
+        return UUID.fromString(
+                ai().create(f.cookie(), f.f().project().id(), f.item(), aiInput(0), key)
+                        .get("jobId")
+                        .toString());
+    }
+
+    JsonNode aiJob(AiFixture f, UUID id) {
+        return json.valueToTree(ai().get(f.cookie(), f.f().project().id(), id)).path("job");
+    }
+
+    com.ayaantrix.collector.ai.worker.AiWorker aiWorker() {
+        return context.getBean(com.ayaantrix.collector.ai.worker.AiWorker.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProjectType.class)
+    void aiGenerationReservesSettlesAndNeverWritesAnswers(ProjectType type) {
+        var f = aiFixture(type);
+        var id = aiCreate(f, "generate");
+        assertThat(aiCreate(f, "generate")).isEqualTo(id);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select ai_drafts_reserved from collector.usage_periods where"
+                                        + " workspace_id=?",
+                                Integer.class,
+                                f.f().tenant().workspace()))
+                .isEqualTo(1);
+        assertThat(aiWorker().dispatchOne()).isTrue();
+        assertThat(aiJob(f, id).path("state").asText()).isEqualTo("SUCCEEDED");
+        assertThat(aiJob(f, id).path("result").path("factsUsed")).hasSize(2);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.answers where project_id=?",
+                                Integer.class,
+                                f.f().project().id()))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.submission_revisions where"
+                                        + " project_id=?",
+                                Integer.class,
+                                f.f().project().id()))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select ai_cost_microusd from collector.usage_periods where"
+                                        + " workspace_id=?",
+                                Long.class,
+                                f.f().tenant().workspace()))
+                .isEqualTo(200);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select ai_drafts_reserved from collector.usage_periods where"
+                                        + " workspace_id=?",
+                                Integer.class,
+                                f.f().tenant().workspace()))
+                .isZero();
+        assertThat(context.getBean(AiFake.class).received.projectType()).isEqualTo(type.name());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "AI_REFUSED",
+                "AI_TIMEOUT",
+                "AI_INVALID_OUTPUT",
+                "AI_PROVIDER_ERROR",
+                "AI_CREDIT_UNAVAILABLE"
+            })
+    void aiFailurePreservesOrdinaryWriting(String failure) {
+        var f = aiFixture(ProjectType.WEBSITE);
+        save(f.f(), f.cookie(), f.item(), text("My ordinary draft"), 0);
+        var id =
+                UUID.fromString(
+                        ai().create(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        f.item(),
+                                        aiInput(1),
+                                        "generate")
+                                .get("jobId")
+                                .toString());
+        context.getBean(AiFake.class).failure = failure;
+        assertThat(aiWorker().dispatchOne()).isTrue();
+        assertThat(aiJob(f, id).path("state").asText())
+                .isEqualTo(failure.equals("AI_REFUSED") ? "REFUSED" : "FAILED");
+        assertThat(aiJob(f, id).path("failureCode").asText()).isEqualTo(failure);
+        assertThat(
+                        save(f.f(), f.cookie(), f.item(), text("Still writing manually"), 1)
+                                .answer()
+                                .version())
+                .isEqualTo(2);
+        assertThat(context.getBean(AiFake.class).calls).isEqualTo(1);
+    }
+
+    @Test
+    void aiSafetyValidationAndBudgetRollback() {
+        var f = aiFixture(ProjectType.WEBSITE);
+        context.getBean(AiFake.class).available = false;
+        code(() -> aiCreate(f, "unavailable"), "AI_UNAVAILABLE");
+        assertThat(
+                        save(f.f(), f.cookie(), f.item(), text("Manual writing works"), 0)
+                                .answer()
+                                .version())
+                .isEqualTo(1);
+        context.getBean(AiFake.class).available = true;
+        code(() -> aiCreate(f, "stale"), "ANSWER_VERSION_CONFLICT");
+        code(
+                () ->
+                        ai().create(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        f.item(),
+                                        new com.ayaantrix.collector.ai.dto.AiDtos.Create(
+                                                List.of("Fact"), "Professional", 150, 1, false),
+                                        "consent"),
+                "VALIDATION_FAILED");
+        assertThatThrownBy(
+                        () ->
+                                tx().executeWithoutResult(
+                                                status -> {
+                                                    ai().create(
+                                                                    f.cookie(),
+                                                                    f.f().project().id(),
+                                                                    f.item(),
+                                                                    aiInput(1),
+                                                                    "rollback");
+                                                    throw new IllegalStateException();
+                                                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.usage_periods where workspace_id=?",
+                                Integer.class,
+                                f.f().tenant().workspace()))
+                .isZero();
+        ai().create(f.cookie(), f.f().project().id(), f.item(), aiInput(1), "budget-first");
+        jdbc.update(
+                "update collector.usage_periods set ai_cost_microusd=10000000-ai_reserved_microusd"
+                        + " where workspace_id=?",
+                f.f().tenant().workspace());
+        code(
+                () ->
+                        ai().create(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        f.item(),
+                                        aiInput(1),
+                                        "budget-exhausted"),
+                "AI_ALLOWANCE_EXHAUSTED");
+    }
+
+    @Test
+    void aiAtomicAllowanceAndControlledRetry() throws Exception {
+        var f = aiFixture(ProjectType.WEBSITE);
+        UUID first = aiCreate(f, "first");
+        context.getBean(AiFake.class).transientFailures = 1;
+        assertThat(aiWorker().dispatchOne()).isTrue();
+        assertThat(aiJob(f, first).path("state").asText()).isEqualTo("SUCCEEDED");
+        assertThat(context.getBean(AiFake.class).calls).isEqualTo(2);
+        jdbc.update(
+                "update collector.usage_periods set ai_drafts_used=19 where workspace_id=?",
+                f.f().tenant().workspace());
+        var pool = Executors.newFixedThreadPool(2);
+        var start = new CountDownLatch(1);
+        try {
+            var a =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                try {
+                                    return aiCreate(f, "a").toString();
+                                } catch (ApiException e) {
+                                    return e.getCode();
+                                }
+                            });
+            var b =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                try {
+                                    return aiCreate(f, "b").toString();
+                                } catch (ApiException e) {
+                                    return e.getCode();
+                                }
+                            });
+            start.countDown();
+            var outcomes = List.of(a.get(15, TimeUnit.SECONDS), b.get(15, TimeUnit.SECONDS));
+            assertThat(outcomes).filteredOn(x -> x.equals("AI_ALLOWANCE_EXHAUSTED")).hasSize(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select ai_drafts_used+ai_drafts_reserved from"
+                                        + " collector.usage_periods where workspace_id=?",
+                                Integer.class,
+                                f.f().tenant().workspace()))
+                .isEqualTo(20);
+    }
+
+    @Test
+    void aiGrantChangesAndUnknownLeasesNeverResend() {
+        var f = aiFixture(ProjectType.WEBSITE);
+        var id = aiCreate(f, "generate");
+        as(
+                f.f().tenant().actor(),
+                () -> {
+                    access().revoke(
+                                    f.f().tenant().workspace(),
+                                    f.f().project().id(),
+                                    f.f().contact());
+                    return null;
+                });
+        assertThat(aiWorker().dispatchOne()).isTrue();
+        assertThat(context.getBean(AiFake.class).calls).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.ai_draft_jobs where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("FAILED");
+        var other = aiFixture(ProjectType.WEBSITE);
+        var pending = aiCreate(other, "generate");
+        var repository = context.getBean(com.ayaantrix.collector.ai.repository.AiRepository.class);
+        var claimed = tx().execute(status -> repository.claim(NOW)).orElseThrow();
+        assertThat(claimed.id()).isEqualTo(pending);
+        context.getBean(TestClock.class).time = NOW.plusSeconds(76);
+        aiWorker().cleanup();
+        assertThat(aiJob(other, pending).path("failureCode").asText())
+                .isEqualTo("AI_OUTCOME_UNKNOWN");
+        assertThat(aiWorker().dispatchOne()).isFalse();
+        assertThat(context.getBean(AiFake.class).calls).isZero();
+    }
+
+    @Test
+    void aiEligibilityContactIsolationAndRetention() {
+        var f = aiFixture(ProjectType.WEBSITE);
+        UUID p = f.f().project().id();
+        jdbc.update("update collector.projects set ai_enabled=false where id=?", p);
+        code(() -> aiCreate(f, "disabled"), "AI_UNAVAILABLE");
+        jdbc.update("update collector.projects set ai_enabled=true where id=?", p);
+        var id = aiCreate(f, "generate");
+        var second =
+                as(
+                        f.f().tenant().actor(),
+                        () ->
+                                context.getBean(
+                                                com.ayaantrix.collector.project.service
+                                                        .ProjectClientService.class)
+                                        .createContact(
+                                                f.f().tenant().workspace(),
+                                                p,
+                                                new com.ayaantrix.collector.project.dto
+                                                        .ProjectClientDtos.ContactCreate(
+                                                        f.f().tenant().client(),
+                                                        "Second Client",
+                                                        "second-"
+                                                                + UUID.randomUUID()
+                                                                + "@example.test",
+                                                        NOW.plus(Duration.ofDays(90)))));
+        var otherCookie =
+                enter(new Fixture(f.f().tenant(), f.f().project(), second.id())).credential();
+        code(() -> ai().get(otherCookie, p, id), "NOT_FOUND");
+        context.close();
+        open();
+        assertThat(aiWorker().dispatchOne()).isTrue();
+        assertThat(aiJob(f, id).path("state").asText()).isEqualTo("SUCCEEDED");
+        context.getBean(TestClock.class).time = NOW.plus(Duration.ofDays(31));
+        aiWorker().cleanup();
+        var row =
+                context.getBean(com.ayaantrix.collector.ai.repository.AiRepository.class)
+                        .find(f.f().tenant().workspace(), p, id)
+                        .orElseThrow();
+        assertThat(row.state()).isEqualTo("EXPIRED");
+        assertThat(row.input()).isNull();
+        assertThat(row.result()).isNull();
+    }
+
+    @Test
+    void aiHttpCsrfContactScopeAndNoAcceptance() throws Exception {
+        var f = aiFixture(ProjectType.WEBSITE);
+        String root = "/api/v1/client/projects/" + f.f().project().id();
+        var cookie = new jakarta.servlet.http.Cookie(cookieName(), f.cookie());
+        String body = json.writeValueAsString(aiInput(0));
+        mvc.perform(
+                        post(root + "/items/" + f.item() + "/ai-drafts")
+                                .cookie(cookie)
+                                .header("Idempotency-Key", "csrf")
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isForbidden());
+        var result =
+                mvc.perform(
+                                post(root + "/items/" + f.item() + "/ai-drafts")
+                                        .with(csrf())
+                                        .cookie(cookie)
+                                        .header("Idempotency-Key", "http")
+                                        .contentType("application/json")
+                                        .content(body))
+                        .andExpect(status().isAccepted())
+                        .andExpect(header().exists("X-Request-ID"))
+                        .andReturn();
+        UUID id =
+                UUID.fromString(
+                        json.readTree(result.getResponse().getContentAsString())
+                                .path("jobId")
+                                .asText());
+        var foreign = aiFixture(ProjectType.WEBSITE);
+        assertThatThrownBy(() -> ai().get(foreign.cookie(), f.f().project().id(), id))
+                .isInstanceOf(ApiException.class);
+        mvc.perform(get(root + "/ai-drafts/" + id)).andExpect(status().isUnauthorized());
+        mvc.perform(
+                        post(root + "/ai-drafts/" + id + "/accept")
+                                .with(csrf())
+                                .cookie(cookie)
+                                .contentType("application/json")
+                                .content("{}"))
+                .andExpect(status().isForbidden());
     }
 
     com.ayaantrix.collector.export.service.ExportService exports() {
