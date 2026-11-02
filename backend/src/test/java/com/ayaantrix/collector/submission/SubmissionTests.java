@@ -1541,7 +1541,7 @@ class SubmissionTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"withdraw", "newSubmission", "pause", "membership", "assignment"})
+    @ValueSource(strings = {"withdraw", "newSubmission", "archive", "membership", "assignment"})
     void reviewWaitingWriterRechecksCommittedState(String kind) throws Exception {
         var r = reviewFixture();
         var f = r.f();
@@ -1646,11 +1646,11 @@ class SubmissionTests {
                                                                                     "next");
                                                                 }
                                                             }
-                                                            case "pause" ->
+                                                            case "archive" ->
                                                                     jdbc.update(
                                                                             "update"
                                                                                 + " collector.projects"
-                                                                                + " set state='PAUSED'"
+                                                                                + " set state='ARCHIVED'"
                                                                                 + " where id=?",
                                                                             f.project().id());
                                                             case "membership" ->
@@ -1843,5 +1843,699 @@ class SubmissionTests {
         assertThat(reviews().clientComments(r.cookie(), f.project().id(), r.item()))
                 .containsKey("data");
         assertThat(count(f.tenant(), "review_decisions")).isZero();
+    }
+
+    com.ayaantrix.collector.project.service.ProjectLifecycleService lifecycle() {
+        return context.getBean(
+                com.ayaantrix.collector.project.service.ProjectLifecycleService.class);
+    }
+
+    com.ayaantrix.collector.project.service.ProjectReopeningService reopening() {
+        return context.getBean(
+                com.ayaantrix.collector.project.service.ProjectReopeningService.class);
+    }
+
+    Fixture draftProject(ProjectType type) {
+        var t = tenant();
+        var p = create(t, type);
+        var c =
+                as(
+                        t.actor(),
+                        () ->
+                                context.getBean(
+                                                com.ayaantrix.collector.project.service
+                                                        .ProjectClientService.class)
+                                        .createContact(
+                                                t.workspace(),
+                                                p.id(),
+                                                new com.ayaantrix.collector.project.dto
+                                                        .ProjectClientDtos.ContactCreate(
+                                                        t.client(),
+                                                        "Publication client",
+                                                        "publish-"
+                                                                + UUID.randomUUID()
+                                                                + "@example.test",
+                                                        NOW.plus(Duration.ofDays(90)))));
+        return new Fixture(t, p, c.id());
+    }
+
+    Map<String, Object> lifecycle(Fixture f, String action, String reason, String key) {
+        return as(
+                f.tenant().actor(),
+                () ->
+                        lifecycle()
+                                .transition(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        action,
+                                        new com.ayaantrix.collector.project.dto.ProjectLifecycleDtos
+                                                .Command(
+                                                detail(f.tenant(), f.project()).project().version(),
+                                                reason),
+                                        key));
+    }
+
+    Map<String, Object> reopenItem(ReviewFixture r, long version, String reason, String key) {
+        return as(
+                r.f().tenant().actor(),
+                () ->
+                        reopening()
+                                .reopen(
+                                        r.f().tenant().workspace(),
+                                        r.f().project().id(),
+                                        r.item(),
+                                        new com.ayaantrix.collector.project.dto.ProjectLifecycleDtos
+                                                .Reopen(version, reason),
+                                        key));
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProjectType.class)
+    void lifecyclePublishesWithRealClientAccessAndStableSnapshot(ProjectType type) {
+        var f = draftProject(type);
+        var before =
+                jdbc.queryForObject(
+                        "select definition::text from collector.project_snapshots where"
+                            + " project_id=?",
+                        String.class,
+                        f.project().id());
+        code(() -> invite(f), "PROJECT_NOT_PUBLISHED");
+        var published = lifecycle(f, "publish", null, "publish");
+        assertThat(published.get("projectState")).isEqualTo("ACTIVE");
+        assertThat(published.get("publishedAt")).isNotNull();
+        assertThat(published.get("publishedVersion")).isEqualTo(published.get("projectVersion"));
+        String c = enter(f).credential();
+        assertThat(portal().checklist(c, f.project().id())).containsKey("sections");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select definition::text from collector.project_snapshots where"
+                                    + " project_id=?",
+                                String.class,
+                                f.project().id()))
+                .isEqualTo(before);
+    }
+
+    @Test
+    void lifecyclePublicationReplayAndStaleVersion() {
+        var f = draftProject(ProjectType.WEBSITE);
+        long version = detail(f.tenant(), f.project()).project().version();
+        var cmd =
+                new com.ayaantrix.collector.project.dto.ProjectLifecycleDtos.Command(version, null);
+        var first =
+                as(
+                        f.tenant().actor(),
+                        () ->
+                                lifecycle()
+                                        .transition(
+                                                f.tenant().workspace(),
+                                                f.project().id(),
+                                                "publish",
+                                                cmd,
+                                                "same"));
+        assertThat(
+                        json.readTree(
+                                json.writeValueAsString(
+                                        as(
+                                                f.tenant().actor(),
+                                                () ->
+                                                        lifecycle()
+                                                                .transition(
+                                                                        f.tenant().workspace(),
+                                                                        f.project().id(),
+                                                                        "publish",
+                                                                        cmd,
+                                                                        "same")))))
+                .isEqualTo(json.readTree(json.writeValueAsString(first)));
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        lifecycle()
+                                                .transition(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        "pause",
+                                                        cmd,
+                                                        "stale")),
+                "PROJECT_VERSION_CONFLICT");
+        assertThat(count(f.tenant(), "project_lifecycle_events")).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"contact", "disabled"})
+    void lifecyclePublicationRequiresUsableContactAndRequests(String missing) {
+        var f = draftProject(ProjectType.WEBSITE);
+        if (missing.equals("contact"))
+            jdbc.update(
+                    "update collector.project_contacts set state='REVOKED',revoked_at=now() where"
+                        + " id=?",
+                    f.contact());
+        else
+            jdbc.update(
+                    "update collector.sections set enabled=false where project_id=?",
+                    f.project().id());
+        code(() -> lifecycle(f, "publish", null, "invalid"), "PUBLICATION_VALIDATION_FAILED");
+        assertThat(detail(f.tenant(), f.project()).project().state().name()).isEqualTo("DRAFT");
+        assertThat(count(f.tenant(), "project_lifecycle_events")).isZero();
+    }
+
+    @Test
+    void lifecyclePauseReviewResumeArchiveRestoreAndClientWrites() {
+        var f = draftProject(ProjectType.WEBSITE);
+        lifecycle(f, "publish", null, "publish");
+        String c = enter(f).credential();
+        UUID i = textItem(f);
+        save(f, c, i, text("Ready for review"), 0);
+        var submitted = submit(f, c, i, 1, "submit");
+        var r = new ReviewFixture(f, c, i, submitted);
+        lifecycle(f, "pause", null, "pause");
+        assertThat(portal().checklist(c, f.project().id())).containsKey("sections");
+        code(() -> save(f, c, i, text("Blocked"), 1), "READ_ONLY");
+        decide(r, "APPROVE", "paused-review");
+        lifecycle(f, "resume", null, "resume");
+        lifecycle(f, "archive", null, "archive");
+        assertThat(portal().checklist(c, f.project().id())).containsKey("sections");
+        assertThatThrownBy(() -> invite(f)).isInstanceOf(ApiException.class);
+        lifecycle(f, "restore", null, "restore");
+        assertThat(detail(f.tenant(), f.project()).project().state().name()).isEqualTo("PAUSED");
+        lifecycle(f, "resume", null, "resume2");
+    }
+
+    @Test
+    void lifecycleCompletionUsesVisibleRequiredApprovalsAndProjectReopenPreservesThem() {
+        var r = reviewFixture();
+        var f = r.f();
+        code(() -> lifecycle(f, "complete", null, "incomplete"), "PROJECT_INCOMPLETE");
+        // Existing schema disable operations preserve the submitted item; optional/hidden work is
+        // excluded.
+        jdbc.update(
+                "update collector.items set"
+                    + " required=false,schema_json=jsonb_set(schema_json,'{required}','false'::jsonb)"
+                    + " where project_id=? and id<>?",
+                f.project().id(),
+                r.item());
+        decide(r, "APPROVE", "approve");
+        lifecycle(f, "complete", null, "complete");
+        code(() -> lifecycle(f, "reopen", " ", "missing-reason"), "VALIDATION_FAILED");
+        lifecycle(f, "reopen", "Client requested an update", "project-reopen");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.items where id=?",
+                                String.class,
+                                r.item()))
+                .isEqualTo("APPROVED");
+        reopenItem(r, r.submitted().itemVersion() + 1, "Update the headline", "item-reopen");
+        assertThat(detail(f.tenant(), f.project()).project().progress().approvedRequired())
+                .isZero();
+    }
+
+    @Test
+    void reopeningPreservesExactApprovalAndEnablesANewRevision() {
+        var r = reviewFixture();
+        var f = r.f();
+        decide(r, "APPROVE", "approve");
+        var before =
+                as(
+                        f.tenant().actor(),
+                        () ->
+                                submissions()
+                                        .detail(
+                                                f.tenant().workspace(),
+                                                f.project().id(),
+                                                r.item(),
+                                                r.submitted().revisionId()));
+        var input =
+                new com.ayaantrix.collector.project.dto.ProjectLifecycleDtos.Reopen(
+                        r.submitted().itemVersion() + 1, "Client requests updates");
+        as(
+                f.tenant().actor(),
+                () ->
+                        reopening()
+                                .reopen(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        r.item(),
+                                        input,
+                                        "reopen"));
+        as(
+                f.tenant().actor(),
+                () ->
+                        reopening()
+                                .reopen(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        r.item(),
+                                        input,
+                                        "reopen"));
+        assertThat(drafts().read(r.cookie(), f.project().id(), r.item()).get("item"))
+                .satisfies(n -> assertThat(((JsonNode) n).path("canEdit").asBoolean()).isTrue());
+        save(f, r.cookie(), r.item(), text("Updated after approval"), 2);
+        var next = submit(f, r.cookie(), r.item(), 3, "new");
+        assertThat(next.revisionNo()).isEqualTo(2);
+        assertThat(
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        submissions()
+                                                .detail(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        r.item(),
+                                                        r.submitted().revisionId())))
+                .isEqualTo(before);
+        assertThat(count(f.tenant(), "item_reopenings")).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"publish", "item"})
+    void lifecycleConcurrentTransitionsHaveOneWinner(String kind) throws Exception {
+        var f = draftProject(ProjectType.WEBSITE);
+        ReviewFixture r;
+        if (kind.equals("item")) {
+            lifecycle(f, "publish", null, "pub");
+            String c = enter(f).credential();
+            UUID i = textItem(f);
+            save(f, c, i, text("Submitted"), 0);
+            r = new ReviewFixture(f, c, i, submit(f, c, i, 1, "s"));
+            decide(r, "APPROVE", "a");
+        } else r = null;
+        long version = detail(f.tenant(), f.project()).project().version();
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var jobs = new ArrayList<Future<Boolean>>();
+            for (int n = 0; n < 2; n++) {
+                String key = "race" + n;
+                jobs.add(
+                        pool.submit(
+                                () -> {
+                                    start.await();
+                                    try {
+                                        if (r == null)
+                                            as(
+                                                    f.tenant().actor(),
+                                                    () ->
+                                                            lifecycle()
+                                                                    .transition(
+                                                                            f.tenant().workspace(),
+                                                                            f.project().id(),
+                                                                            "publish",
+                                                                            new com.ayaantrix
+                                                                                    .collector
+                                                                                    .project.dto
+                                                                                    .ProjectLifecycleDtos
+                                                                                    .Command(
+                                                                                    version, null),
+                                                                            key));
+                                        else
+                                            reopenItem(
+                                                    r,
+                                                    r.submitted().itemVersion() + 1,
+                                                    "Reopen",
+                                                    key);
+                                        return true;
+                                    } catch (ApiException conflict) {
+                                        assertThat(conflict.getStatus().value()).isEqualTo(409);
+                                        return false;
+                                    }
+                                }));
+            }
+            start.countDown();
+            int winners = 0;
+            for (var job : jobs) if (job.get(20, TimeUnit.SECONDS)) winners++;
+            assertThat(winners).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void collectedDraftRevalidationRejectsDestructiveSchemaWithoutLosingAnswers() {
+        var f = fixture();
+        String c = enter(f).credential();
+        UUID i = textItem(f);
+        save(f, c, i, text("Retain this full answer"), 0);
+        var d = detail(f.tenant(), f.project());
+        var item = d.structure().getFirst().path("items").get(0);
+        var incompatible = definition(item);
+        ((ObjectNode) incompatible.path("validation")).put("maxLength", 2);
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        editor().patchItem(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        i,
+                                                        new ItemPatch(
+                                                                incompatible,
+                                                                d.project().structureVersion(),
+                                                                false))),
+                "DRAFT_REVALIDATION_FAILED");
+        var compatible = definition(item);
+        ((ObjectNode) compatible.path("validation")).put("maxLength", 180);
+        as(
+                f.tenant().actor(),
+                () ->
+                        editor().patchItem(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        i,
+                                        new ItemPatch(
+                                                compatible,
+                                                d.project().structureVersion(),
+                                                false)));
+        assertThat(
+                        json.<JsonNode>valueToTree(drafts().read(c, f.project().id(), i))
+                                .at("/answer/value/text")
+                                .asText())
+                .isEqualTo("Retain this full answer");
+    }
+
+    @Test
+    void collectedSubmittedSchemaRequiresReasonAndAtomicallyReopens() {
+        var r = reviewFixture();
+        var f = r.f();
+        var before = detail(f.tenant(), f.project());
+        var original = before.structure().getFirst().path("items").get(0);
+        var def = definition(original);
+        ((ObjectNode) def.path("validation")).put("maxLength", 180);
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        editor().patchItem(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        r.item(),
+                                                        new ItemPatch(
+                                                                def,
+                                                                before.project().structureVersion(),
+                                                                false))),
+                "REOPEN_REQUIRED");
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        editor().patchItem(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        r.item(),
+                                                        new ItemPatch(
+                                                                def,
+                                                                before.project().structureVersion(),
+                                                                true))),
+                "REOPEN_REQUIRED");
+        as(
+                f.tenant().actor(),
+                () ->
+                        editor().patchItem(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        r.item(),
+                                        new ItemPatch(
+                                                def,
+                                                before.project().structureVersion(),
+                                                true,
+                                                "Revise the requested limit")));
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.items where id=?",
+                                String.class,
+                                r.item()))
+                .isEqualTo("DRAFT");
+        assertThat(count(f.tenant(), "submission_revisions")).isEqualTo(1);
+        assertThat(count(f.tenant(), "item_reopenings")).isEqualTo(1);
+        assertThat(detail(f.tenant(), f.project()).project().structureVersion())
+                .isEqualTo(before.project().structureVersion() + 1);
+    }
+
+    @Test
+    void collectedApprovedReopenProofAllowsCompatibleStructureAndRetainsSnapshot() {
+        var r = reviewFixture();
+        var f = r.f();
+        decide(r, "APPROVE", "approve");
+        reopenItem(r, r.submitted().itemVersion() + 1, "New wording needed", "open");
+        var current = detail(f.tenant(), f.project());
+        var def = definition(current.structure().getFirst().path("items").get(0));
+        ((ObjectNode) def.path("validation")).put("maxLength", 180);
+        as(
+                f.tenant().actor(),
+                () ->
+                        editor().patchItem(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        r.item(),
+                                        new ItemPatch(
+                                                def, current.project().structureVersion(), false)));
+        assertThat(count(f.tenant(), "review_decisions")).isEqualTo(1);
+        assertThat(count(f.tenant(), "submission_revisions")).isEqualTo(1);
+    }
+
+    @Test
+    void lifecycleAndReopeningRollbackIncludeHistoryAndVersions() {
+        var f = draftProject(ProjectType.WEBSITE);
+        assertThatThrownBy(
+                        () ->
+                                tx().executeWithoutResult(
+                                                s1 -> {
+                                                    lifecycle(f, "publish", null, "rollback");
+                                                    throw new IllegalStateException(
+                                                            "Synthetic rollback");
+                                                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(detail(f.tenant(), f.project()).project().state().name()).isEqualTo("DRAFT");
+        assertThat(count(f.tenant(), "project_lifecycle_events")).isZero();
+        lifecycle(f, "publish", null, "rollback");
+        var r = reviewFixture();
+        decide(r, "APPROVE", "a");
+        assertThatThrownBy(
+                        () ->
+                                tx().executeWithoutResult(
+                                                st -> {
+                                                    reopenItem(
+                                                            r,
+                                                            r.submitted().itemVersion() + 1,
+                                                            "Reason",
+                                                            "rollback-item");
+                                                    throw new IllegalStateException(
+                                                            "Synthetic rollback");
+                                                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(count(r.f().tenant(), "item_reopenings")).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.items where id=?",
+                                String.class,
+                                r.item()))
+                .isEqualTo("APPROVED");
+    }
+
+    @Test
+    void lifecycleHttpSecurityCorrelationAndExactStateContracts() throws Exception {
+        var f = draftProject(ProjectType.WEBSITE);
+        String path = f.tenant().root() + "/projects/" + f.project().id() + "/publish";
+        var input =
+                new com.ayaantrix.collector.project.dto.ProjectLifecycleDtos.Command(
+                        detail(f.tenant(), f.project()).project().version(), null);
+        String body = json.writeValueAsString(input);
+        mvc.perform(
+                        post(path)
+                                .header("Authorization", bearer(f.tenant()))
+                                .header("Idempotency-Key", "http")
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(
+                        post(path)
+                                .with(csrf().asHeader())
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(
+                        post(path)
+                                .with(csrf().asHeader())
+                                .header("Authorization", bearer(f.tenant()))
+                                .header("Idempotency-Key", "http")
+                                .header("X-Request-ID", "publication-contract")
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projectState").value("ACTIVE"))
+                .andExpect(header().string("X-Request-ID", "publication-contract"));
+        var other = tenant();
+        assertThatThrownBy(
+                        () ->
+                                as(
+                                        other.actor(),
+                                        () ->
+                                                lifecycle()
+                                                        .transition(
+                                                                f.tenant().workspace(),
+                                                                f.project().id(),
+                                                                "archive",
+                                                                input,
+                                                                "foreign")))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"reviewer", "exporter", "unassigned", "revoked"})
+    void reopeningRespectsIndependentPermissionAndOwnerLifecycle(String kind) {
+        var r = reviewFixture();
+        var f = r.f();
+        decide(r, "APPROVE", "approved");
+        var actor = actor();
+        var member =
+                new WorkspaceMember(f.tenant().workspace(), actor.id(), WorkspaceRole.MEMBER, NOW);
+        context.getBean(WorkspaceMemberRepository.class).saveAndFlush(member);
+        if (!kind.equals("unassigned"))
+            jdbc.update(
+                    "insert into"
+                        + " collector.project_members(workspace_id,project_id,workspace_member_id,can_review,can_export,created_at,updated_at)"
+                        + " values(?,?,?,?,?,?,?)",
+                    f.tenant().workspace(),
+                    f.project().id(),
+                    member.id(),
+                    kind.equals("reviewer"),
+                    kind.equals("exporter"),
+                    java.sql.Timestamp.from(NOW),
+                    java.sql.Timestamp.from(NOW));
+        if (kind.equals("revoked"))
+            jdbc.update(
+                    "update collector.workspace_members set state='DISABLED' where id=?",
+                    member.id());
+        var cmd =
+                new com.ayaantrix.collector.project.dto.ProjectLifecycleDtos.Reopen(
+                        r.submitted().itemVersion() + 1, "Client updates");
+        if (kind.equals("reviewer"))
+            as(
+                    actor,
+                    () ->
+                            reopening()
+                                    .reopen(
+                                            f.tenant().workspace(),
+                                            f.project().id(),
+                                            r.item(),
+                                            cmd,
+                                            "reviewer"));
+        else
+            assertThatThrownBy(
+                            () ->
+                                    as(
+                                            actor,
+                                            () ->
+                                                    reopening()
+                                                            .reopen(
+                                                                    f.tenant().workspace(),
+                                                                    f.project().id(),
+                                                                    r.item(),
+                                                                    cmd,
+                                                                    "denied")))
+                    .isInstanceOf(ApiException.class);
+        assertThatThrownBy(
+                        () ->
+                                as(
+                                        actor,
+                                        () ->
+                                                lifecycle()
+                                                        .transition(
+                                                                f.tenant().workspace(),
+                                                                f.project().id(),
+                                                                "archive",
+                                                                new com.ayaantrix.collector.project
+                                                                        .dto.ProjectLifecycleDtos
+                                                                        .Command(1, null),
+                                                                "owner-only")))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void reopeningCannotRaceAStaleApprovalIntoTheNewDraft() throws Exception {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "approved");
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var opening =
+                    pool.submit(
+                            () ->
+                                    reopenItem(
+                                            r,
+                                            r.submitted().itemVersion() + 1,
+                                            "Update content",
+                                            "opening"));
+            var stale =
+                    pool.submit(
+                            () -> {
+                                code(
+                                        () -> decide(r, "APPROVE", "stale-approval"),
+                                        "ITEM_VERSION_CONFLICT");
+                                return true;
+                            });
+            opening.get(20, TimeUnit.SECONDS);
+            assertThat(stale.get(20, TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.items where id=?",
+                                String.class,
+                                r.item()))
+                .isEqualTo("DRAFT");
+        assertThat(count(r.f().tenant(), "review_decisions")).isEqualTo(1);
+    }
+
+    @Test
+    void lifecyclePauseSerializesAgainstAutosaveWithoutLosingSavedText() throws Exception {
+        var f = draftProject(ProjectType.WEBSITE);
+        lifecycle(f, "publish", null, "pub");
+        String c = enter(f).credential();
+        UUID i = textItem(f);
+        save(f, c, i, text("Preserved draft"), 0);
+        long structure = detail(f.tenant(), f.project()).project().structureVersion();
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var writer =
+                    pool.submit(
+                            () ->
+                                    tx().executeWithoutResult(
+                                                    st -> {
+                                                        lifecycle(f, "pause", null, "pause");
+                                                        held.countDown();
+                                                        try {
+                                                            if (!release.await(
+                                                                    12, TimeUnit.SECONDS))
+                                                                throw new IllegalStateException(
+                                                                        "Lock deadline");
+                                                        } catch (InterruptedException e) {
+                                                            throw new IllegalStateException(e);
+                                                        }
+                                                    }));
+            assertThat(held.await(10, TimeUnit.SECONDS)).isTrue();
+            var saving =
+                    pool.submit(
+                            () -> {
+                                code(
+                                        () ->
+                                                drafts().save(
+                                                                c,
+                                                                f.project().id(),
+                                                                i,
+                                                                saveCommand(
+                                                                        text("Late autosave"),
+                                                                        1,
+                                                                        structure)),
+                                        "READ_ONLY");
+                                return true;
+                            });
+            release.countDown();
+            writer.get(20, TimeUnit.SECONDS);
+            assertThat(saving.get(20, TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(
+                        json.<JsonNode>valueToTree(drafts().read(c, f.project().id(), i))
+                                .at("/answer/value/text")
+                                .asText())
+                .isEqualTo("Preserved draft");
     }
 }

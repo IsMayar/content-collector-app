@@ -20,6 +20,10 @@ public class Project {
     @Column(name="ai_enabled",nullable=false) private boolean aiEnabled;
     @Column(name="created_at",nullable=false,updatable=false) private Instant createdAt;
     @Column(name="updated_at",nullable=false) private Instant updatedAt;
+    @Column(name="published_at") private Instant publishedAt;
+    @Column(name="published_version") private Long publishedVersion;
+    public Instant publishedAt(){return publishedAt;} public Long publishedVersion(){return publishedVersion;}
+    public void transition(ProjectState next,Instant now){state=next;updatedAt=now;if(next==ProjectState.ACTIVE&&publishedAt==null){publishedAt=now;publishedVersion=version+1;}}
     protected Project() {}
     public Project(UUID workspace,UUID client,UUID source,UUID actor,String title,ProjectType type,LocalDate dueDate,String timezone,Instant now) {
         id=UUID.randomUUID();workspaceId=workspace;clientId=client;sourceTemplateVersionId=source;createdBy=actor;

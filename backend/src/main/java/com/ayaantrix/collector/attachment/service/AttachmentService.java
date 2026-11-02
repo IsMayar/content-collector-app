@@ -335,6 +335,47 @@ public class AttachmentService {
     }
 
     /**
+     * Revalidate retained references against a proposed schema without transferring/decoding bytes.
+     */
+    public void validateStructureReferences(
+            UUID w, UUID p, UUID i, JsonNode field, JsonNode value) {
+        validateReferences(w, p, i, value);
+        var ids = new HashSet<String>();
+        if (value.has("assetIds")) for (var id : value.path("assetIds")) ids.add(id.asText());
+        if (value.has("rows"))
+            for (var row : value.path("rows"))
+                for (var cell : row.path("values"))
+                    if (cell.isArray()) for (var id : cell) ids.add(id.asText());
+        for (String id : ids) {
+            var asset =
+                    assets.find(w, p, UUID.fromString(id))
+                            .orElseThrow(ProjectAuthorization::missing);
+            if (Set.of("IMAGE", "REPEATER").contains(field.path("type").asText())
+                    && !Set.of("image/jpeg", "image/png").contains(asset.detectedType()))
+                throw new ApiException(
+                        HttpStatus.UNPROCESSABLE_ENTITY,
+                        "INVALID_ASSET_REFERENCE",
+                        "Choose a verified image for this field.");
+            var allowed = field.path("validation").path("allowedExtensions");
+            if (allowed.isArray() && !allowed.isEmpty()) {
+                String ext =
+                        asset.name()
+                                .substring(asset.name().lastIndexOf('.') + 1)
+                                .toLowerCase(Locale.ROOT);
+                if (ext.equals("jpeg")) ext = "jpg";
+                boolean accepted = false;
+                for (var extension : allowed)
+                    if (extension.asText().replace("jpeg", "jpg").equals(ext)) accepted = true;
+                if (!accepted)
+                    throw new ApiException(
+                            HttpStatus.UNPROCESSABLE_ENTITY,
+                            "INVALID_ASSET_REFERENCE",
+                            "An existing file does not match the proposed allowed formats.");
+            }
+        }
+    }
+
+    /**
      * Called under the existing project lock: READY bytes must still exist before linking history.
      */
     public void validateSubmissionObjects(

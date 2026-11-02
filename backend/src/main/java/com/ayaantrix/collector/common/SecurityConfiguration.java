@@ -73,6 +73,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/projects/*/items/*/comments").authenticated()
                         .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/items/*/comments").permitAll()
                         .requestMatchers(HttpMethod.POST,"/api/v1/client/projects/*/items/*/comments").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects/*/publish","/api/v1/workspaces/*/projects/*/pause","/api/v1/workspaces/*/projects/*/resume","/api/v1/workspaces/*/projects/*/complete","/api/v1/workspaces/*/projects/*/reopen","/api/v1/workspaces/*/projects/*/archive","/api/v1/workspaces/*/projects/*/restore","/api/v1/workspaces/*/projects/*/items/*/reopen").authenticated()
                         .anyRequest().denyAll()
                 )
 

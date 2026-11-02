@@ -9,7 +9,7 @@ public final class ProjectStructureDtos {
     public record SectionPatch(@Size(min=1,max=200) String title,Boolean enabled,
         @NotNull @PositiveOrZero Long expectedStructureVersion) {}
     public record ItemCreate(@NotNull JsonNode definition,@NotNull @PositiveOrZero Long expectedStructureVersion) {}
-    public record ItemPatch(@NotNull JsonNode definition,@NotNull @PositiveOrZero Long expectedStructureVersion,boolean reopenAffected) {}
+    public record ItemPatch(@NotNull JsonNode definition,@NotNull @PositiveOrZero Long expectedStructureVersion,boolean reopenAffected,@Size(max=5000) String reason) {public ItemPatch(JsonNode definition,Long expectedStructureVersion,boolean reopenAffected){this(definition,expectedStructureVersion,reopenAffected,null);}}
     public record Reorder(@NotNull @Size(max=30) List<@NotNull UUID> sectionIds,
         @NotNull @Size(max=30) Map<UUID,List<@NotNull UUID>> itemOrderBySection,
         @NotNull @PositiveOrZero Long expectedStructureVersion) {}

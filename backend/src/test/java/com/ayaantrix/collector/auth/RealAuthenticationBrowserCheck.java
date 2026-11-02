@@ -113,9 +113,10 @@ class RealAuthenticationBrowserCheck {
                     io.step(Map.of("action","team-verify-accept","verification",verificationMail.actionLink().getFragment().substring(6),"invitation",invitationMail.actionLink().getFragment().substring(6)));
                     io.step(Map.of("action","team-assign-revoke"));
                     assertThat(jdbc.queryForList("select definition::text from collector.project_snapshots where workspace_id=? order by id",String.class,workspace)).isEqualTo(initialSnapshots);
-                    // T14 reads require a published project. This isolated fixture is not a T22 publish API.
+                    // T22 now publishes through the real browser action before any client invitation.
                     UUID clientProject=jdbc.queryForObject("select project_id from collector.project_contacts where workspace_id=?",UUID.class,workspace);
-                    jdbc.update("update collector.projects set state='ACTIVE' where workspace_id=? and id=?",workspace,clientProject);
+                    io.step(Map.of("action","project-publication"));
+                    assertThat(jdbc.queryForObject("select published_at is not null from collector.projects where workspace_id=? and id=?",Boolean.class,workspace,clientProject)).isTrue();
                     io.step(Map.of("action","client-owner-invite"));
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
                     var clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
@@ -127,6 +128,9 @@ class RealAuthenticationBrowserCheck {
                     assertThat(jdbc.queryForObject("select count(*) from collector.answers where project_id=?",Integer.class,clientProject)).isGreaterThan(0);
                     io.step(Map.of("action","review-decisions"));
                     assertThat(jdbc.queryForObject("select count(*) from collector.review_decisions where project_id=?",Integer.class,clientProject)).isEqualTo(2);
+                    io.step(Map.of("action","project-reopening"));
+                    assertThat(jdbc.queryForObject("select state from collector.projects where id=?",String.class,clientProject)).isEqualTo("ACTIVE");
+                    assertThat(jdbc.queryForObject("select count(*) from collector.item_reopenings where project_id=?",Integer.class,clientProject)).isEqualTo(2);
                     clock.advance(24*3600+1);io.step(Map.of("action","client-idle-request-link"));
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
                     clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();

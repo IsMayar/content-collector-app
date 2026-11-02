@@ -32,7 +32,7 @@ public class ReviewAuthorization {
                     HttpStatus.FORBIDDEN, "REVIEW_FORBIDDEN", "Review permission is required.");
         if (write) {
             auth.writable(a);
-            if (!project.state().name().equals("ACTIVE"))
+            if (!java.util.Set.of("ACTIVE","PAUSED").contains(project.state().name()))
                 throw new ApiException(
                         HttpStatus.CONFLICT, "READ_ONLY", "This project is read-only.");
         }

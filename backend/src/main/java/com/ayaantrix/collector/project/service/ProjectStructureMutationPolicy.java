@@ -71,7 +71,7 @@ public class ProjectStructureMutationPolicy {
         if(!impact.requiresCollectedWorkHandling())return;
         // Persisted draft existence is reflected in item DRAFT state. Semantic changes remain fail-closed pending draft revalidation/reopening.
         String detail=reopenRequested
-            ? "Reopening requires the revision workflow and draft revalidation, which are not available yet. Collected work was preserved."
+            ? "This collected work has no eligible persisted reopening. Reopen the exact revision with a reason and preserve a compatible draft."
             : "This change affects collected work. Use the revision reopening workflow before changing its structure.";
         throw new ApiException(HttpStatus.CONFLICT,"REOPEN_REQUIRED",detail);
     }

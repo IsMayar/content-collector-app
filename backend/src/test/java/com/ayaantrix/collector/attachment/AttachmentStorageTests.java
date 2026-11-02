@@ -2047,4 +2047,13 @@ class AttachmentStorageTests {
                                 first.assetId()))
                 .isEqualTo(1);
     }
+
+ @Test void structureRevalidationCannotTurnRetainedDocumentsIntoImageAnswers() throws Exception {
+  var t=target("FILE");var r=reserve(t,"notes.txt","text/plain",text());transfer(r,text());finish(t,r);
+  var value=json.createObjectNode();value.putArray("assetIds").add(r.assetId().toString());context.getBean(com.ayaantrix.collector.collection.service.ClientAnswerService.class).save(t.cookie(),t.f().project().id(),t.item(),new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(value,0L,t.structure(),UUID.randomUUID()));
+  var current=detail(t.f().tenant(),t.f().project());JsonNode item=null;for(var section:current.structure())for(var candidate:section.path("items"))if(id(candidate).equals(t.item()))item=candidate;
+  var change=definition(item);change.put("type","IMAGE");change.withObject("validation").putArray("allowedExtensions").add("png");
+  denial(()->as(t.f().tenant().actor(),()->editor().patchItem(t.f().tenant().workspace(),t.f().project().id(),t.item(),new ItemPatch(change,current.project().structureVersion(),false))),"DRAFT_REVALIDATION_FAILED");
+  assertThat(files().read(t.cookie(),t.f().project().id(),r.assetId()).state()).isEqualTo("READY");assertThat(jdbc.queryForObject("select value_json::text from collector.answers where item_id=?",String.class,t.item())).contains(r.assetId().toString());
+ }
 }
