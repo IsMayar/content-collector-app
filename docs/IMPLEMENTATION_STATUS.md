@@ -501,7 +501,7 @@ Milestone status: In progress
 | T20  | Phone upload queue and original option      | Real-device photo and error journeys pass                    | In progress |
 | T21  | Comments and review decisions               | Internal comments never reach clients; decision race handled | Complete |
 | T22  | Project completion, reopening and archive   | Progress and lifecycle guards use the same evaluator         | Complete |
-| T23  | Immutable approved export manifest and jobs | Partial exports labeled; all three formats match snapshots   | Not started |
+| T23  | Immutable approved export manifest and jobs | Partial exports labeled; all three formats match snapshots   | Complete |
 
 ### Milestone M5 Assistance and reminders
 
@@ -815,3 +815,12 @@ T22 Complete for original-roadmap local acceptance: publication, pause/resume, s
 Final full clean verify: **936 passed,0 failures/errors/skips in one complete run**, preserving913 prior cases plus23 additions. Initial affected226 checks passed; focused corrections24 plus1 route check passed. Frontend30 checks across3 files plus1 editor regression passed; TypeScript/build/changed-file lint/format passed. **1 real HTTPS lifecycle with MSW disabled passed**, replacing artificial ACTIVE setup with real publication and exercising completion/reopening/archive/restore and immutable prior snapshots. Earlier935-case run had2 obsolete expectation failures; they were corrected and the full run repeated. Earlier browser editor render failure was reproduced/fixed before the final green lifecycle. Unrelated responsive/PWA/frontend suites were intentionally not rerun.
 
 [T22 exact contracts, transitions, security/concurrency, file manifest and evidence](T22_PROJECT_PUBLICATION_REOPENING.md). Implementation commits:8b8ae0e, a377b88. T20 physical-device acceptance, T04–T06, T16 production/storage/codec/device and T23+ gates remain pending. No push or full-MVP claim.
+
+
+## T23 approved snapshot exports — 2 November 2026
+
+T23 implementation resumed from the two uncommitted private streaming-storage additions; those changes are preserved and verified. V18 adds immutable approved manifests and durable leased PostgreSQL export jobs, ZIP/JSON/Markdown generation, explicit partial acknowledgment, private live-authorized downloads, 24-hour expiry, bounded retries and cleanup. The existing frontend export panel now uses the real queue/summary contracts through RTK Query. No T24+ feature or supplied specification/applied migration changed. M4 remains In progress.
+
+Focused verification: streaming1 passed; export/renderer17 passed; uncertain-commit regression1 passed; frontend export/review12 passed; TypeScript/build and changed-file lint/format passed. One real HTTPS journey with MSW disabled passed ZIP download, real files and matching JSON/Markdown snapshots; initial test-harness issues were corrected before the passing run. Full backend clean verify passed **955 tests, zero failures/errors/skips in one complete run**, preserving936 existing cases plus19 additions; Flyway V1–V18/Hibernate validation/upgrade/restart and executable JAR packaging passed. The focused existing mock artifact test also passed1 case, with24 unrelated cases intentionally filtered out. T23 is Complete for original-roadmap local acceptance. Unrelated responsive/PWA suites were intentionally skipped. Existing release/provider/device gates remain unchanged. [Contracts, file manifest, operations and evidence](T23_IMPLEMENTATION.md).
+
+T23 backend implementation commit:`f1690f6`; frontend/documentation commit and final working tree are reported separately. No push.

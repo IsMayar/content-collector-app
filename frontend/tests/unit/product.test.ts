@@ -454,7 +454,7 @@ describe('review, exports and AI', () => {
           })
         ).status,
       ).toBe(422)
-      const result = await json<{ export: { id: string } }>(
+      const result = await json<{ jobId: string; state: 'QUEUED' }>(
         `${projectRoot}/exports`,
         'POST',
         {
@@ -463,7 +463,8 @@ describe('review, exports and AI', () => {
           acknowledgePartial: true,
         },
       )
-      const id = result.export.id
+      expect(result.state).toBe('QUEUED')
+      const id = result.jobId
       await json(`${projectRoot}/exports/${id}`)
       await json(`${projectRoot}/exports/${id}`)
       r.answers[item.id].value = { text: 'unapproved mutable draft' }

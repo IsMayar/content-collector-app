@@ -1,3 +1,4 @@
+import { unzipSync } from 'fflate'
 // Explicit integration runner: real Vite, HTTPS, Edge and HTTP API; no MSW or request mocks.
 import { createServer } from 'vite'
 import { createServer as createHttpServer } from 'node:http'
@@ -1998,6 +1999,105 @@ async function command(input) {
       await expect(
         page.getByRole('button', { name: 'Reopen approved item', exact: true }),
       ).toBeEnabled()
+      break
+    }
+    case 'approved-exports': {
+      phase = 'approved-exports'
+      const root = `workspaces/${settings.workspace}/projects/${settings.previewProject}`
+      const detail = (await run(root)).data
+      const approved = detail.structure
+        .flatMap((s) => s.items)
+        .find((i) => i.id === settings.attachmentItem)
+      assert.equal(approved.state, 'APPROVED')
+      const revision = (
+        await run(
+          `${root}/items/${approved.id}/revisions/${approved.currentRevisionId}`,
+        )
+      ).data.revision
+      await page.goto(
+        `${origin}/app/w/${settings.workspace}/projects/${settings.previewProject}?tab=exports`,
+      )
+      await page.getByRole('button', { name: /New export/ }).click()
+      await page.getByLabel(/I understand this is a/).check()
+      await page.getByRole('button', { name: 'Continue', exact: true }).click()
+      const queued = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/exports'),
+      )
+      await page
+        .getByRole('button', { name: 'Create approved export', exact: true })
+        .click()
+      const response = await queued
+      assert.equal(response.status(), 202)
+      const first = await response.json()
+      assert.equal(first.state, 'QUEUED')
+      await expect(page.getByText(/Export queued/)).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: 'Download', exact: true }),
+      ).toBeVisible()
+      const downloading = page.waitForEvent('download')
+      await page.getByRole('button', { name: 'Download', exact: true }).click()
+      const download = await downloading
+      assert.equal(await download.failure(), null)
+      const zip = unzipSync(readFileSync(await download.path()))
+      const manifest = JSON.parse(
+        Buffer.from(zip['manifest.json']).toString('utf8'),
+      )
+      const exported = manifest.sections
+        .flatMap((s) => s.items)
+        .find((i) => i.itemId === approved.id)
+      assert.equal(manifest.partial, true)
+      assert.equal(exported.revisionId, approved.currentRevisionId)
+      assert.deepEqual(exported.value, revision.valueSnapshot)
+      assert.ok(exported.files.length > 0)
+      for (const file of exported.files) assert.ok(zip[file.path]?.length > 0)
+      assert.ok(Object.keys(zip).some((path) => path.endsWith('/content.md')))
+      assert.ok(
+        !JSON.stringify(manifest).includes('Synthetic internal review note'),
+      )
+      assert.equal(Object.hasOwn(manifest, 'sources'), false)
+      for (const format of ['APPROVED_JSON', 'APPROVED_MARKDOWN']) {
+        phase = 'approved-exports:' + format
+        const result = await run({
+          url: root + '/exports',
+          method: 'POST',
+          body: {
+            format,
+            expectedProjectVersion: detail.project.version,
+            includeOriginals: false,
+            acknowledgePartial: true,
+          },
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+        })
+        assert.ok(result.data.jobId)
+        const jobId = result.data.jobId
+        await expect
+          .poll(
+            async () =>
+              (await run(root + '/exports/' + jobId)).data.export.state,
+          )
+          .toBe('READY')
+        const link = (
+          await run({
+            url: root + '/exports/' + jobId + '/download',
+            method: 'POST',
+            body: {},
+          })
+        ).data.url
+        const artifact = await context.request.get(link)
+        assert.equal(artifact.status(), 200)
+        if (format === 'APPROVED_JSON') {
+          const json = await artifact.json()
+          assert.deepEqual(json.sections, manifest.sections)
+          assert.equal(json.projectVersion, manifest.projectVersion)
+        } else {
+          const markdown = await artifact.text()
+          assert.ok(markdown.includes('Partial approved export'))
+          assert.ok(markdown.includes(approved.currentRevisionId))
+          assert.ok(!markdown.includes('Synthetic internal review note'))
+        }
+      }
       break
     }
     case 'project-publication': {

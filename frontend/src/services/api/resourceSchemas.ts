@@ -1,3 +1,4 @@
+import { exportSummarySchema } from '@/features/exports/schemas/exportSchema'
 import {
   reviewDecisionSchema,
   commentSchema,
@@ -29,7 +30,11 @@ import { z } from 'zod'
 export function validateProductRead(path: string, data: unknown) {
   const route = path.split('?')[0]
   let schema: z.ZodType = object
-  if (/^workspaces\/[^/]+\/members$/.test(route)) schema = teamSchema
+  if (/^workspaces\/[^/]+\/projects\/[^/]+\/exports$/.test(route))
+    schema = z.object({ data: z.array(exportSummarySchema) })
+  else if (/^workspaces\/[^/]+\/projects\/[^/]+\/exports\/[^/]+$/.test(route))
+    schema = z.object({ export: exportSummarySchema })
+  else if (/^workspaces\/[^/]+\/members$/.test(route)) schema = teamSchema
   else if (/^workspaces\/[^/]+\/projects\/[^/]+\/assignments$/.test(route))
     schema = assignmentsSchema
   else if (/^workspaces\/[^/]+\/projects$/.test(route))

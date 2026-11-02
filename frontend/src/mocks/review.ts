@@ -280,7 +280,7 @@ registerProductResolver((request, path, _search, body) => {
         fail: productDb.scenario === 'export-failure',
       }
       r.exports[exportId] = job
-      return response({ export: job }, 202)
+      return response({ jobId: job.id, state: 'QUEUED' }, 202)
     }
     const job = r.exports[id]
     requireRule(job, 404, 'NOT_FOUND', 'Export unavailable.')
