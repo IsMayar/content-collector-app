@@ -590,3 +590,17 @@ if ($LASTEXITCODE -ne 0) { throw 'Real HTTPS review acceptance failed.' }
 ```
 
 The HTTPS command requires existing frontend dependencies/Edge and local private storage/scanner/image-worker fixtures documented above; MSW remains disabled. [Full T21 contract inventory, exact evidence and blockers](../docs/T21_REVIEW_DECISIONS.md). Recorded backend evidence is896 passing full-run cases plus17 corrected migration checks passing on focused verify (913 distinct cases covered), not a claimed subsequent full green run. Final44 targeted frontend tests and1 real HTTPS lifecycle passed. T20 real-device and existing hosted/provider/deployment gates remain open.
+
+
+## T23 approved exports
+
+After configuring the existing private storage/scanner setup, opt in to the durable export dispatcher and expiry cleanup on a worker instance:
+
+```powershell
+Set-Location -LiteralPath 'D:\F drive data\Website Content Collector\backend'
+# Existing server-only private storage environment variables must already be configured.
+$env:EXPORT_WORKER_ENABLED = 'true'
+.\mvnw.cmd '-Dspring-boot.run.profiles=dev' spring-boot:run
+```
+
+`PRIVATE_STORAGE_ENABLED` and export workers default to false in placeholder configuration. The worker persists jobs in PostgreSQL, processes only immutable approved manifests, retries at most three times and removes expired private attempt artifacts. Downloads expire 24 hours after request and are authorized again before issuing a maximum-60-second private URL. Provide sufficient temporary disk (one bounded 2 GiB output per worker instance); stale crash files are swept after 24 hours. Production S3 lifecycle/monitoring/load validation remains an operational gate. Contracts and focused/full verification evidence: [T23 implementation](../docs/T23_IMPLEMENTATION.md).

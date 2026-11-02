@@ -25,6 +25,15 @@ public interface PrivateObjectStorage {
 
     void put(String key, byte[] bytes, String type);
 
+    /** Stream private canonical bytes without buffering an export-sized object. */
+    default java.io.InputStream openPrivate(String key) {
+        throw new UnsupportedOperationException("Streaming private reads unavailable");
+    }
+
+    default void putFile(String key, java.nio.file.Path file, String type) {
+        throw new UnsupportedOperationException("Streaming private writes unavailable");
+    }
+
     void deleteStaging(String key);
 
     void deletePrivate(String key);

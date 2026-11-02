@@ -138,6 +138,53 @@ class AttachmentStorageTests {
     private MockMvc mvc;
     private String hash;
 
+    @Test
+    void privateStreamingFileRoundTrip() throws Exception {
+        var storage =
+                context.getBean(
+                        com.ayaantrix.collector.attachment.storage.PrivateObjectStorage.class);
+        byte[] bytes = new byte[1024 * 1024 + 17];
+        new Random(23).nextBytes(bytes);
+        var file = directory.resolve("streaming-export.bin");
+        java.nio.file.Files.write(file, bytes);
+        String key = "exports/stream-test/" + UUID.randomUUID();
+        try {
+            storage.putFile(key, file, "application/zip");
+            assertThat(storage.headPrivate(key).bytes()).isEqualTo(bytes.length);
+            try (var in = storage.openPrivate(key)) {
+                assertThat(in.readAllBytes()).isEqualTo(bytes);
+            }
+            var client = java.net.http.HttpClient.newHttpClient();
+            var signed =
+                    storage.download(
+                            key, "approved.zip", "application/zip", Duration.ofSeconds(30));
+            assertThat(
+                            client.send(
+                                            java.net.http.HttpRequest.newBuilder(
+                                                            java.net.URI.create(signed))
+                                                    .GET()
+                                                    .build(),
+                                            java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+                                    .body())
+                    .isEqualTo(bytes);
+            var uri = java.net.URI.create(signed);
+            var unsigned =
+                    new java.net.URI(
+                            uri.getScheme(), uri.getAuthority(), uri.getPath(), null, null);
+            assertThat(
+                            client.send(
+                                            java.net.http.HttpRequest.newBuilder(unsigned)
+                                                    .GET()
+                                                    .build(),
+                                            java.net.http.HttpResponse.BodyHandlers.discarding())
+                                    .statusCode())
+                    .isIn(401, 403);
+        } finally {
+            storage.deletePrivate(key);
+            java.nio.file.Files.deleteIfExists(file);
+        }
+    }
+
     @BeforeAll
     void start() throws Exception {
         storageFixture = new StorageFixture();
@@ -2048,12 +2095,51 @@ class AttachmentStorageTests {
                 .isEqualTo(1);
     }
 
- @Test void structureRevalidationCannotTurnRetainedDocumentsIntoImageAnswers() throws Exception {
-  var t=target("FILE");var r=reserve(t,"notes.txt","text/plain",text());transfer(r,text());finish(t,r);
-  var value=json.createObjectNode();value.putArray("assetIds").add(r.assetId().toString());context.getBean(com.ayaantrix.collector.collection.service.ClientAnswerService.class).save(t.cookie(),t.f().project().id(),t.item(),new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(value,0L,t.structure(),UUID.randomUUID()));
-  var current=detail(t.f().tenant(),t.f().project());JsonNode item=null;for(var section:current.structure())for(var candidate:section.path("items"))if(id(candidate).equals(t.item()))item=candidate;
-  var change=definition(item);change.put("type","IMAGE");change.withObject("validation").putArray("allowedExtensions").add("png");
-  denial(()->as(t.f().tenant().actor(),()->editor().patchItem(t.f().tenant().workspace(),t.f().project().id(),t.item(),new ItemPatch(change,current.project().structureVersion(),false))),"DRAFT_REVALIDATION_FAILED");
-  assertThat(files().read(t.cookie(),t.f().project().id(),r.assetId()).state()).isEqualTo("READY");assertThat(jdbc.queryForObject("select value_json::text from collector.answers where item_id=?",String.class,t.item())).contains(r.assetId().toString());
- }
+    @Test
+    void structureRevalidationCannotTurnRetainedDocumentsIntoImageAnswers() throws Exception {
+        var t = target("FILE");
+        var r = reserve(t, "notes.txt", "text/plain", text());
+        transfer(r, text());
+        finish(t, r);
+        var value = json.createObjectNode();
+        value.putArray("assetIds").add(r.assetId().toString());
+        context.getBean(com.ayaantrix.collector.collection.service.ClientAnswerService.class)
+                .save(
+                        t.cookie(),
+                        t.f().project().id(),
+                        t.item(),
+                        new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(
+                                value, 0L, t.structure(), UUID.randomUUID()));
+        var current = detail(t.f().tenant(), t.f().project());
+        JsonNode item = null;
+        for (var section : current.structure())
+            for (var candidate : section.path("items"))
+                if (id(candidate).equals(t.item())) item = candidate;
+        var change = definition(item);
+        change.put("type", "IMAGE");
+        change.withObject("validation").putArray("allowedExtensions").add("png");
+        denial(
+                () ->
+                        as(
+                                t.f().tenant().actor(),
+                                () ->
+                                        editor().patchItem(
+                                                        t.f().tenant().workspace(),
+                                                        t.f().project().id(),
+                                                        t.item(),
+                                                        new ItemPatch(
+                                                                change,
+                                                                current.project()
+                                                                        .structureVersion(),
+                                                                false))),
+                "DRAFT_REVALIDATION_FAILED");
+        assertThat(files().read(t.cookie(), t.f().project().id(), r.assetId()).state())
+                .isEqualTo("READY");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select value_json::text from collector.answers where item_id=?",
+                                String.class,
+                                t.item()))
+                .contains(r.assetId().toString());
+    }
 }

@@ -90,7 +90,8 @@ public class SecurityProblemHandler
         boolean reviewRoute=(method.equals("POST") && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/items/[^/]+/(review-decisions|comments)"))
             || (method.equals("GET") && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/items/[^/]+/comments"));
         boolean lifecycleRoute=method.equals("POST")&&path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/(publish|pause|resume|complete|reopen|archive|restore|items/[^/]+/reopen)");
-        boolean unauthorized=!denied && (accountRoute || workspaceRoute || catalogRoute || projectRoute || structureRoute || clientManagementRoute || clientGrantRoute || teamRoute || reviewRoute || lifecycleRoute || request.getHeader("Authorization")!=null);
+        boolean exportRoute=(method.equals("GET") && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/exports(/[^/]+)?")) || (method.equals("POST") && path.matches("/api/v1/workspaces/[^/]+/projects/[^/]+/exports(/[^/]+/download)?"));
+        boolean unauthorized=!denied && (exportRoute || accountRoute || workspaceRoute || catalogRoute || projectRoute || structureRoute || clientManagementRoute || clientGrantRoute || teamRoute || reviewRoute || lifecycleRoute || request.getHeader("Authorization")!=null);
         ProblemDetail problem = problemFactory.create(
                 unauthorized?HttpStatus.UNAUTHORIZED:HttpStatus.FORBIDDEN,
                 unauthorized?"INVALID_CREDENTIALS":"ACCESS_DENIED",

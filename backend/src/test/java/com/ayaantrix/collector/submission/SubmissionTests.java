@@ -132,6 +132,7 @@ class SubmissionTests {
         }
     }
 
+    private com.ayaantrix.collector.attachment.StorageFixture exportStorage;
     private ConfigurableApplicationContext context;
     private SigningKeyFixture keys;
     private JdbcTemplate jdbc;
@@ -141,29 +142,35 @@ class SubmissionTests {
 
     @BeforeAll
     void start() throws Exception {
+        exportStorage = new com.ayaantrix.collector.attachment.StorageFixture();
+        exportStorage.start();
         keys = SigningKeyFixture.create(directory, "catalog-test");
         open();
         hash = context.getBean(PasswordEncoder.class).encode(PASSWORD);
     }
 
     ConfigurableApplicationContext start(String url) {
+        var args =
+                new java.util.ArrayList<String>(
+                        java.util.List.of(
+                                "--server.port=0",
+                                "--spring.datasource.url=" + url,
+                                "--spring.datasource.username=" + POSTGRES.getUsername(),
+                                "--spring.datasource.password=" + POSTGRES.getPassword(),
+                                "--collector.jwt.private-key=" + keys.privateFile(),
+                                "--collector.jwt.public-keys=" + keys.publicFile(),
+                                "--collector.jwt.key-id=" + keys.kid(),
+                                "--collector.jwt.issuer=https://catalog.test",
+                                "--collector.jwt.audience=collector-api",
+                                "--collector.auth.token-hash-pepper="
+                                        + Base64.getEncoder().encodeToString(new byte[32]),
+                                "--collector.delivery.worker-enabled=false",
+                                "--collector.delivery.encryption-key="
+                                        + Base64.getEncoder().encodeToString(new byte[32])));
+        args.addAll(java.util.List.of(exportStorage.args()));
         return new SpringApplicationBuilder(CollectorApplication.class, Configuration.class)
                 .profiles("test")
-                .run(
-                        "--server.port=0",
-                        "--spring.datasource.url=" + url,
-                        "--spring.datasource.username=" + POSTGRES.getUsername(),
-                        "--spring.datasource.password=" + POSTGRES.getPassword(),
-                        "--collector.jwt.private-key=" + keys.privateFile(),
-                        "--collector.jwt.public-keys=" + keys.publicFile(),
-                        "--collector.jwt.key-id=" + keys.kid(),
-                        "--collector.jwt.issuer=https://catalog.test",
-                        "--collector.jwt.audience=collector-api",
-                        "--collector.auth.token-hash-pepper="
-                                + Base64.getEncoder().encodeToString(new byte[32]),
-                        "--collector.delivery.worker-enabled=false",
-                        "--collector.delivery.encryption-key="
-                                + Base64.getEncoder().encodeToString(new byte[32]));
+                .run(args.toArray(String[]::new));
     }
 
     void open() {
@@ -180,12 +187,16 @@ class SubmissionTests {
     @AfterAll
     void stop() {
         if (context != null) context.close();
+        if (exportStorage != null) exportStorage.close();
     }
 
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
         context.getBean(TestClock.class).time = NOW;
+        jdbc.update(
+                "update collector.export_jobs set state='CANCELLED',lease_id=null,lease_until=null"
+                        + " where state in ('QUEUED','RUNNING')");
     }
 
     Actor actor() {
@@ -1282,6 +1293,547 @@ class SubmissionTests {
                                         key));
     }
 
+    com.ayaantrix.collector.export.service.ExportService exports() {
+        return context.getBean(com.ayaantrix.collector.export.service.ExportService.class);
+    }
+
+    com.ayaantrix.collector.export.repository.ExportRepository exportJobs() {
+        return context.getBean(com.ayaantrix.collector.export.repository.ExportRepository.class);
+    }
+
+    UUID export(ReviewFixture r, String format, boolean partial, String key) {
+        var f = r.f();
+        long version =
+                as(f.tenant().actor(), () -> detail(f.tenant(), f.project()).project().version());
+        var result =
+                as(
+                        f.tenant().actor(),
+                        () ->
+                                exports()
+                                        .create(
+                                                f.tenant().workspace(),
+                                                f.project().id(),
+                                                new com.ayaantrix.collector.export.dto.ExportDtos
+                                                        .Create(
+                                                        com.ayaantrix.collector.export.dto
+                                                                .ExportDtos.Format.valueOf(format),
+                                                        version,
+                                                        false,
+                                                        partial,
+                                                        null),
+                                                key));
+        return UUID.fromString(result.get("jobId").toString());
+    }
+
+    com.ayaantrix.collector.export.repository.ExportRepository.Job exportJob(
+            ReviewFixture r, UUID id) {
+        return exportJobs()
+                .find(r.f().tenant().workspace(), r.f().project().id(), id)
+                .orElseThrow();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"APPROVED_ZIP", "APPROVED_JSON", "APPROVED_MARKDOWN"})
+    void exportFormatsUseImmutableApprovedSnapshot(String format) throws Exception {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "a");
+        var id = export(r, format, true, "e");
+        var before = exportJob(r, id).manifest().deepCopy();
+        assertThat(export(r, format, true, "e")).isEqualTo(id);
+        reopenItem(
+                r,
+                as(
+                        r.f().tenant().actor(),
+                        () -> detail(r.f().tenant(), r.f().project()).project().version()),
+                "New content needed",
+                "open");
+        var worker = context.getBean(com.ayaantrix.collector.export.worker.ExportWorker.class);
+        assertThat(worker.dispatchOne()).isTrue();
+        var job = exportJob(r, id);
+        assertThat(job.state()).isEqualTo("READY");
+        assertThat(job.manifest()).isEqualTo(before);
+        var storage =
+                context.getBean(
+                        com.ayaantrix.collector.attachment.storage.PrivateObjectStorage.class);
+        byte[] bytes;
+        try (var in = storage.openPrivate(job.key())) {
+            bytes = in.readAllBytes();
+        }
+        if (format.equals("APPROVED_ZIP")) {
+            var entries = new HashMap<String, byte[]>();
+            try (var zip =
+                    new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(bytes))) {
+                java.util.zip.ZipEntry e;
+                while ((e = zip.getNextEntry()) != null)
+                    entries.put(e.getName(), zip.readAllBytes());
+            }
+            assertThat(json.readTree(entries.get("manifest.json")))
+                    .isEqualTo(before.path("public"));
+            assertThat(entries.keySet()).anyMatch(n -> n.endsWith("content.md"));
+        } else if (format.equals("APPROVED_JSON"))
+            assertThat(json.readTree(bytes)).isEqualTo(before.path("public"));
+        else
+            assertThat(new String(bytes, java.nio.charset.StandardCharsets.UTF_8))
+                    .contains("Exact submitted content", "Partial approved export");
+        assertThat(new String(bytes, java.nio.charset.StandardCharsets.UTF_8))
+                .doesNotContain("PRIVATE_KEY", "INTERNAL");
+        var summary =
+                as(
+                        r.f().tenant().actor(),
+                        () -> exports().get(r.f().tenant().workspace(), r.f().project().id(), id));
+        assertThat(
+                        json.valueToTree(summary)
+                                .path("export")
+                                .path("olderThanCurrentProject")
+                                .asBoolean())
+                .isTrue();
+        assertThatThrownBy(
+                        () ->
+                                tx().executeWithoutResult(
+                                                status ->
+                                                        jdbc.update(
+                                                                "update collector.export_jobs set"
+                                                                    + " manifest_json='{}'::jsonb"
+                                                                    + " where id=?",
+                                                                id)))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThat(exportJob(r, id).manifest()).isEqualTo(before);
+    }
+
+    @Test
+    void exportPartialStaleBindingAndRollback() {
+        var r = reviewFixture();
+        code(() -> export(r, "APPROVED_JSON", true, "empty"), "NO_APPROVED_CONTENT");
+        decide(r, "APPROVE", "a");
+        code(() -> export(r, "APPROVED_JSON", false, "partial"), "PARTIAL_EXPORT_ACK_REQUIRED");
+        var f = r.f();
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        exports()
+                                                .create(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        new com.ayaantrix.collector.export.dto
+                                                                .ExportDtos.Create(
+                                                                com.ayaantrix.collector.export.dto
+                                                                        .ExportDtos.Format
+                                                                        .APPROVED_JSON,
+                                                                1L,
+                                                                false,
+                                                                true,
+                                                                null),
+                                                        "stale")),
+                "PROJECT_VERSION_CONFLICT");
+        assertThatThrownBy(
+                        () ->
+                                tx().executeWithoutResult(
+                                                status -> {
+                                                    export(r, "APPROVED_JSON", true, "rollback");
+                                                    throw new IllegalStateException("rollback");
+                                                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(exportJobs().list(f.tenant().workspace(), f.project().id())).isEmpty();
+        assertThat(export(r, "APPROVED_JSON", true, "rollback")).isNotNull();
+    }
+
+    @Test
+    void exportDurableClaimRetryAndExpiry() throws Exception {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "a");
+        var id = export(r, "APPROVED_JSON", true, "e");
+        var snapshot = exportJob(r, id).manifest().deepCopy();
+        var claimed = tx().execute(status -> exportJobs().claim(NOW)).orElseThrow();
+        assertThat(claimed.id()).isEqualTo(id);
+        java.util.Optional<com.ayaantrix.collector.export.repository.ExportRepository.Job>
+                secondClaim = tx().execute(status -> exportJobs().claim(NOW));
+        assertThat(secondClaim).isEmpty();
+        // Application restart reuses PostgreSQL state, not an in-memory task queue.
+        context.close();
+        open();
+        assertThat(exportJob(r, id).manifest()).isEqualTo(snapshot);
+        context.getBean(TestClock.class).time = NOW.plusSeconds(121);
+        assertThat(
+                        context.getBean(com.ayaantrix.collector.export.worker.ExportWorker.class)
+                                .dispatchOne())
+                .isTrue();
+        var job = exportJob(r, id);
+        assertThat(job.state()).isEqualTo("READY");
+        assertThat(job.attempts()).isEqualTo(2);
+        Boolean stale =
+                tx().execute(
+                                status ->
+                                        exportJobs()
+                                                .ready(
+                                                        claimed,
+                                                        "stale-attempt",
+                                                        1,
+                                                        NOW.plusSeconds(122)));
+        assertThat(stale).isFalse();
+        context.getBean(TestClock.class).time = NOW.plusSeconds(86401);
+        var owner = r.f().tenant().actor();
+        var account =
+                context.getBean(UserAccountRepository.class).findById(owner.id()).orElseThrow();
+        var issued =
+                context.getBean(AgencySessions.class)
+                        .login(new LoginRequest(account.getEmailNormalized(), PASSWORD));
+        var current =
+                new Actor(
+                        owner.id(),
+                        issued.accessToken(),
+                        context.getBean(AccessTokens.class).decode(issued.accessToken()));
+        assertThat(
+                        json.valueToTree(
+                                        as(
+                                                current,
+                                                () ->
+                                                        exports()
+                                                                .get(
+                                                                        r.f().tenant().workspace(),
+                                                                        r.f().project().id(),
+                                                                        id)))
+                                .path("export")
+                                .path("state")
+                                .asText())
+                .isEqualTo("EXPIRED");
+        code(
+                () ->
+                        as(
+                                current,
+                                () ->
+                                        exports()
+                                                .download(
+                                                        r.f().tenant().workspace(),
+                                                        r.f().project().id(),
+                                                        id)),
+                "EXPORT_EXPIRED");
+        context.getBean(com.ayaantrix.collector.export.worker.ExportWorker.class).cleanup();
+        assertThat(exportJob(r, id).state()).isEqualTo("EXPIRED");
+        assertThatThrownBy(
+                        () ->
+                                context.getBean(
+                                                com.ayaantrix.collector.attachment.storage
+                                                        .PrivateObjectStorage.class)
+                                        .headPrivate(job.key()))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void exportRetriesBoundedFailuresAndConcurrentIdempotency() throws Exception {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "a");
+        var start = new CountDownLatch(1);
+        var pool = Executors.newFixedThreadPool(2);
+        UUID id;
+        try {
+            var a =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                return export(r, "APPROVED_JSON", true, "same");
+                            });
+            var b =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                return export(r, "APPROVED_JSON", true, "same");
+                            });
+            start.countDown();
+            id = a.get(15, TimeUnit.SECONDS);
+            assertThat(b.get(15, TimeUnit.SECONDS)).isEqualTo(id);
+        } finally {
+            pool.shutdownNow();
+        }
+        var original =
+                context.getBean(
+                        com.ayaantrix.collector.attachment.storage.PrivateObjectStorage.class);
+        var failed =
+                (com.ayaantrix.collector.attachment.storage.PrivateObjectStorage)
+                        java.lang.reflect.Proxy.newProxyInstance(
+                                getClass().getClassLoader(),
+                                new Class[] {
+                                    com.ayaantrix.collector.attachment.storage.PrivateObjectStorage
+                                            .class
+                                },
+                                (proxy, method, args) -> {
+                                    if (method.getName().equals("putFile"))
+                                        throw new IllegalStateException(
+                                                "Synthetic provider failure");
+                                    try {
+                                        return method.invoke(original, args);
+                                    } catch (java.lang.reflect.InvocationTargetException e) {
+                                        throw e.getCause();
+                                    }
+                                });
+        var worker =
+                new com.ayaantrix.collector.export.worker.ExportWorker(
+                        exportJobs(),
+                        context.getBean(com.ayaantrix.collector.export.worker.ExportRenderer.class),
+                        failed,
+                        context.getBean(TestClock.class),
+                        context.getBean(PlatformTransactionManager.class));
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            context.getBean(TestClock.class).time = NOW.plusSeconds(attempt * 60);
+            assertThat(worker.dispatchOne()).isTrue();
+            assertThat(exportJob(r, id).attempts()).isEqualTo(attempt);
+        }
+        assertThat(exportJob(r, id).state()).isEqualTo("FAILED");
+        assertThat(exportJob(r, id).failure()).isEqualTo("EXPORT_GENERATION_FAILED");
+        assertThat(worker.dispatchOne()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "exporter",
+                "reviewer",
+                "unassigned",
+                "revokedMember",
+                "revokedAssignment",
+                "revokedSession",
+                "foreign"
+            })
+    void exportIndependentLivePermissions(String kind) {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "a");
+        var id = export(r, "APPROVED_JSON", true, "owner");
+        var f = r.f();
+        var actor = actor();
+        UUID member = UUID.randomUUID();
+        jdbc.update(
+                "insert into"
+                    + " collector.workspace_members(id,workspace_id,user_id,role,state,created_at,updated_at)"
+                    + " values(?,?,?,'MEMBER','ACTIVE',?,?)",
+                member,
+                f.tenant().workspace(),
+                actor.id(),
+                java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        if (!kind.equals("unassigned"))
+            jdbc.update(
+                    "insert into"
+                        + " collector.project_members(workspace_id,project_id,workspace_member_id,can_review,can_export,created_at,updated_at)"
+                        + " values(?,?,?,?,?,?,?)",
+                    f.tenant().workspace(),
+                    f.project().id(),
+                    member,
+                    kind.equals("reviewer"),
+                    !kind.equals("reviewer"),
+                    java.sql.Timestamp.from(NOW),
+                    java.sql.Timestamp.from(NOW));
+        if (kind.equals("revokedMember"))
+            jdbc.update(
+                    "update collector.workspace_members set state='DISABLED' where id=?", member);
+        if (kind.equals("revokedAssignment"))
+            jdbc.update(
+                    "delete from collector.project_members where workspace_member_id=?", member);
+        if (kind.equals("revokedSession"))
+            context.getBean(AgencySessions.class).logoutAll(actor.jwt());
+        var chosen = kind.equals("foreign") ? actor() : actor;
+        if (kind.equals("exporter"))
+            assertThat(
+                            as(
+                                    chosen,
+                                    () ->
+                                            exports()
+                                                    .get(
+                                                            f.tenant().workspace(),
+                                                            f.project().id(),
+                                                            id)))
+                    .containsKey("export");
+        else {
+            assertThatThrownBy(
+                            () ->
+                                    as(
+                                            chosen,
+                                            () ->
+                                                    exports()
+                                                            .get(
+                                                                    f.tenant().workspace(),
+                                                                    f.project().id(),
+                                                                    id)))
+                    .isInstanceOf(ApiException.class);
+            assertThatThrownBy(
+                            () ->
+                                    as(
+                                            chosen,
+                                            () ->
+                                                    exports()
+                                                            .download(
+                                                                    f.tenant().workspace(),
+                                                                    f.project().id(),
+                                                                    id)))
+                    .isInstanceOf(ApiException.class);
+        }
+    }
+
+    @Test
+    void exportLostCommitAcknowledgmentPreservesReadyObject() {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "approve");
+        var id = export(r, "APPROVED_JSON", true, "export");
+        var real = context.getBean(PlatformTransactionManager.class);
+        var commits = new java.util.concurrent.atomic.AtomicInteger();
+        var uncertain =
+                new PlatformTransactionManager() {
+                    public org.springframework.transaction.TransactionStatus getTransaction(
+                            org.springframework.transaction.TransactionDefinition definition) {
+                        return real.getTransaction(definition);
+                    }
+
+                    public void rollback(org.springframework.transaction.TransactionStatus status) {
+                        real.rollback(status);
+                    }
+
+                    public void commit(org.springframework.transaction.TransactionStatus status) {
+                        real.commit(status);
+                        if (commits.incrementAndGet() == 2)
+                            throw new org.springframework.transaction.TransactionSystemException(
+                                    "Synthetic lost commit acknowledgment");
+                    }
+                };
+        var storage =
+                context.getBean(
+                        com.ayaantrix.collector.attachment.storage.PrivateObjectStorage.class);
+        var worker =
+                new com.ayaantrix.collector.export.worker.ExportWorker(
+                        exportJobs(),
+                        context.getBean(com.ayaantrix.collector.export.worker.ExportRenderer.class),
+                        storage,
+                        context.getBean(TestClock.class),
+                        uncertain);
+        assertThat(worker.dispatchOne()).isTrue();
+        var job = exportJob(r, id);
+        assertThat(job.state()).isEqualTo("READY");
+        assertThat(storage.headPrivate(job.key()).bytes()).isPositive();
+    }
+
+    @Test
+    void exportSectionSelectionAndHiddenItems() {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "a");
+        var f = r.f();
+        long version =
+                as(f.tenant().actor(), () -> detail(f.tenant(), f.project()).project().version());
+        UUID section =
+                jdbc.queryForObject(
+                        "select section_id from collector.items where id=?", UUID.class, r.item());
+        var result =
+                as(
+                        f.tenant().actor(),
+                        () ->
+                                exports()
+                                        .create(
+                                                f.tenant().workspace(),
+                                                f.project().id(),
+                                                new com.ayaantrix.collector.export.dto.ExportDtos
+                                                        .Create(
+                                                        com.ayaantrix.collector.export.dto
+                                                                .ExportDtos.Format.APPROVED_JSON,
+                                                        version,
+                                                        false,
+                                                        true,
+                                                        List.of(section)),
+                                                "section"));
+        var manifest =
+                exportJob(r, UUID.fromString(result.get("jobId").toString()))
+                        .manifest()
+                        .path("public");
+        assertThat(manifest.path("sections")).hasSize(1);
+        assertThat(manifest.path("sections").get(0).path("id").asText())
+                .isEqualTo(section.toString());
+        jdbc.update("update collector.sections set enabled=false where id=?", section);
+        code(() -> export(r, "APPROVED_JSON", true, "hidden"), "NO_APPROVED_CONTENT");
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        exports()
+                                                .create(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        new com.ayaantrix.collector.export.dto
+                                                                .ExportDtos.Create(
+                                                                com.ayaantrix.collector.export.dto
+                                                                        .ExportDtos.Format
+                                                                        .APPROVED_JSON,
+                                                                version,
+                                                                false,
+                                                                true,
+                                                                List.of(UUID.randomUUID())),
+                                                        "bad-section")),
+                "VALIDATION_FAILED");
+    }
+
+    @Test
+    void exportHttpContractsCsrfAndTenantBinding() throws Exception {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "a");
+        var f = r.f();
+        String root = f.tenant().root() + "/projects/" + f.project().id() + "/exports";
+        var body =
+                json.writeValueAsString(
+                        Map.of(
+                                "format",
+                                "APPROVED_JSON",
+                                "expectedProjectVersion",
+                                as(
+                                        f.tenant().actor(),
+                                        () -> detail(f.tenant(), f.project()).project().version()),
+                                "includeOriginals",
+                                false,
+                                "acknowledgePartial",
+                                true));
+        mvc.perform(get(root)).andExpect(status().isUnauthorized());
+        mvc.perform(
+                        post(root)
+                                .header("Authorization", "Bearer " + f.tenant().actor().access())
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(
+                        post(root)
+                                .with(csrf())
+                                .header("Authorization", "Bearer " + f.tenant().actor().access())
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isBadRequest());
+        var response =
+                mvc.perform(
+                                post(root)
+                                        .with(csrf())
+                                        .header(
+                                                "Authorization",
+                                                "Bearer " + f.tenant().actor().access())
+                                        .header("Idempotency-Key", "http-export")
+                                        .contentType("application/json")
+                                        .content(body))
+                        .andExpect(status().isAccepted())
+                        .andExpect(header().exists("X-Request-ID"))
+                        .andExpect(jsonPath("$.state").value("QUEUED"))
+                        .andReturn();
+        UUID id =
+                UUID.fromString(
+                        json.readTree(response.getResponse().getContentAsString())
+                                .path("jobId")
+                                .asText());
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () -> exports().get(f.tenant().workspace(), UUID.randomUUID(), id)),
+                "NOT_FOUND");
+        context.getBean(com.ayaantrix.collector.export.worker.ExportWorker.class).dispatchOne();
+        var link =
+                as(
+                        f.tenant().actor(),
+                        () -> exports().download(f.tenant().workspace(), f.project().id(), id));
+        assertThat(link.get("url")).contains("X-Amz-Expires=60");
+    }
+
     @Test
     void reviewApprovalReplayHistoryAndStaleDecision() {
         var r = reviewFixture();
@@ -1916,7 +2468,7 @@ class SubmissionTests {
         var before =
                 jdbc.queryForObject(
                         "select definition::text from collector.project_snapshots where"
-                            + " project_id=?",
+                                + " project_id=?",
                         String.class,
                         f.project().id());
         code(() -> invite(f), "PROJECT_NOT_PUBLISHED");
@@ -1929,7 +2481,7 @@ class SubmissionTests {
         assertThat(
                         jdbc.queryForObject(
                                 "select definition::text from collector.project_snapshots where"
-                                    + " project_id=?",
+                                        + " project_id=?",
                                 String.class,
                                 f.project().id()))
                 .isEqualTo(before);
@@ -1989,7 +2541,7 @@ class SubmissionTests {
         if (missing.equals("contact"))
             jdbc.update(
                     "update collector.project_contacts set state='REVOKED',revoked_at=now() where"
-                        + " id=?",
+                            + " id=?",
                     f.contact());
         else
             jdbc.update(

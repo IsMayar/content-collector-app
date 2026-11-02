@@ -197,6 +197,24 @@ public class S3PrivateObjectStorage implements PrivateObjectStorage, AutoCloseab
                 RequestBody.fromBytes(bytes));
     }
 
+    public java.io.InputStream openPrivate(String key) {
+        require();
+        return client.getObject(GetObjectRequest.builder().bucket(privateBucket).key(key).build());
+    }
+
+    public void putFile(String key, java.nio.file.Path file, String type) {
+        require();
+        client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(privateBucket)
+                        .key(key)
+                        .contentType("application/octet-stream")
+                        .contentDisposition("attachment")
+                        .cacheControl("private, no-store")
+                        .build(),
+                RequestBody.fromFile(file));
+    }
+
     public void deleteStaging(String key) {
         require();
         client.deleteObject(DeleteObjectRequest.builder().bucket(staging).key(key).build());

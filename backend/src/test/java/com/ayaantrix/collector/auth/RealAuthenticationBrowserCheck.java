@@ -64,7 +64,7 @@ class RealAuthenticationBrowserCheck {
             "--spring.datasource.username="+POSTGRES.getUsername(),"--spring.datasource.password="+POSTGRES.getPassword(),
             "--collector.jwt.private-key="+keys.privateFile(),"--collector.jwt.public-keys="+keys.publicFile(),"--collector.jwt.key-id="+keys.kid(),
             "--collector.delivery.encryption-key="+pepper,"--collector.delivery.encryption-key-id=browser-test","--collector.jwt.issuer=https://browser.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+pepper,
-            "--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false"),java.util.Arrays.stream(storage.args()).map(v->v.equals("--collector.storage.worker-enabled=false")?"--collector.storage.worker-enabled=true":v)).toArray(String[]::new))) {
+            "--collector.exports.worker-enabled=true","--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false"),java.util.Arrays.stream(storage.args()).map(v->v.equals("--collector.storage.worker-enabled=false")?"--collector.storage.worker-enabled=true":v)).toArray(String[]::new))) {
             var clock=app.getBean(AccountRegistrationWorkflowTests.TestClock.class);var users=app.getBean(UserAccountRepository.class);
             UserAccount user=null;
             if(!onboarding){user=new UserAccount(email,"Synthetic Browser User",app.getBean(PasswordEncoder.class).encode(password),clock.instant());user.markVerified(clock.instant());users.saveAndFlush(user);}
@@ -128,6 +128,8 @@ class RealAuthenticationBrowserCheck {
                     assertThat(jdbc.queryForObject("select count(*) from collector.answers where project_id=?",Integer.class,clientProject)).isGreaterThan(0);
                     io.step(Map.of("action","review-decisions"));
                     assertThat(jdbc.queryForObject("select count(*) from collector.review_decisions where project_id=?",Integer.class,clientProject)).isEqualTo(2);
+                    io.step(Map.of("action","approved-exports"));
+                    assertThat(jdbc.queryForObject("select count(*) from collector.export_jobs where project_id=? and state='READY'",Integer.class,clientProject)).isEqualTo(3);
                     io.step(Map.of("action","project-reopening"));
                     assertThat(jdbc.queryForObject("select state from collector.projects where id=?",String.class,clientProject)).isEqualTo("ACTIVE");
                     assertThat(jdbc.queryForObject("select count(*) from collector.item_reopenings where project_id=?",Integer.class,clientProject)).isEqualTo(2);
