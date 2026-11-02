@@ -1,4 +1,6 @@
 import { LiveReviewPanel } from '@/features/review/components/LiveReviewPanel'
+import { useRef } from 'react'
+import { LiveCompletionPanel } from '../components/LiveCompletionPanel'
 import { env } from '@/config/env'
 import { SubmissionHistoryPanel } from '../components/SubmissionHistoryPanel'
 import { AnalyticsPanel } from '@/features/analytics/components/AnalyticsPanel'
@@ -45,19 +47,63 @@ export function ProjectPage() {
   const notify = useNotify()
   const [action, setAction] = useState('')
   const [reason, setReason] = useState('')
+  const operation = useRef<{
+    signature: string
+    key: string
+    version: number
+  } | null>(null)
+  const lifecycleBusy = useRef(false)
+  const [lifecycleError, setLifecycleError] = useState('')
   const data = query.data
   const p = data?.project
   async function lifecycle() {
-    if (!p) return
-    if (
-      await command.run(`${root}/${action}`, {
-        expectedVersion: p.version,
-        reason,
-      })
-    ) {
+    if (!p || lifecycleBusy.current) return
+    if (action === 'reopen' && !reason.trim()) {
+      setLifecycleError('Provide a reason for reopening this project.')
+      return
+    }
+    const signature = action + ':' + reason.trim()
+    if (operation.current?.signature !== signature)
+      operation.current = {
+        signature,
+        key: crypto.randomUUID(),
+        version: operation.current?.version ?? p.version,
+      }
+    lifecycleBusy.current = true
+    setLifecycleError('')
+    try {
+      const result = await command.run<{ projectState: string }>(
+        `${root}/${action}`,
+        {
+          expectedVersion: operation.current.version,
+          reason: reason.trim() || undefined,
+        },
+        'POST',
+        { 'Idempotency-Key': operation.current.key },
+      )
+      if (!result) return
+      const expected: Record<string, string> = {
+        publish: 'ACTIVE',
+        pause: 'PAUSED',
+        resume: 'ACTIVE',
+        complete: 'COMPLETED',
+        reopen: 'ACTIVE',
+        archive: 'ARCHIVED',
+        restore: 'PAUSED',
+        'delete-request': 'DELETION_PENDING',
+      }
+      if (result.projectState !== expected[action]) {
+        setLifecycleError(
+          'The project state could not be verified. Refresh before continuing.',
+        )
+        return
+      }
       notify(`Project ${action} completed.`)
       setAction('')
       setReason('')
+      operation.current = null
+    } finally {
+      lifecycleBusy.current = false
     }
   }
   return (
@@ -78,7 +124,15 @@ export function ProjectPage() {
                 <select
                   aria-label="Project action"
                   value=""
-                  onChange={(e) => setAction(e.target.value)}
+                  onChange={(e) => {
+                    operation.current = {
+                      signature: e.target.value + ':' + reason.trim(),
+                      key: crypto.randomUUID(),
+                      version: p.version,
+                    }
+                    setLifecycleError('')
+                    setAction(e.target.value)
+                  }}
                 >
                   <option value="">Project actions</option>
                   {(
@@ -87,7 +141,9 @@ export function ProjectPage() {
                       ACTIVE: ['pause', 'complete', 'archive'],
                       PAUSED: ['resume', 'complete', 'archive'],
                       COMPLETED: ['reopen', 'archive'],
-                      ARCHIVED: ['restore', 'delete-request'],
+                      ARCHIVED: env.mocksEnabled
+                        ? ['restore', 'delete-request']
+                        : ['restore'],
                       DELETION_PENDING: [],
                     } as Record<string, string[]>
                   )[p.state].map((a) => (
@@ -211,9 +267,19 @@ export function ProjectPage() {
             />
           )}
           {tab === 'files' && <FilesPanel root={root} project={p} />}
-          {tab === 'completion' && owner && (
-            <CompletionPanel root={root} project={p} />
-          )}
+          {tab === 'completion' &&
+            owner &&
+            (env.mocksEnabled ? (
+              <CompletionPanel root={root} project={p} />
+            ) : (
+              <LiveCompletionPanel
+                project={p}
+                onAction={(a) => {
+                  operation.current = null
+                  setAction(a)
+                }}
+              />
+            ))}
           {tab === 'preview' && owner && <PreviewPanel root={root} />}
           {tab === 'access' && owner && (
             <>
@@ -236,6 +302,7 @@ export function ProjectPage() {
                 key={root}
                 root={root}
                 items={data.structure.flatMap((s) => s.items)}
+                canMutate={['ACTIVE', 'PAUSED'].includes(p.state)}
               />
             ))}
           {tab === 'submissions' && (
@@ -345,7 +412,20 @@ export function ProjectPage() {
                     />
                   </Field>
                 )}
-                <ErrorNotice error={command.error} />
+                <ErrorNotice error={lifecycleError || command.error} />
+                {(lifecycleError || command.error) && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={async () => {
+                      await query.refetch()
+                      operation.current = null
+                      setLifecycleError('')
+                    }}
+                  >
+                    Refresh project state; keep reason
+                  </button>
+                )}
               </>
             }
             confirmLabel={`Confirm ${action}`}

@@ -40,6 +40,8 @@ export function ItemEditor({
     item?.type || 'SHORT_TEXT',
   )
   const latest = useData<ProjectDetail>(root)
+  const currentSection =
+    latest.data?.structure.find((s) => s.id === section.id) || section
   const [options, setOptions] = useState(
     item?.validation.options?.map((o) => `${o.key}|${o.label}`).join('\n') ||
       'yes|Yes\nno|No',
@@ -53,6 +55,24 @@ export function ItemEditor({
   const [localError, setLocalError] = useState('')
   const [controller, setController] = useState(
     item?.visibleWhen?.dependsOnItemKey || '',
+  )
+  const potentialKeys = new Set(item ? [item.key] : [])
+  const fields = latest.data?.structure.flatMap((s) => s.items) || section.items
+  let expanded = true
+  while (expanded) {
+    expanded = false
+    for (const field of fields)
+      if (
+        field.visibleWhen &&
+        potentialKeys.has(field.visibleWhen.dependsOnItemKey) &&
+        !potentialKeys.has(field.key)
+      ) {
+        potentialKeys.add(field.key)
+        expanded = true
+      }
+  }
+  const collectedFields = fields.filter(
+    (field) => potentialKeys.has(field.key) && field.state !== 'NOT_STARTED',
   )
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -130,6 +150,9 @@ export function ItemEditor({
           definition,
           expectedStructureVersion: structureVersion,
           reopenAffected: v.reopen === 'on',
+          ...(v.reopen === 'on'
+            ? { reason: String(v.reopenReason || '') }
+            : {}),
         },
         item ? 'PATCH' : 'POST',
       )
@@ -467,7 +490,7 @@ export function ItemEditor({
               onChange={(e) => setController(e.target.value)}
             >
               <option value="">Always visible</option>
-              {section.items
+              {currentSection.items
                 .filter(
                   (i) =>
                     i.type === 'SINGLE_SELECT' &&
@@ -486,7 +509,7 @@ export function ItemEditor({
                 name="optionKey"
                 defaultValue={item?.visibleWhen?.optionKey}
               >
-                {section.items
+                {currentSection.items
                   .find((i) => i.key === controller)
                   ?.validation.options?.map((o) => (
                     <option value={o.key} key={o.key}>
@@ -502,11 +525,36 @@ export function ItemEditor({
               return when their condition is met.
             </p>
           )}
-          {item && ['SUBMITTED', 'APPROVED'].includes(item.state) && (
+          {item && collectedFields.length > 0 && (
+            <section aria-label="Potentially affected collected items">
+              <strong>Collected content to review before saving</strong>
+              <ul>
+                {collectedFields.map((field) => (
+                  <li key={field.id}>
+                    {field.label} · {field.state}
+                  </li>
+                ))}
+              </ul>
+              <p>
+                Semantic changes may affect these items and their visibility.
+                Historical revisions stay unchanged; incompatible drafts block
+                the entire change.
+              </p>
+            </section>
+          )}
+          {item && (
             <label className="check-row">
-              <input required name="reopen" type="checkbox" />
+              <input name="reopen" type="checkbox" />
               Reopen affected item; historical submissions remain immutable
             </label>
+          )}
+          {item && (
+            <Field
+              label="Reason for reopening affected collected content"
+              hint="Required when explicitly reopening affected submitted or approved work. Saved drafts must fit the proposed field settings; incompatible content is preserved and the edit is rejected."
+            >
+              <textarea name="reopenReason" maxLength={5000} />
+            </Field>
           )}
           <ErrorNotice error={localError || command.error} />
           {command.error && (

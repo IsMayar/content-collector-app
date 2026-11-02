@@ -24,9 +24,11 @@ import { decisionResultSchema } from '../schemas/reviewSchema'
 export function LiveReviewPanel({
   root,
   items,
+  canMutate = true,
 }: {
   root: string
   items: Item[]
+  canMutate?: boolean
 }) {
   const [page, setPage] = useState(0)
   const queue = useData<{
@@ -46,7 +48,12 @@ export function LiveReviewPanel({
           >
             Back to review queue
           </button>
-          <LiveRevisionReview key={root + item.id} root={root} item={item} />
+          <LiveRevisionReview
+            key={root + item.id}
+            root={root}
+            item={item}
+            canMutate={canMutate}
+          />
         </>
       ) : (
         <Panel title="Content review queue">
@@ -114,9 +121,11 @@ export function LiveReviewPanel({
 export function LiveRevisionReview({
   root,
   item,
+  canMutate = true,
 }: {
   root: string
   item: Item
+  canMutate?: boolean
 }) {
   const history = useData<{ data: SubmissionSummary[] }>(
     `${root}/items/${item.id}/revisions`,
@@ -129,25 +138,31 @@ export function LiveRevisionReview({
   }>(`${root}/items/${item.id}/revisions/${revisionId}`, { skip: !revisionId })
   const revision = detail.data?.revision
   const command = useCommand()
-  const [intent, setIntent] = useState<ReviewCommand | null>(null)
+  const [intent, setIntent] = useState<
+    | (Omit<ReviewCommand, 'decision'> & {
+        decision: ReviewCommand['decision'] | 'REOPEN'
+      })
+    | null
+  >(null)
   const [reason, setReason] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const busy = useRef(false)
   const retry = useRef({ body: '', key: '' })
   const current =
+    canMutate &&
     item.state === 'SUBMITTED' &&
     revisionId === item.currentRevisionId &&
     !detail.isFetching
   async function confirm() {
     if (!intent || busy.current) return
-    if (intent.decision === 'REQUEST_CHANGES' && !reason.trim()) {
+    if (intent.decision !== 'APPROVE' && !reason.trim()) {
       setError('Explain the changes needed before sending feedback.')
       return
     }
     const body = {
       ...intent,
-      reason: intent.decision === 'REQUEST_CHANGES' ? reason.trim() : undefined,
+      reason: intent.decision !== 'APPROVE' ? reason.trim() : undefined,
     }
     const serialized = JSON.stringify(body)
     if (retry.current.body !== serialized)
@@ -157,12 +172,32 @@ export function LiveRevisionReview({
     setMessage('')
     try {
       const result = await command.run(
-        `${root}/items/${item.id}/review-decisions`,
+        `${root}/items/${item.id}/${intent.decision === 'REOPEN' ? 'reopen' : 'review-decisions'}`,
         body,
         'POST',
         { 'Idempotency-Key': retry.current.key },
       )
       if (!result) return
+      if (intent.decision === 'REOPEN') {
+        const reopened = result as {
+          item?: { id?: string; state?: string; version?: number }
+        }
+        if (
+          reopened.item?.id !== item.id ||
+          reopened.item.state !== 'DRAFT' ||
+          typeof reopened.item.version !== 'number'
+        ) {
+          setError(
+            'The reopened state could not be verified. Refresh before continuing.',
+          )
+          return
+        }
+        setMessage('Item reopened. Historical approvals remain unchanged.')
+        setIntent(null)
+        setReason('')
+        void detail.refetch()
+        return
+      }
       const parsed = decisionResultSchema.safeParse(result)
       if (
         !parsed.success ||
@@ -289,6 +324,25 @@ export function LiveRevisionReview({
                     Request changes
                   </button>
                 </div>
+                {item.state === 'APPROVED' &&
+                  revisionId === item.currentRevisionId && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={!canMutate || command.pending}
+                      onClick={() => {
+                        setReason('')
+                        setError('')
+                        setIntent({
+                          revisionId,
+                          expectedItemVersion: item.version,
+                          decision: 'REOPEN',
+                        })
+                      }}
+                    >
+                      Reopen approved item
+                    </button>
+                  )}
                 <ul aria-label="Review decisions">
                   {detail.data?.decisions.map((d) => (
                     <li key={d.id}>
@@ -317,7 +371,9 @@ export function LiveRevisionReview({
         title={
           intent?.decision === 'APPROVE'
             ? 'Approve this exact revision?'
-            : 'Request changes'
+            : intent?.decision === 'REOPEN'
+              ? 'Reopen approved item?'
+              : 'Request changes'
         }
         description={
           <>
@@ -325,7 +381,7 @@ export function LiveRevisionReview({
               You are deciding submitted revision {revision?.revisionNo}.
               Historical content stays unchanged.
             </p>
-            {intent?.decision === 'REQUEST_CHANGES' && (
+            {intent?.decision !== 'APPROVE' && (
               <Field label="Feedback shared with the client">
                 <textarea
                   value={reason}
@@ -339,7 +395,11 @@ export function LiveRevisionReview({
           </>
         }
         confirmLabel={
-          intent?.decision === 'APPROVE' ? 'Approve' : 'Send feedback'
+          intent?.decision === 'APPROVE'
+            ? 'Approve'
+            : intent?.decision === 'REOPEN'
+              ? 'Reopen item'
+              : 'Send feedback'
         }
         onCancel={() => setIntent(null)}
         onConfirm={() => void confirm()}

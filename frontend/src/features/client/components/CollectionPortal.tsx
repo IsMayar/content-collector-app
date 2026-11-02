@@ -35,7 +35,7 @@ export function CollectionPortal({
     <>
       <Heading
         title={data.project.title}
-        description="Save your answers, then submit each completed question for review. Submitted answers stay read-only until you withdraw them."
+        description="Save your answers, then submit each completed question for review. Submitted answers stay read-only until an eligible withdrawal or agency reopening. Approved revisions remain in history."
       >
         <button
           className="secondary-button"

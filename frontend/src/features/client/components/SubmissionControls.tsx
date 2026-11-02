@@ -109,9 +109,11 @@ export function SubmissionControls({
         {message ||
           (item.state === 'SUBMITTED'
             ? 'Submitted for review. Your saved submission is read-only.'
-            : item.state === 'CHANGES_REQUESTED'
-              ? 'Changes requested. Update your draft before submitting a new revision.'
-              : 'Draft answers are not submitted automatically.')}
+            : item.state === 'APPROVED'
+              ? 'Approved. This revision is read-only until your agency explicitly reopens it.'
+              : item.state === 'CHANGES_REQUESTED'
+                ? 'Changes requested. Update your draft before submitting a new revision.'
+                : 'Draft answers are not submitted automatically.')}
       </p>
       <ErrorNotice error={command.error} />
       {pending && (

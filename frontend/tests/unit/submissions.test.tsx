@@ -303,3 +303,18 @@ it('preserves existing full revision fields when validating summary-compatible h
   expect(parsed.schemaSnapshot).toEqual(full.schemaSnapshot)
   expect(parsed.valueSnapshot).toEqual(full.valueSnapshot)
 })
+
+it('shows approved content as read-only until explicit agency reopening', () => {
+  mount({ item: { ...baseItem, state: 'APPROVED', canEdit: false } })
+  expect(
+    screen.getByText(
+      'Approved. This revision is read-only until your agency explicitly reopens it.',
+    ),
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Withdraw to edit' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Review and submit' }),
+  ).not.toBeInTheDocument()
+})

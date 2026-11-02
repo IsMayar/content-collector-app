@@ -136,8 +136,8 @@ it('does not permit decisions on a historical revision or an approved item', () 
   mount({ state: 'APPROVED' as typeof item.state })
   expect(screen.getByRole('button', { name: 'Request changes' })).toBeDisabled()
   expect(
-    screen.queryByRole('button', { name: /Reopen/ }),
-  ).not.toBeInTheDocument()
+    screen.getByRole('button', { name: 'Reopen approved item' }),
+  ).toBeEnabled()
 })
 it('rejects incompatible decision responses rather than claiming success', async () => {
   mocks.run.mockResolvedValue({
@@ -202,4 +202,26 @@ it('rejects a response whose item state contradicts the confirmed decision', asy
   expect(
     screen.queryByText('Exact submitted revision approved.'),
   ).not.toBeInTheDocument()
+})
+
+it('requires a reason and server confirmation before reopening an exact approved item', async () => {
+  mocks.run.mockResolvedValue({ item: { id, state: 'DRAFT', version: 6 } })
+  mount({ state: 'APPROVED' as typeof item.state })
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Reopen approved item' }),
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Reopen item' }))
+  expect(mocks.run).not.toHaveBeenCalled()
+  await userEvent.type(
+    screen.getByLabelText('Feedback shared with the client'),
+    'Please update your approved answer.',
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Reopen item' }))
+  expect(
+    await screen.findByText(
+      'Item reopened. Historical approvals remain unchanged.',
+    ),
+  ).toBeVisible()
+  expect(mocks.run.mock.calls[0][0]).toMatch(/\/reopen$/)
+  expect(mocks.run.mock.calls[0][1].expectedItemVersion).toBe(4)
 })

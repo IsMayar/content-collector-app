@@ -41,6 +41,19 @@ export function errorMessage(error: unknown): string {
   if (problem.status === 429)
     return 'Too many attempts. Please wait before trying again.'
   if (problem.status === 403) return 'You do not have permission to do that.'
+  if (problem.code === 'PROJECT_VERSION_CONFLICT')
+    return 'This project changed. Refresh its current state before retrying.'
+  if (problem.code === 'PUBLICATION_VALIDATION_FAILED')
+    return 'Add enabled content requests, an active client contact and a due date before publishing.'
+  if (problem.code === 'PROJECT_INCOMPLETE')
+    return 'Approve every visible required item before completing the project.'
+  if (problem.code === 'DRAFT_REVALIDATION_FAILED')
+    return 'Saved answers do not fit these field settings. Keep the answers and choose compatible settings or correct the draft first.'
+  if (
+    problem.code === 'INVALID_PROJECT_TRANSITION' ||
+    problem.code === 'READ_ONLY'
+  )
+    return 'This action is unavailable in the current project state. Refresh the project before continuing.'
   if (problem.code === 'ITEM_VERSION_CONFLICT')
     return 'This submission changed or was already reviewed. Refresh the current revision before deciding.'
   if (problem.code === 'REVIEW_FORBIDDEN')

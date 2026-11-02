@@ -1452,7 +1452,7 @@ async function command(input) {
         'comments',
       ])
         delete definition[key]
-      definition.validation = { ...definition.validation, maxLength: 150 }
+      definition.validation = { ...definition.validation, maxLength: 1 }
       const unsafe = await run({
         url: agencyRoot + '/items/' + item.id + '/schema',
         method: 'PATCH',
@@ -1462,8 +1462,8 @@ async function command(input) {
           reopenAffected: false,
         },
       })
-      assert.equal(unsafe.status, 409)
-      assert.equal(unsafe.code, 'REOPEN_REQUIRED')
+      assert.equal(unsafe.status, 422)
+      assert.equal(unsafe.code, 'DRAFT_REVALIDATION_FAILED')
       const directory = new URL(
         '../../../.artifacts/real-auth/t15/',
         import.meta.url,
@@ -1996,8 +1996,262 @@ async function command(input) {
         page.getByRole('button', { name: 'Approve revision', exact: true }),
       ).toBeDisabled()
       await expect(
-        page.getByRole('button', { name: /Reopen approved/ }),
-      ).toHaveCount(0)
+        page.getByRole('button', { name: 'Reopen approved item', exact: true }),
+      ).toBeEnabled()
+      break
+    }
+    case 'project-publication': {
+      phase = 'project-publication'
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject,
+      )
+      await page.getByLabel('Project action').selectOption('publish')
+      const published = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/publish'),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Confirm publish', exact: true })
+        .click()
+      const response = await published
+      assert.equal(response.status(), 200)
+      const data = await response.json()
+      assert.equal(data.projectState, 'ACTIVE')
+      assert.ok(data.publishedAt)
+      assert.equal(data.publishedVersion, data.projectVersion)
+      await expect(page.getByRole('dialog')).not.toBeVisible()
+      break
+    }
+    case 'project-reopening': {
+      const agency =
+        'workspaces/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject
+      const clientRoot = 'client/projects/' + settings.previewProject
+      const item = settings.attachmentItem
+      const url =
+        origin +
+        '/app/w/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject +
+        '?tab=review'
+      async function action(name, reason) {
+        await page.getByLabel('Project action').selectOption(name)
+        if (reason)
+          await page
+            .getByRole('dialog')
+            .getByLabel('Reason', { exact: true })
+            .fill(reason)
+        const response = page.waitForResponse(
+          (r) =>
+            r.request().method() === 'POST' &&
+            new URL(r.url()).pathname.endsWith('/' + name),
+        )
+        await page
+          .getByRole('dialog')
+          .getByRole('button', { name: 'Confirm ' + name, exact: true })
+          .click()
+        const result = await response
+        assert.equal(result.status(), 200)
+        await expect(page.getByRole('dialog')).not.toBeVisible()
+        return (await result.json()).projectState
+      }
+      phase = 'project-reopening:pause'
+      await page.goto(url)
+      assert.equal(await action('pause'), 'PAUSED')
+      assert.equal(
+        (await run(clientRoot + '/checklist', clientPage, false)).data
+          .capabilities.canRespond,
+        false,
+      )
+      assert.equal(await action('resume'), 'ACTIVE')
+      phase = 'project-reopening:item'
+      await page.getByLabel('Browse submitted item history').selectOption(item)
+      const previous = (await run(agency + '/items/' + item + '/revisions'))
+        .data.data[0].revisionId
+      const frozen = (
+        await run(agency + '/items/' + item + '/revisions/' + previous)
+      ).data
+      await page
+        .getByRole('button', { name: 'Reopen approved item', exact: true })
+        .click()
+      await page
+        .getByLabel('Feedback shared with the client')
+        .fill(
+          'Please reconfirm the approved document after the request update.',
+        )
+      const opened = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/items/' + item + '/reopen'),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Reopen item', exact: true })
+        .click()
+      assert.equal((await opened).status(), 200)
+      await expect(
+        page.getByText(
+          'Item reopened. Historical approvals remain unchanged.',
+          { exact: true },
+        ),
+      ).toBeVisible()
+      phase = 'project-reopening:structure'
+      let project = (await run(agency)).data
+      const field = project.structure
+        .flatMap((s) => s.items)
+        .find((i) => i.id === item)
+      const definition = {
+        ...field,
+        required: true,
+        validation: { ...field.validation, maxFiles: 3 },
+      }
+      for (const key of [
+        'id',
+        'sectionId',
+        'sortOrder',
+        'state',
+        'version',
+        'currentRevisionId',
+        'visible',
+      ])
+        delete definition[key]
+      const changed = await run({
+        url: agency + '/items/' + item + '/schema',
+        method: 'PATCH',
+        body: {
+          definition,
+          expectedStructureVersion: project.project.structureVersion,
+          reopenAffected: false,
+        },
+      })
+      assert.equal(changed.status, 200)
+      assert.deepEqual(
+        (await run(agency + '/items/' + item + '/revisions/' + previous)).data,
+        frozen,
+      )
+      phase = 'project-reopening:client-resubmission'
+      await clientPage.reload()
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: 'Browser attachments', exact: true })
+        .click()
+      const editor = clientPage.locator('article').filter({
+        has: clientPage.getByRole('heading', {
+          name: 'Private documents',
+          exact: true,
+        }),
+      })
+      await expect(
+        editor.getByText(
+          'Please reconfirm the approved document after the request update.',
+          { exact: true },
+        ),
+      ).toBeVisible()
+      await editor
+        .getByRole('button', { name: 'Review and submit', exact: true })
+        .click()
+      const submitted = clientPage.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/submit'),
+      )
+      await editor
+        .getByRole('button', { name: 'Submit for review', exact: true })
+        .click()
+      const fourth = await (await submitted).json()
+      assert.equal(fourth.revisionNo, 4)
+      await page.reload()
+      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await expect(
+        page.getByRole('heading', {
+          name: 'Submitted revision 4',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await page
+        .getByRole('button', { name: 'Approve revision', exact: true })
+        .click()
+      const approved = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/review-decisions'),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Approve', exact: true })
+        .click()
+      assert.equal((await approved).status(), 201)
+      phase = 'project-reopening:completion'
+      // Disable unrelated requests through the real T11 API, preserving every saved draft/history.
+      project = (await run(agency)).data
+      for (const section of project.structure.filter(
+        (s) => !s.items.some((i) => i.id === item),
+      )) {
+        project = (await run(agency)).data
+        assert.equal(
+          (
+            await run({
+              url: agency + '/sections/' + section.id,
+              method: 'PATCH',
+              body: {
+                enabled: false,
+                expectedStructureVersion: project.project.structureVersion,
+              },
+            })
+          ).status,
+          200,
+        )
+      }
+      await page.reload()
+      assert.equal(await action('complete'), 'COMPLETED')
+      assert.equal(
+        (await run(clientRoot + '/checklist', clientPage, false)).data
+          .capabilities.canRespond,
+        false,
+      )
+      assert.equal(
+        await action('reopen', 'Client requests one final update.'),
+        'ACTIVE',
+      )
+      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await page
+        .getByRole('button', { name: 'Reopen approved item', exact: true })
+        .click()
+      await page
+        .getByLabel('Feedback shared with the client')
+        .fill('Final selective reopening after project completion.')
+      const again = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/items/' + item + '/reopen'),
+      )
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Reopen item', exact: true })
+        .click()
+      assert.equal((await again).status(), 200)
+      phase = 'project-reopening:archive-restore'
+      assert.equal(await action('archive'), 'ARCHIVED')
+      assert.equal(
+        (await run(clientRoot + '/checklist', clientPage, false)).data
+          .capabilities.canRespond,
+        false,
+      )
+      assert.equal(await action('restore'), 'PAUSED')
+      assert.equal(await action('resume'), 'ACTIVE')
+      assert.deepEqual(
+        (await run(agency + '/items/' + item + '/revisions/' + previous)).data,
+        frozen,
+      )
       break
     }
     case 'client-idle-request-link': {
@@ -2558,6 +2812,38 @@ for await (const line of lines) {
           text.replace(/https?:\/\/[^\s]+/g, '[private URL]'),
         ),
       })
+    }
+    if (phase.startsWith('structure') || phase.startsWith('project-')) {
+      const choices = await page
+        .locator('dialog select')
+        .evaluateAll((nodes) =>
+          nodes.map((node) => ({
+            label: node.closest('label')?.textContent?.slice(0, 120),
+            options: [...node.options].map((option) => ({
+              value: option.value,
+              label: option.textContent,
+            })),
+          })),
+        )
+        .catch(() => [])
+      http.push({
+        failure: String(error.message)
+          .replace(/https?:\/\/[^\s]+/g, '[private URL]')
+          .replace(/[A-Za-z0-9_-]{40,}/g, '[redacted]')
+          .slice(0, 2200),
+        choices,
+      })
+      await page
+        .screenshot({
+          path: fileURLToPath(
+            new URL(
+              '../../../.artifacts/real-auth/t22-agency-failure.png',
+              import.meta.url,
+            ),
+          ),
+          fullPage: true,
+        })
+        .catch(() => {})
     }
     const diagnostic = String(error.message || '')
       .split('\n')[0]
