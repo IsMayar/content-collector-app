@@ -475,7 +475,7 @@ Milestone status: In progress
 | ---- | -------------------------------------------- | --------------------------------------------------- | ----------- |
 | T09  | Template JSON validator and catalog seed     | All ten built-ins validate                          | Complete    |
 | T10  | Project creation for all three types         | Template snapshot remains independent               | Complete    |
-| T11  | Section and item editor and reorder          | Keyboard reorder and structure conflicts work       | In progress |
+| T11  | Section and item editor and reorder          | Keyboard reorder and structure conflicts work       | Complete |
 | T12  | Client contacts and read-only client preview | Preview exposes no live client session              | Complete    |
 | T13  | Team invitations and project assignments     | Seat reservation and reviewer/export flags enforced | Complete |
 
@@ -500,7 +500,7 @@ Milestone status: In progress
 | T19  | Scanner, canonical copy and image variants  | Unsafe staging bytes never become public READY content       | Complete |
 | T20  | Phone upload queue and original option      | Real-device photo and error journeys pass                    | In progress |
 | T21  | Comments and review decisions               | Internal comments never reach clients; decision race handled | Complete |
-| T22  | Project completion, reopening and archive   | Progress and lifecycle guards use the same evaluator         | Not started |
+| T22  | Project completion, reopening and archive   | Progress and lifecycle guards use the same evaluator         | Complete |
 | T23  | Immutable approved export manifest and jobs | Partial exports labeled; all three formats match snapshots   | Not started |
 
 ### Milestone M5 Assistance and reminders
@@ -806,3 +806,12 @@ Live Review navigation, queue/history, explicit exact-version confirmation, stab
 Evidence:23 initial focused review checks passed; full backend executed913 cases (889 preserved +24 review):896 passed and17 failed only on stale schema totals. Exact expectations were updated to16 migrations/30 tables; all17 failed cases then passed via focused Maven verify, including Boot JAR packaging. **This is passing coverage across the full run plus targeted correction, not a subsequent one-shot913 green run.** A prior engine-unavailable attempt reported288 tests/16 infrastructure errors and is not counted as successful. No production backend edits occurred between the913 run and17-case repair. Final frontend44 tests /3 files, strict TypeScript/build, changed-file zero-warning lint/format and1 actual HTTPS lifecycle with MSW disabled passed. HTTPS demonstrated internal-note exclusion, revision2 feedback, client resubmission3, historical denial and exact approval with unchanged previous snapshot. The initial empty-only client-comment schema failure was fixed and regression-tested before the final passing lifecycle. Unrelated responsive/PWA/frontend suites were intentionally not rerun.
 
 [Exact contracts, concurrency/security, tests, limitations, commands and file manifest](T21_REVIEW_DECISIONS.md). Backend `817c206`; frontend `4e93b88`; documentation commit reported separately. T20 physical-device acceptance, T04/T05/T06/T11/T16/T22 and production gates remain pending. No push or full-MVP claim.
+
+
+## T22 project lifecycle and reopening — 2 November 2026
+
+T22 Complete for original-roadmap local acceptance: publication, pause/resume, shared-evaluator completion, explicit project/item reopening, archive/restore, and real T11 draft revalidation are integrated. T11 local reopening dependency/editor acceptance is Complete; M2 and M4 remain In progress under independent release/remaining-task gates. V17 alone adds publication metadata and append-only reopening/lifecycle history; V1–V16 and supplied specifications are unchanged.
+
+Final full clean verify: **936 passed,0 failures/errors/skips in one complete run**, preserving913 prior cases plus23 additions. Initial affected226 checks passed; focused corrections24 plus1 route check passed. Frontend30 checks across3 files plus1 editor regression passed; TypeScript/build/changed-file lint/format passed. **1 real HTTPS lifecycle with MSW disabled passed**, replacing artificial ACTIVE setup with real publication and exercising completion/reopening/archive/restore and immutable prior snapshots. Earlier935-case run had2 obsolete expectation failures; they were corrected and the full run repeated. Earlier browser editor render failure was reproduced/fixed before the final green lifecycle. Unrelated responsive/PWA/frontend suites were intentionally not rerun.
+
+[T22 exact contracts, transitions, security/concurrency, file manifest and evidence](T22_PROJECT_PUBLICATION_REOPENING.md). Implementation commits:8b8ae0e, a377b88. T20 physical-device acceptance, T04–T06, T16 production/storage/codec/device and T23+ gates remain pending. No push or full-MVP claim.
