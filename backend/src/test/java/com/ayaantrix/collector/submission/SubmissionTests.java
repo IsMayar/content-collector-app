@@ -106,6 +106,12 @@ class SubmissionTests {
 
         @Bean
         @Primary
+        ReminderMail reminderMail() {
+            return new ReminderMail();
+        }
+
+        @Bean
+        @Primary
         Mailbox teamMail() {
             return new Mailbox();
         }
@@ -170,6 +176,23 @@ class SubmissionTests {
     private MockMvc mvc;
     private String hash;
 
+    static class ReminderMail implements com.ayaantrix.collector.reminder.service.EmailSender {
+        java.util.List<Message> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        volatile String outcome = "ACCEPTED";
+
+        public boolean available() {
+            return true;
+        }
+
+        public Result send(Message m) {
+            messages.add(m);
+            return new Result(
+                    outcome,
+                    outcome.equals("ACCEPTED") ? UUID.randomUUID().toString() : null,
+                    outcome.equals("ACCEPTED") ? null : "SYNTHETIC_FAILURE");
+        }
+    }
+
     @BeforeAll
     void start() throws Exception {
         exportStorage = new com.ayaantrix.collector.attachment.StorageFixture();
@@ -200,6 +223,9 @@ class SubmissionTests {
                                 "--AI_MONTHLY_BUDGET_MICROUSD=10000000",
                                 "--collector.workspace.trial-ai-drafts=20",
                                 "--collector.delivery.worker-enabled=false",
+                                "--collector.reminders.webhook-secret=whsec_"
+                                        + Base64.getEncoder().encodeToString(new byte[32]),
+                                "--collector.reminders.webhook-url=http://localhost/api/v1/webhooks/email",
                                 "--collector.delivery.encryption-key="
                                         + Base64.getEncoder().encodeToString(new byte[32])));
         args.addAll(java.util.List.of(exportStorage.args()));
@@ -228,6 +254,12 @@ class SubmissionTests {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        context.getBean(ReminderMail.class).messages.clear();
+        context.getBean(ReminderMail.class).outcome = "ACCEPTED";
+        jdbc.update(
+                "update collector.reminder_deliveries set"
+                        + " state='CANCELLED',lease_id=null,lease_until=null where state in"
+                        + " ('QUEUED','SENDING')");
         var fake = context.getBean(AiFake.class);
         fake.failure = null;
         fake.calls = 0;
@@ -1727,7 +1759,7 @@ class SubmissionTests {
                 json.readTree(
                         jdbc.queryForObject(
                                 "select acceptance_json::text from collector.ai_draft_jobs where"
-                                    + " id=?",
+                                        + " id=?",
                                 String.class,
                                 id));
         assertThat(previous.path("previousAnswer").path("value").path("text").asText())
@@ -1741,14 +1773,14 @@ class SubmissionTests {
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from collector.submission_revisions where"
-                                    + " project_id=?",
+                                        + " project_id=?",
                                 Integer.class,
                                 f.f().project().id()))
                 .isZero();
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from collector.audit_logs where"
-                                    + " action='AI_DRAFT_ACCEPTED' and resource_id=?",
+                                        + " action='AI_DRAFT_ACCEPTED' and resource_id=?",
                                 Integer.class,
                                 id))
                 .isEqualTo(1);
@@ -1774,8 +1806,8 @@ class SubmissionTests {
         aiWorker().dispatchOne();
         jdbc.update(
                 "update collector.items set"
-                    + " schema_json=jsonb_set(schema_json,'{validation,maxLength}','3'::jsonb)"
-                    + " where id=?",
+                        + " schema_json=jsonb_set(schema_json,'{validation,maxLength}','3'::jsonb)"
+                        + " where id=?",
                 other.item());
         code(() -> acceptAi(other, second, 0, "schema"), "STRUCTURE_CONFLICT");
         assertThat(policyAnswer(other)).isEmpty();
@@ -1797,7 +1829,7 @@ class SubmissionTests {
         if (state.equals("EXPIRED")) {
             jdbc.update(
                     "update collector.ai_draft_jobs set created_at=created_at-interval '31"
-                        + " days',expires_at=expires_at-interval '31 days' where id=?",
+                            + " days',expires_at=expires_at-interval '31 days' where id=?",
                     id);
             code(() -> acceptAi(f, id, 0, "expired"), "AI_EXPIRED");
             return;
@@ -1836,8 +1868,8 @@ class SubmissionTests {
         var f = aiFixture(ProjectType.WEBSITE);
         jdbc.update(
                 "update collector.items set"
-                    + " schema_json=jsonb_set(schema_json,'{validation,maxLength}','3'::jsonb)"
-                    + " where id=?",
+                        + " schema_json=jsonb_set(schema_json,'{validation,maxLength}','3'::jsonb)"
+                        + " where id=?",
                 f.item());
         var command = aiInput(0);
         UUID id =
@@ -3712,5 +3744,514 @@ class SubmissionTests {
                                 .at("/answer/value/text")
                                 .asText())
                 .isEqualTo("Preserved draft");
+    }
+
+    com.ayaantrix.collector.reminder.service.ReminderService reminders() {
+        return context.getBean(com.ayaantrix.collector.reminder.service.ReminderService.class);
+    }
+
+    com.ayaantrix.collector.reminder.worker.ReminderWorker reminderWorker() {
+        return context.getBean(com.ayaantrix.collector.reminder.worker.ReminderWorker.class);
+    }
+
+    UUID remind(Fixture f, String key) {
+        return as(
+                f.tenant().actor(),
+                () ->
+                        reminders()
+                                .send(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        new com.ayaantrix.collector.reminder.dto.ReminderDtos.Send(
+                                                f.contact(), "EMAIL"),
+                                        key));
+    }
+
+    @Test
+    void reminderAcceptedIsNotDeliveredAndContainsOnlySafeLinks() {
+        var f = fixture();
+        enter(f);
+        String key = UUID.randomUUID().toString();
+        var id = remind(f, key);
+        assertThat(remind(f, key)).isEqualTo(id);
+        assertThat(reminderWorker().dispatchOne()).isTrue();
+        var row = jdbc.queryForMap("select * from collector.reminder_deliveries where id=?", id);
+        assertThat(row.get("state")).isEqualTo("ACCEPTED");
+        assertThat(row.get("encrypted_payload")).isNull();
+        var sent = context.getBean(ReminderMail.class).messages.getFirst();
+        assertThat(sent.body())
+                .contains("required content items", "/client/access#token=", "preferences=1")
+                .doesNotContain("storage_key", "password");
+        assertThat(sent.replyTo())
+                .isEqualTo(
+                        jdbc.queryForObject(
+                                "select email_normalized from collector.users where id=?",
+                                String.class,
+                                f.tenant().actor().id()));
+        var token = sent.body().split("token=")[1].split("\\s")[0];
+        assertThat(access().exchange(input(token), null).projectId()).isEqualTo(f.project().id());
+        assertThatThrownBy(() -> access().exchange(input(token), null))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> remind(f, UUID.randomUUID().toString()))
+                .hasMessageContaining("DAILY_LIMIT");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PAUSED", "COMPLETED", "ARCHIVED", "REVOKED", "OPT_OUT"})
+    void reminderFinalEligibilityPreventsChase(String reason) {
+        var f = fixture();
+        var cookie = enter(f).credential();
+        var id = remind(f, UUID.randomUUID().toString());
+        switch (reason) {
+            case "REVOKED" ->
+                    as(
+                            f.tenant().actor(),
+                            () -> {
+                                access().revoke(
+                                                f.tenant().workspace(),
+                                                f.project().id(),
+                                                f.contact());
+                                return true;
+                            });
+            case "OPT_OUT" ->
+                    reminders()
+                            .preferences(
+                                    cookie,
+                                    f.project().id(),
+                                    new com.ayaantrix.collector.reminder.dto.ReminderDtos
+                                            .ChangePreferences(false, "Asia/Kabul"));
+            case "SUBMITTED" ->
+                    jdbc.update(
+                            "update collector.items set"
+                                + " required=false,schema_json=jsonb_set(schema_json,'{required}','false'::jsonb)"
+                                + " where workspace_id=? and project_id=?",
+                            f.tenant().workspace(),
+                            f.project().id());
+            default ->
+                    jdbc.update(
+                            "update collector.projects set state=? where id=?",
+                            reason,
+                            f.project().id());
+        }
+        reminderWorker().dispatchOne();
+        assertThat(context.getBean(ReminderMail.class).messages).isEmpty();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isIn("SUPPRESSED", "CANCELLED");
+    }
+
+    @Test
+    void reminderSubmittedItemsAreNotMissingClientWork() {
+        var r = reviewFixture();
+        jdbc.update(
+                "update collector.items set"
+                    + " required=false,schema_json=jsonb_set(schema_json,'{required}','false'::jsonb)"
+                    + " where workspace_id=? and project_id=? and id<>?",
+                r.f().tenant().workspace(),
+                r.f().project().id(),
+                r.item());
+        var preview =
+                as(
+                        r.f().tenant().actor(),
+                        () ->
+                                reminders()
+                                        .preview(
+                                                r.f().tenant().workspace(),
+                                                r.f().project().id(),
+                                                new com.ayaantrix.collector.reminder.dto
+                                                        .ReminderDtos.Send(
+                                                        r.f().contact(), "EMAIL")));
+        assertThat(preview.eligible()).isFalse();
+        assertThat(preview.reasons()).contains("NO_CLIENT_ACTION");
+    }
+
+    @Test
+    void reminderUnknownNeverResendsAndPolicyConflictsRollback() {
+        var f = fixture();
+        enter(f);
+        var id = remind(f, UUID.randomUUID().toString());
+        context.getBean(ReminderMail.class).outcome = "UNKNOWN";
+        reminderWorker().dispatchOne();
+        assertThat(reminderWorker().dispatchOne()).isFalse();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("UNKNOWN");
+        var policy =
+                as(
+                        f.tenant().actor(),
+                        () -> reminders().policy(f.tenant().workspace(), f.project().id()));
+        var command =
+                new com.ayaantrix.collector.reminder.dto.ReminderDtos.Update(
+                        policy.rules(), policy.timezone(), true, policy.version(), true);
+        as(
+                f.tenant().actor(),
+                () -> reminders().update(f.tenant().workspace(), f.project().id(), command));
+        assertThatThrownBy(
+                        () ->
+                                as(
+                                        f.tenant().actor(),
+                                        () ->
+                                                reminders()
+                                                        .update(
+                                                                f.tenant().workspace(),
+                                                                f.project().id(),
+                                                                command)))
+                .hasMessageContaining("Reload");
+    }
+
+    @Test
+    void reminderConcurrentIdempotencyAndTenantIsolation() throws Exception {
+        var f = fixture();
+        enter(f);
+        String key = UUID.randomUUID().toString();
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var a = pool.submit(() -> remind(f, key));
+            var b = pool.submit(() -> remind(f, key));
+            assertThat(a.get(20, TimeUnit.SECONDS)).isEqualTo(b.get(20, TimeUnit.SECONDS));
+        } finally {
+            pool.shutdownNow();
+        }
+        var other = tenant();
+        assertThatThrownBy(
+                        () ->
+                                as(
+                                        other.actor(),
+                                        () ->
+                                                reminders()
+                                                        .policy(
+                                                                f.tenant().workspace(),
+                                                                f.project().id())))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void reminderClientPreferencesRequireOwnSessionAndCsrf() throws Exception {
+        var f = fixture();
+        String cookie = enter(f).credential(),
+                path = "/api/v1/client/projects/" + f.project().id() + "/notification-preferences";
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(
+                        put(path)
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), cookie))
+                                .contentType("application/json")
+                                .content("{\"emailEnabled\":false,\"timezone\":\"Asia/Kabul\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(
+                        put(path)
+                                .with(csrf())
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), cookie))
+                                .contentType("application/json")
+                                .content("{\"emailEnabled\":false,\"timezone\":\"Asia/Kabul\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preferences.emailEnabled").value(false));
+    }
+
+    @Test
+    void reminderWebhookSignatureDedupSuppressionAndUnknownSafety() throws Exception {
+        var f = fixture();
+        enter(f);
+        var id = remind(f, UUID.randomUUID().toString());
+        reminderWorker().dispatchOne();
+        String provider =
+                jdbc.queryForObject(
+                        "select provider_id from collector.reminder_deliveries where id=?",
+                        String.class,
+                        id);
+        String body =
+                json.writeValueAsString(
+                        Map.of(
+                                "type",
+                                "email.bounced",
+                                "created_at",
+                                NOW.toString(),
+                                "data",
+                                Map.of("email_id", provider)));
+        String event = "msg_" + UUID.randomUUID(), time = Long.toString(NOW.getEpochSecond());
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(new byte[32], "HmacSHA256"));
+        String sig =
+                "v1,"
+                        + Base64.getEncoder()
+                                .encodeToString(
+                                        mac.doFinal(
+                                                (event + "." + time + "." + body)
+                                                        .getBytes(
+                                                                java.nio.charset.StandardCharsets
+                                                                        .UTF_8)));
+        mvc.perform(post("/api/v1/webhooks/email").contentType("application/json").content(body))
+                .andExpect(status().isUnauthorized());
+        for (int n = 0; n < 2; n++)
+            mvc.perform(
+                            post("/api/v1/webhooks/email")
+                                    .header("svix-id", event)
+                                    .header("svix-timestamp", time)
+                                    .header("svix-signature", sig)
+                                    .contentType("application/json")
+                                    .content(body))
+                    .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.email_webhook_events where"
+                                        + " event_id=?",
+                                Integer.class,
+                                event))
+                .isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("BOUNCED");
+        assertThatThrownBy(() -> remind(f, UUID.randomUUID().toString()))
+                .hasMessageContaining("EMAIL_SUPPRESSED");
+    }
+
+    @Test
+    void reminderDefiniteFailuresRetryButAbandonedClaimsRemainUnknown() {
+        var f = fixture();
+        enter(f);
+        var id = remind(f, UUID.randomUUID().toString());
+        context.getBean(ReminderMail.class).outcome = "QUEUED";
+        reminderWorker().dispatchOne();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("QUEUED");
+        context.getBean(TestClock.class).time = NOW.plusSeconds(31);
+        context.getBean(ReminderMail.class).outcome = "ACCEPTED";
+        reminderWorker().dispatchOne();
+        var messages = context.getBean(ReminderMail.class).messages;
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(0)).isEqualTo(messages.get(1));
+        var other = fixture();
+        enter(other);
+        var abandoned = remind(other, UUID.randomUUID().toString());
+        var repo =
+                context.getBean(
+                        com.ayaantrix.collector.reminder.repository.ReminderRepository.class);
+        assertThat(
+                        tx().execute(t -> repo.claim(context.getBean(TestClock.class).instant()))
+                                .orElseThrow()
+                                .id())
+                .isEqualTo(abandoned);
+        context.getBean(TestClock.class).time = NOW.plusSeconds(152);
+        reminderWorker().dispatchOne();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                abandoned))
+                .isEqualTo("UNKNOWN");
+        assertThat(messages).hasSize(2);
+    }
+
+    @Test
+    void reminderPolicyCancellationAndAuditRollback() {
+        var f = fixture();
+        enter(f);
+        var id = remind(f, UUID.randomUUID().toString());
+        var policy =
+                as(
+                        f.tenant().actor(),
+                        () -> reminders().policy(f.tenant().workspace(), f.project().id()));
+        try {
+            tx().executeWithoutResult(
+                            t -> {
+                                as(
+                                        f.tenant().actor(),
+                                        () ->
+                                                reminders()
+                                                        .update(
+                                                                f.tenant().workspace(),
+                                                                f.project().id(),
+                                                                new com.ayaantrix.collector.reminder
+                                                                        .dto.ReminderDtos.Update(
+                                                                        policy.rules(),
+                                                                        "UTC",
+                                                                        true,
+                                                                        policy.version(),
+                                                                        true)));
+                                throw new IllegalStateException("rollback");
+                            });
+        } catch (IllegalStateException expected) {
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("QUEUED");
+        assertThat(
+                        as(
+                                        f.tenant().actor(),
+                                        () ->
+                                                reminders()
+                                                        .policy(
+                                                                f.tenant().workspace(),
+                                                                f.project().id()))
+                                .version())
+                .isEqualTo(policy.version());
+        jdbc.update(
+                "update collector.projects set due_date=due_date+1 where id=?", f.project().id());
+        assertThat(
+                        as(
+                                        f.tenant().actor(),
+                                        () ->
+                                                reminders()
+                                                        .policy(
+                                                                f.tenant().workspace(),
+                                                                f.project().id()))
+                                .version())
+                .isEqualTo(policy.version() + 1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void reminderWeeklyLimitAppliesAcrossRecipients() {
+        var f = fixture();
+        enter(f);
+        for (int i = 0; i < 6; i++) {
+            Fixture target = f;
+            if (i > 0) {
+                var c =
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        context.getBean(
+                                                        com.ayaantrix.collector.project.service
+                                                                .ProjectClientService.class)
+                                                .createContact(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        new com.ayaantrix.collector.project.dto
+                                                                .ProjectClientDtos.ContactCreate(
+                                                                f.tenant().client(),
+                                                                "Other client",
+                                                                "reminder-"
+                                                                        + UUID.randomUUID()
+                                                                        + "@example.test",
+                                                                NOW.plus(Duration.ofDays(90)))));
+                target = new Fixture(f.tenant(), f.project(), c.id());
+                enter(target);
+            }
+            var current = target;
+            if (i < 5) assertThat(remind(current, UUID.randomUUID().toString())).isNotNull();
+            else
+                assertThatThrownBy(() -> remind(current, UUID.randomUUID().toString()))
+                        .hasMessageContaining("WEEKLY_LIMIT");
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.reminder_deliveries where"
+                                        + " project_id=?",
+                                Integer.class,
+                                f.project().id()))
+                .isEqualTo(5);
+    }
+
+    @Test
+    void reminderSchedulerDeduplicatesAndNeverReplaysMissedBacklog() {
+        var f = fixture();
+        enter(f);
+        jdbc.update(
+                "update collector.projects set state='PAUSED' where id<>? and state='ACTIVE'",
+                f.project().id());
+        var now = context.getBean(TestClock.class).instant();
+        jdbc.update(
+                "update collector.projects set due_date=? where id=?",
+                now.atZone(ZoneOffset.UTC).toLocalDate(),
+                f.project().id());
+        var p =
+                as(
+                        f.tenant().actor(),
+                        () -> reminders().policy(f.tenant().workspace(), f.project().id()));
+        var rules =
+                List.of(-2, -1, 0).stream()
+                        .map(
+                                d ->
+                                        new com.ayaantrix.collector.reminder.dto.ReminderDtos.Rule(
+                                                UUID.randomUUID(), "EMAIL", d, "00:00", false))
+                        .toList();
+        as(
+                f.tenant().actor(),
+                () ->
+                        reminders()
+                                .update(
+                                        f.tenant().workspace(),
+                                        f.project().id(),
+                                        new com.ayaantrix.collector.reminder.dto.ReminderDtos
+                                                .Update(rules, "UTC", false, p.version(), true)));
+        for (int i = 0; i < 3; i++) reminderWorker().schedule();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.reminder_deliveries where"
+                                        + " project_id=?",
+                                Integer.class,
+                                f.project().id()))
+                .isEqualTo(1);
+        reminderWorker().dispatchOne();
+        for (int i = 0; i < 3; i++) reminderWorker().schedule();
+        assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.reminder_deliveries where"
+                                        + " project_id=?",
+                                Integer.class,
+                                f.project().id()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void reminderPreparationFailureRetriesWithoutLeakingOrDuplicatingTokens() {
+        var f = fixture();
+        enter(f);
+        var id = remind(f, UUID.randomUUID().toString());
+        int before =
+                jdbc.queryForObject(
+                        "select count(*) from collector.access_tokens where project_id=?",
+                        Integer.class,
+                        f.project().id());
+        jdbc.update(
+                "update collector.users set verified_at=null where id=?", f.tenant().actor().id());
+        reminderWorker().dispatchOne();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("QUEUED");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.access_tokens where project_id=?",
+                                Integer.class,
+                                f.project().id()))
+                .isEqualTo(before);
+        assertThat(context.getBean(ReminderMail.class).messages).isEmpty();
+        jdbc.update(
+                "update collector.users set verified_at=created_at where id=?",
+                f.tenant().actor().id());
+        context.getBean(TestClock.class).time = NOW.plusSeconds(31);
+        reminderWorker().dispatchOne();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("ACCEPTED");
+        assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
     }
 }

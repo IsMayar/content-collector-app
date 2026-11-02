@@ -29,7 +29,46 @@ public class ClientAccessService {
   String route="/api/v1/workspaces/"+workspace+"/projects/"+project+"/contacts/"+contact+"/invite",hash=IdempotencyRepository.hash(contact.toString());var replay=requests.replay(workspace,access.member().userId(),route,key,hash,now);if(replay.isPresent())return json.readValue(replay.get(),Invitation.class);
   grants.initialize(g,now);var invitation=issue(g,trace);audit.write(workspace,project,access.member().userId(),"CLIENT_INVITATION_CREATED","CONTACT",contact,Map.of(),now);requests.remember(workspace,access.member().userId(),route,key,hash,json.writeValueAsString(invitation),202,now);return invitation;
  }
- private Invitation issue(ClientAccessRepository.Grant g,String trace){var now=clock.instant();grants.revokeInvitations(g,now);String raw=secrets.generate();var token=new AccountToken(g.workspace(),g.project(),g.contact(),g.email(),secrets.digest(raw),now,g.expires());tokens.saveAndFlush(token);outbox.enqueue(token,raw,trace);return new Invitation(token.getId(),g.email(),token.getExpiresAt().isBefore(g.expires())?token.getExpiresAt():g.expires(),"PENDING");}
+    public record ReminderInvitation(AccountToken token, String raw) {
+        @Override
+        public String toString() {
+            return "ReminderInvitation[redacted]";
+        }
+    }
+
+    private ReminderInvitation freshInvitation(ClientAccessRepository.Grant g) {
+        var now = clock.instant();
+        grants.revokeInvitations(g, now);
+        String raw = secrets.generate();
+        var token =
+                new AccountToken(
+                        g.workspace(),
+                        g.project(),
+                        g.contact(),
+                        g.email(),
+                        secrets.digest(raw),
+                        now,
+                        g.expires());
+        tokens.saveAndFlush(token);
+        return new ReminderInvitation(token, raw);
+    }
+
+    public ReminderInvitation reminderInvitation(UUID workspace, UUID project, UUID contact) {
+        return freshInvitation(clients.grant(workspace, project, contact, true).grant());
+    }
+
+    private Invitation issue(ClientAccessRepository.Grant g, String trace) {
+        var fresh = freshInvitation(g);
+        var token = fresh.token();
+        outbox.enqueue(token, fresh.raw(), trace);
+        return new Invitation(
+                token.getId(),
+                g.email(),
+                token.getExpiresAt().isBefore(g.expires()) ? token.getExpiresAt() : g.expires(),
+                "PENDING");
+    }
+
+
  public void revoke(UUID workspace,UUID project,UUID contact){var access=agency.access(workspace,true);projects.lockForStructure(workspace,project).orElseThrow(ProjectAuthorization::missing);var g=grants.contact(workspace,project,contact).orElseThrow(ProjectAuthorization::missing);if(g.state().equals("REVOKED"))return;var now=clock.instant();grants.revoke(g,now);grants.revokeInvitations(g,now);sessions.revokeGrant(workspace,project,contact,now);audit.write(workspace,project,access.member().userId(),"CLIENT_ACCESS_REVOKED","CONTACT",contact,Map.of(),now);}
  public Issued exchange(Exchange input,String previous){valid(input);AccountToken token;try{token=tokens.findByTokenHashAndPurpose(secrets.digest(input.token()),TokenPurpose.CLIENT_INVITE).orElseThrow(ClientAccessAuthorization::unavailable);}catch(IllegalArgumentException e){throw ClientAccessAuthorization.unavailable();}
   var access=clients.grant(token.getWorkspaceId(),token.getProjectId(),token.getContactId(),true);var now=clock.instant();if(!token.getEmailNormalized().equals(access.grant().email())||tokens.consume(token.getId(),TokenPurpose.CLIENT_INVITE,now)!=1)throw ClientAccessAuthorization.unavailable();

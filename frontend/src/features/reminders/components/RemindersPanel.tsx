@@ -3,6 +3,7 @@ import { DeliveryHistory } from '@/features/reminders/components/DeliveryHistory
 import type {
   ReminderPolicy,
   ReminderPreview,
+  ReminderRule,
 } from '@/features/reminders/types/reminder.types'
 import { useData } from '@/services/api/resourceApi'
 import { Notice } from '@/shared/components/Feedback'
@@ -11,7 +12,9 @@ import { useCommand } from '@/shared/hooks/useCommand'
 import { useState } from 'react'
 
 export function RemindersPanel({ root }: { root: string }) {
-  const q = useData<ReminderPolicy>(`${root}/reminder-policy`)
+  const query = useData<{ policy: ReminderPolicy }>(`${root}/reminder-policy`)
+  const q = { ...query, data: query.data?.policy }
+  const [extraRules, setExtraRules] = useState<ReminderRule[]>([])
   const contacts = useData<{ data: ProjectContact[] }>(`${root}/contacts`)
   const command = useCommand()
   const [preview, setPreview] = useState<ReminderPreview>()
@@ -53,13 +56,20 @@ export function RemindersPanel({ root }: { root: string }) {
               onSubmit={async (e) => {
                 e.preventDefault()
                 const v = new FormData(e.currentTarget)
-                const rules = q.data!.rules.map((r, i) => ({
-                  ...r,
-                  channel: String(v.get(`channel${i}`)) as 'EMAIL' | 'SMS',
-                  daysRelativeToDueDate: Number(v.get(`days${i}`)),
-                  localTime: String(v.get(`time${i}`)),
-                  weekdaysOnly: v.has(`weekdays${i}`),
-                }))
+                const rules = [...q.data!.rules, ...extraRules]
+                  .filter((_, i) => v.has(`enabled${i}`))
+                  .map((r) => {
+                    const i = [...q.data!.rules, ...extraRules].findIndex(
+                      (rule) => rule.id === r.id,
+                    )
+                    return {
+                      ...r,
+                      channel: String(v.get(`channel${i}`)) as 'EMAIL' | 'SMS',
+                      daysRelativeToDueDate: Number(v.get(`days${i}`)),
+                      localTime: String(v.get(`time${i}`)),
+                      weekdaysOnly: v.has(`weekdays${i}`),
+                    }
+                  })
                 if (
                   await command.run(
                     `${root}/reminder-policy`,
@@ -72,8 +82,10 @@ export function RemindersPanel({ root }: { root: string }) {
                     },
                     'PUT',
                   )
-                )
+                ) {
                   setMessage('Reminder policy saved.')
+                  setExtraRules([])
+                }
               }}
             >
               <div className="actions">
@@ -104,10 +116,10 @@ export function RemindersPanel({ root }: { root: string }) {
               {tab === 'policy' && (
                 <section className="policy-channels">
                   <h3>Reminder channels</h3>
-                  {['EMAIL', 'SMS'].map((c) => (
+                  {['EMAIL'].map((c) => (
                     <article key={c}>
                       <span className="channel-symbol" aria-hidden="true">
-                        {c === 'EMAIL' ? '✉' : '▤'}
+                        {c === 'EMAIL' ? 'âœ‰' : 'â–¤'}
                       </span>
                       <div>
                         <h3>{c === 'EMAIL' ? 'Email' : 'SMS'}</h3>
@@ -137,8 +149,16 @@ export function RemindersPanel({ root }: { root: string }) {
                 </section>
               )}
               <div hidden={tab !== 'cadence'} className="cadence-list">
-                {q.data.rules.map((r, i) => (
+                {[...q.data.rules, ...extraRules].map((r, i) => (
                   <article className="cadence-card" key={r.id}>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        name={`enabled${i}`}
+                        defaultChecked
+                      />{' '}
+                      Enable rule
+                    </label>
                     <div className="cadence-title">
                       <span>{i + 1}</span>
                       <h3>
@@ -158,7 +178,7 @@ export function RemindersPanel({ root }: { root: string }) {
                       <Field label="Reminder channel">
                         <select name={`channel${i}`} defaultValue={r.channel}>
                           <option>EMAIL</option>
-                          <option>SMS</option>
+                          <option disabled>SMS</option>
                         </select>
                       </Field>
                       <Field label="Days relative to due date">
@@ -166,7 +186,7 @@ export function RemindersPanel({ root }: { root: string }) {
                           type="number"
                           name={`days${i}`}
                           min={-30}
-                          max={30}
+                          max={90}
                           defaultValue={r.daysRelativeToDueDate}
                         />
                       </Field>
@@ -194,6 +214,25 @@ export function RemindersPanel({ root }: { root: string }) {
                   </article>
                 ))}
               </div>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={q.data.rules.length + extraRules.length >= 5}
+                onClick={() =>
+                  setExtraRules([
+                    ...extraRules,
+                    {
+                      id: crypto.randomUUID(),
+                      channel: 'EMAIL',
+                      daysRelativeToDueDate: 7,
+                      localTime: '10:00',
+                      weekdaysOnly: true,
+                    },
+                  ])
+                }
+              >
+                Add email reminder
+              </button>
               <button className="primary-button" disabled={command.pending}>
                 Save policy
               </button>
@@ -233,7 +272,7 @@ export function RemindersPanel({ root }: { root: string }) {
                     }}
                   >
                     <option>EMAIL</option>
-                    <option>SMS</option>
+                    <option disabled>SMS</option>
                   </select>
                 </Field>
               </div>
@@ -247,10 +286,12 @@ export function RemindersPanel({ root }: { root: string }) {
                   disabled={!contact || command.pending}
                   onClick={async () =>
                     setPreview(
-                      await command.run<ReminderPreview>(
-                        `${root}/reminders/preview`,
-                        { contactId: contact, channel },
-                      ),
+                      (
+                        await command.run<{ preview: ReminderPreview }>(
+                          `${root}/reminders/preview`,
+                          { contactId: contact, channel },
+                        )
+                      )?.preview,
                     )
                   }
                 >
@@ -267,7 +308,7 @@ export function RemindersPanel({ root }: { root: string }) {
                       })
                     )
                       setMessage(
-                        'Synthetic reminder queued. No email or SMS sent.',
+                        'Reminder queued. Provider acceptance and delivery are shown separately in delivery activity.',
                       )
                   }}
                 >

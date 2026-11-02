@@ -161,12 +161,12 @@ describe('tenant-scoped project foundations', () => {
     login()
     const r = productDb.projects[demoProjectId]
     for (const i of r.structure.flatMap((s) => s.items)) i.state = 'SUBMITTED'
-    const preview = await json<{ eligible: boolean }>(
+    const preview = await json<{ preview: { eligible: boolean } }>(
       `${projectRoot}/reminders/preview`,
       'POST',
       { contactId: r.contacts[0].id, channel: 'EMAIL' },
     )
-    expect(preview.eligible).toBe(false)
+    expect(preview.preview.eligible).toBe(false)
   })
 })
 describe('client session, draft and submission boundaries', () => {

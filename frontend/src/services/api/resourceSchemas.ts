@@ -132,5 +132,53 @@ export function validateProductRead(path: string, data: unknown) {
       ),
     })
   if (route.endsWith('/client-preview')) schema = previewSchema
+  if (route.endsWith('/reminder-policy'))
+    schema = z.object({
+      policy: z.object({
+        version: z.number().int().positive(),
+        enabled: z.boolean(),
+        paused: z.boolean(),
+        timezone: z.string(),
+        rules: z
+          .array(
+            z.object({
+              id: z.string(),
+              channel: z.enum(['EMAIL', 'SMS']),
+              daysRelativeToDueDate: z.number().int().min(-30).max(90),
+              localTime: z.string(),
+              weekdaysOnly: z.boolean(),
+            }),
+          )
+          .max(5),
+      }),
+    })
+  if (route.endsWith('/deliveries'))
+    schema = z.looseObject({
+      data: z.array(
+        z.object({
+          id: z.string(),
+          channel: z.enum(['EMAIL', 'SMS']),
+          dueAt: z.string(),
+          state: z.enum([
+            'QUEUED',
+            'SENDING',
+            'ACCEPTED',
+            'DELIVERED',
+            'BOUNCED',
+            'SUPPRESSED',
+            'FAILED',
+            'UNKNOWN',
+            'CANCELLED',
+          ]),
+          failureCode: z.string().nullable(),
+        }),
+      ),
+    })
+  if (route.endsWith('/notification-preferences'))
+    schema = z.looseObject({
+      emailEnabled: z.boolean(),
+      timezone: z.string().nullable(),
+      smsStatus: z.string(),
+    })
   return schema.safeParse(data)
 }

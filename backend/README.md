@@ -622,3 +622,10 @@ Provider failures never block ordinary writing. T25 suggestion acceptance is not
 ## T25 explicit AI acceptance
 
 T25 supersedes the T24-era acceptance gap above. Client preview now uses the real job API; explicit cookie/CSRF/idempotent POST `client/projects/{p}/ai-drafts/{job}/accept` accepts only a successful unexpired own-contact suggestion at its exact base answer version and unchanged question definition. Normal draft-service validation/persistence is reused; no automatic submission, review or extra provider call. V20 adds accepted/schema/recovery snapshots to the existing job and retains the previous answer only until the original job expiry. Original V1–V19 migrations and provider-disabled defaults are preserved. See [T25 contracts and evidence](../docs/T25_IMPLEMENTATION.md).
+
+
+## T26 email reminders
+
+Existing local initialization/startup commands remain unchanged. `REMINDER_WORKER_ENABLED` and `REMINDER_EMAIL_ENABLED` default false. Before any sandbox enablement, configure server-only `EMAIL_API_KEY`, verified platform `EMAIL_FROM`, `EMAIL_WEBHOOK_SECRET`, canonical HTTPS `EMAIL_WEBHOOK_URL` and existing public `APP_BASE_URL`/delivery encryption. An enabled adapter requires webhook configuration; platform From and verified owner Reply-To remain distinct. Configure SPF/DKIM and signed bounce/complaint events with the provider before production. No SMS or unknown-outcome replay is enabled. Unknown deliveries must await T28 reconciliation rather than manual blind resend.
+
+Focused verification from backend/: `.\mvnw.cmd '-Dtest=ReminderCalendarTests,SubmissionTests#reminder*' test`. [Contracts, persistence, configuration, tests and production gates](../docs/T26_IMPLEMENTATION.md).

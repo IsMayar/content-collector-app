@@ -245,6 +245,7 @@ registerProductResolver((request, path, _search, body) => {
       'assignments',
       'reminder-policy',
       'reminders',
+      'deliveries',
     ].includes(action)
   )
     return null
@@ -670,7 +671,7 @@ registerProductResolver((request, path, _search, body) => {
       : new Response(null, { status: 204 })
   }
   if (action === 'reminder-policy') {
-    if (method === 'GET') return response(r.policy)
+    if (method === 'GET') return response({ policy: r.policy })
     checkVersion(r.policy.version, body.expectedVersion)
     requireRule(
       Array.isArray(body.rules) && body.rules.length <= 5 && body.timezone,
@@ -684,8 +685,18 @@ registerProductResolver((request, path, _search, body) => {
       version: r.policy.version + 1,
     } as typeof r.policy
     touch(r, 'Reminder policy updated')
-    return response(r.policy)
+    return response({ policy: r.policy })
   }
+  if (action === 'deliveries')
+    return response({
+      data: r.deliveries || [],
+      page: {
+        number: 0,
+        size: 100,
+        totalElements: r.deliveries?.length || 0,
+        totalPages: 1,
+      },
+    })
   if (action === 'reminders') {
     const eligible =
       r.project.state === 'ACTIVE' &&
@@ -720,7 +731,7 @@ registerProductResolver((request, path, _search, body) => {
         : ['No eligible client action, active grant, or verified SMS consent.'],
       estimatedSegments: body.channel === 'SMS' ? 1 : null,
     }
-    if (aid === 'preview') return response(preview)
+    if (aid === 'preview') return response({ preview })
     if (aid === 'send') {
       requireRule(eligible, 409, 'SUPPRESSED', 'This reminder is not eligible.')
       const delivery = {
@@ -733,7 +744,7 @@ registerProductResolver((request, path, _search, body) => {
       ;(r.deliveries ||= []).unshift(delivery)
       return response(
         {
-          delivery,
+          jobId: delivery.id,
         },
         202,
       )

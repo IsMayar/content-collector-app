@@ -42,6 +42,9 @@ class RealAuthenticationBrowserCheck {
         final List<Message> messages=new CopyOnWriteArrayList<>();
         public void send(Message message){messages.add(message);}
     }
+    static class ReminderMailbox implements com.ayaantrix.collector.reminder.service.EmailSender {
+      final List<Message> messages=new CopyOnWriteArrayList<>();public boolean available(){return true;}public Result send(Message message){messages.add(message);return new Result("ACCEPTED",UUID.randomUUID().toString(),null);}
+    }
     static class BrowserAiProvider implements com.ayaantrix.collector.ai.provider.AiDraftProvider {
         volatile boolean fail=true;
         public boolean available(){return true;}
@@ -49,6 +52,7 @@ class RealAuthenticationBrowserCheck {
     }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class Configuration {
+        @Bean @Primary ReminderMailbox reminderMailbox(){return new ReminderMailbox();}
         @Bean @Primary BrowserAiProvider browserAiProvider(){return new BrowserAiProvider();}
         @Bean org.springframework.web.servlet.config.annotation.WebMvcConfigurer safeBrowserDiagnostics(){return new org.springframework.web.servlet.config.annotation.WebMvcConfigurer(){public void extendHandlerExceptionResolvers(java.util.List<org.springframework.web.servlet.HandlerExceptionResolver> resolvers){resolvers.addFirst((request,response,handler,error)->{Throwable root=error;while(root.getCause()!=null)root=root.getCause();if(!(error instanceof com.ayaantrix.collector.common.error.ApiException)){System.out.println("SAFE_BROWSER_ERROR "+root.getClass().getName());java.util.Arrays.stream(root.getStackTrace()).limit(6).forEach(frame->System.out.println("SAFE_BROWSER_FRAME "+frame));}return null;});}};}
         @Bean @Primary Mailbox browserMailbox(){return new Mailbox();}
@@ -128,6 +132,11 @@ class RealAuthenticationBrowserCheck {
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
                     var clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
                     io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
+                    io.step(Map.of("action","email-reminders"));
+                    assertThat(app.getBean(com.ayaantrix.collector.reminder.worker.ReminderWorker.class).dispatchOne()).isTrue();
+                    assertThat(app.getBean(ReminderMailbox.class).messages).hasSize(1);
+                    assertThat(jdbc.queryForObject("select state from collector.reminder_deliveries where project_id=?",String.class,clientProject)).isEqualTo("ACCEPTED");
+                    io.step(Map.of("action","email-reminder-history"));
                     io.step(Map.of("action","client-draft-collection"));
                     UUID aiItem=jdbc.queryForObject("select id from collector.items where project_id=? and field_type='LONG_TEXT' and state in ('NOT_STARTED','DRAFT') order by id limit 1",UUID.class,clientProject);
                     jdbc.update("update collector.projects set ai_enabled=true where id=?",clientProject);

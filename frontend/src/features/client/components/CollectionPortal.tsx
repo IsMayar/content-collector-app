@@ -1,3 +1,4 @@
+import { ClientPreferences } from './ClientPreferences'
 import { SubmissionValidationSummary } from './SubmissionValidationSummary'
 import { UnsavedDraftRecovery } from './UnsavedDraftRecovery'
 import { useState } from 'react'
@@ -15,6 +16,10 @@ export function CollectionPortal({
   onRefresh: () => void
 }) {
   const [selected, setSelected] = useState('')
+  const [preferences, setPreferences] = useState(
+    () =>
+      new URLSearchParams(window.location.search).get('preferences') === '1',
+  )
   const command = useCommand(true)
   const navigate = useNavigate()
   const current =
@@ -39,6 +44,13 @@ export function CollectionPortal({
       >
         <button
           className="secondary-button"
+          aria-expanded={preferences}
+          onClick={() => setPreferences(!preferences)}
+        >
+          Reminder preferences
+        </button>
+        <button
+          className="secondary-button"
           onClick={async () => {
             if (!(await flush())) return
             const result = await command.run('client-access/logout', {}, 'POST')
@@ -52,6 +64,12 @@ export function CollectionPortal({
         </button>
       </Heading>
       <ErrorNotice error={command.error} />
+      {preferences && (
+        <ClientPreferences
+          root={`client/projects/${data.project.id}`}
+          emailOnly
+        />
+      )}
       <UnsavedDraftRecovery projectId={data.project.id} />
       {!data.capabilities.canRespond && (
         <p role="status">

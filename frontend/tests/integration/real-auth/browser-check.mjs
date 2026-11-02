@@ -1363,20 +1363,25 @@ async function command(input) {
       await expect(input).toHaveValue('Retained offline draft')
       await clientContext.setOffline(false)
       phase = 'client-drafts:offline-retry'
-      // The bounded retry may finish as connectivity returns. Resolve the action/state
-      // in one browser turn rather than waiting for a button that can disappear.
-      await field.evaluate((node) => {
-        const retry = [...node.querySelectorAll('button')].find(
-          (button) => button.textContent.trim() === 'Retry save',
+      // Reconnection can put the writer in Saving before either the retry action
+      // or terminal saved status is present. Observe that legitimate intermediate
+      // state atomically; the saved status and exact persisted text remain required.
+      await expect
+        .poll(() =>
+          field.evaluate((node) => {
+            const retry = [...node.querySelectorAll('button')].find(
+              (button) => button.textContent.trim() === 'Retry save',
+            )
+            if (retry) {
+              retry.click()
+              return true
+            }
+            const status =
+              node.querySelector('[role="status"]')?.textContent || ''
+            return status.includes('Saving') || status.includes('Saved at')
+          }),
         )
-        if (retry) retry.click()
-        else if (
-          !node
-            .querySelector('[role="status"]')
-            ?.textContent?.includes('Saved at')
-        )
-          throw new Error('Expected retry action or confirmed saved state')
-      })
+        .toBe(true)
       await expect(field.getByRole('status')).toContainText('Saved at')
       saved = (await run(root + '/items/' + item.id, clientPage, false)).data
         .answer
@@ -1499,6 +1504,86 @@ async function command(input) {
       settings.draftVersion = (
         await run(root + '/items/' + item.id, clientPage, false)
       ).data.answer.version
+      break
+    }
+    case 'email-reminders': {
+      phase = 'email-reminders:preferences'
+      await clientPage
+        .getByRole('button', { name: 'Reminder preferences', exact: true })
+        .click()
+      await expect(
+        clientPage.getByRole('heading', {
+          name: 'Reminder preferences',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await clientPage.getByLabel('Your timezone').fill('Asia/Kabul')
+      const saved = clientPage.waitForResponse(
+        (res) =>
+          res.request().method() === 'PUT' &&
+          new URL(res.url()).pathname.endsWith('/notification-preferences'),
+      )
+      await clientPage
+        .getByRole('button', { name: 'Save preferences', exact: true })
+        .click()
+      assert.equal((await saved).status(), 200)
+      await expect(
+        clientPage.getByText('Preferences saved.', { exact: true }),
+      ).toBeVisible()
+      await expect(
+        clientPage.getByRole('button', { name: 'Send verification code' }),
+      ).toHaveCount(0)
+      phase = 'email-reminders:owner'
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '?tab=reminders',
+      )
+      await expect(
+        page.getByRole('button', { name: 'Save policy', exact: true }),
+      ).toBeVisible()
+      const policySaved = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'PUT' &&
+          new URL(res.url()).pathname.endsWith('/reminder-policy'),
+      )
+      await page
+        .getByRole('button', { name: 'Save policy', exact: true })
+        .click()
+      assert.equal((await policySaved).status(), 200)
+      await page
+        .getByRole('button', { name: 'Email & SMS preview', exact: true })
+        .click()
+      await page
+        .getByLabel('Contact', { exact: true })
+        .selectOption({ index: 1 })
+      await page.getByRole('button', { name: 'Preview', exact: true }).click()
+      await expect(
+        page.getByRole('button', { name: 'Send now', exact: true }),
+      ).toBeEnabled()
+      const queued = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname.endsWith('/reminders/send'),
+      )
+      await page.getByRole('button', { name: 'Send now', exact: true }).click()
+      assert.equal((await queued).status(), 202)
+      await expect(page.getByText(/Reminder queued/)).toBeVisible()
+      break
+    }
+    case 'email-reminder-history': {
+      await page
+        .getByRole('button', { name: 'Delivery activity', exact: true })
+        .click()
+      await expect(
+        page.getByRole('cell', { name: 'ACCEPTED', exact: true }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('cell', { name: 'DELIVERED', exact: true }),
+      ).toHaveCount(0)
       break
     }
     case 'client-attachments': {

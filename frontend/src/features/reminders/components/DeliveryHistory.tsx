@@ -4,7 +4,7 @@ import { Badge, Empty, Panel, QueryState } from '@/shared/components/ProductUI'
 import { useState } from 'react'
 
 export function DeliveryHistory({ root }: { root: string }) {
-  const q = useData<{ data: DeliverySummary[] }>(`${root}/reminders/deliveries`)
+  const q = useData<{ data: DeliverySummary[] }>(`${root}/deliveries`)
   const [channel, setChannel] = useState('ALL'),
     [status, setStatus] = useState('ALL')
   const rows = q.data?.data || []

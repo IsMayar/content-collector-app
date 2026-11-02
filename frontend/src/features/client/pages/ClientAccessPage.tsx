@@ -23,6 +23,10 @@ export function ClientAccessPage() {
     if (location.hash)
       setToken(new URLSearchParams(location.hash.slice(1)).get('token') || '')
   }
+  const [openPreferences] = useState(
+    () =>
+      new URLSearchParams(location.hash.slice(1)).get('preferences') === '1',
+  )
   const command = useCommand(true)
   const [message, setMessage] = useState('')
   const [fresh, setFresh] = useState('')
@@ -110,7 +114,9 @@ export function ClientAccessPage() {
                 setToken('')
                 dispatch(clientApi.util.resetApiState())
                 dispatch(clientAccessEstablished())
-                navigate(`/client/projects/${result.projectId}`)
+                navigate(
+                  `/client/projects/${result.projectId}${openPreferences ? '?preferences=1' : ''}`,
+                )
               }
             }}
           >

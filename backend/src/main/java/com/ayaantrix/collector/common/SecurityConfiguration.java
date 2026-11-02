@@ -36,6 +36,12 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST,"/api/v1/auth/register","/api/v1/auth/verify-email",
                                 "/api/v1/auth/forgot-password","/api/v1/auth/reset-password",
                                 "/api/v1/auth/login","/api/v1/auth/refresh","/api/v1/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/projects/*/reminder-policy","/api/v1/workspaces/*/projects/*/deliveries").authenticated()
+                        .requestMatchers(HttpMethod.PUT,"/api/v1/workspaces/*/projects/*/reminder-policy").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects/*/reminders/preview","/api/v1/workspaces/*/projects/*/reminders/send").authenticated()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/notification-preferences").permitAll()
+                        .requestMatchers(HttpMethod.PUT,"/api/v1/client/projects/*/notification-preferences").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/webhooks/email").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/me","/api/v1/me/sessions").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/auth/logout-all").authenticated()
                         .requestMatchers(HttpMethod.DELETE,"/api/v1/me/sessions/*").authenticated()
@@ -95,7 +101,7 @@ public class SecurityConfiguration {
                 )
 
                 .headers(headers -> headers.referrerPolicy(policy -> policy.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository))
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(request -> "POST".equals(request.getMethod()) && (request.getContextPath()+"/api/v1/webhooks/email").equals(request.getRequestURI())))
 
                 // CSRF remains enabled for future
                 // cookie-authenticated write requests.
