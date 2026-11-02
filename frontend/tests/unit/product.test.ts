@@ -493,7 +493,7 @@ describe('review, exports and AI', () => {
       .flatMap((s) => s.items)
       .find((i) => i.type === 'LONG_TEXT')!
     item.ai = { enabled: true, targetWords: 100 }
-    const { job } = await json<{ job: { id: string } }>(
+    const { jobId } = await json<{ jobId: string; state: 'QUEUED' }>(
       `${portal}/items/${item.id}/ai-drafts`,
       'POST',
       {
@@ -506,13 +506,13 @@ describe('review, exports and AI', () => {
       false,
     )
     expect(r.answers[item.id].value).toEqual(initialValue('LONG_TEXT'))
-    await json(`${portal}/ai-drafts/${job.id}`, 'GET', undefined, false)
-    await json(`${portal}/ai-drafts/${job.id}`, 'GET', undefined, false)
+    await json(`${portal}/ai-drafts/${jobId}`, 'GET', undefined, false)
+    await json(`${portal}/ai-drafts/${jobId}`, 'GET', undefined, false)
     r.answers[item.id].version++
     expect(
       (
         await request(
-          `${portal}/ai-drafts/${job.id}/accept`,
+          `${portal}/ai-drafts/${jobId}/accept`,
           'POST',
           { expectedAnswerVersion: 2 },
           false,

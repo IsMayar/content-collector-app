@@ -145,6 +145,20 @@ export class DraftAutosave {
     if (result && this.state.dirty) return this.flush()
     return result
   }
+  applyAccepted(answer: Answer, expectedVersion: number) {
+    if (
+      this.state.dirty ||
+      this.inFlight ||
+      this.operation ||
+      this.state.version !== expectedVersion
+    ) {
+      this.compare(answer)
+      return false
+    }
+    this.compare(answer)
+    this.loadServer()
+    return true
+  }
   compare(answer: Answer) {
     this.change({ conflict: answer, status: 'Conflict — compare answers' })
   }

@@ -264,7 +264,7 @@ registerProductResolver((request, path, _search, body) => {
         polls: 0,
       }
       jobs.set(j.id, j)
-      return response({ job: j }, 202)
+      return response({ jobId: j.id, state: 'QUEUED' }, 202)
     }
     if (pid === 'ai-drafts' && area) {
       const j = jobs.get(area)

@@ -30,6 +30,7 @@ public class AiService {
     private final AuditRepository audit;
     private final JsonMapper json;
     private final Clock clock;
+    private final com.ayaantrix.collector.collection.service.ClientAnswerService drafts;
 
     public AiService(
             ClientAccessAuthorization auth,
@@ -40,7 +41,9 @@ public class AiService {
             IdempotencyRepository requests,
             AuditRepository audit,
             JsonMapper json,
-            Clock clock) {
+            Clock clock,
+            com.ayaantrix.collector.collection.service.ClientAnswerService drafts) {
+        this.drafts = drafts;
         this.auth = auth;
         this.policy = policy;
         this.jobs = jobs;
@@ -140,10 +143,92 @@ public class AiService {
                 settings.outputTokens,
                 cost,
                 now);
+        jobs.captureSchema(
+                w,
+                p,
+                id,
+                com.ayaantrix.collector.project.repository.ProjectStructureRepository.definition(
+                        field));
         audit.writeClient(w, p, contact, "AI_DRAFT_REQUESTED", i, now);
         var result = Map.<String, Object>of("jobId", id, "state", "QUEUED");
         requests.remember(w, contact, route, key, hash, json.writeValueAsString(result), 202, now);
         return result;
+    }
+
+    public Map<String, Object> accept(String cookie, UUID p, UUID id, Accept input, String key) {
+        var a = auth.require(cookie, p);
+        UUID w = a.grant().workspace(), contact = a.grant().contact();
+        var j =
+                jobs.find(w, p, id)
+                        .filter(job -> job.contact().equals(contact))
+                        .orElseThrow(
+                                () ->
+                                        new ApiException(
+                                                HttpStatus.NOT_FOUND,
+                                                "NOT_FOUND",
+                                                "This suggestion is unavailable."));
+        var field = policy.field(a, j.item(), true);
+        var now = clock.instant();
+        if (!now.isBefore(j.expires()))
+            throw new ApiException(
+                    HttpStatus.GONE,
+                    "AI_EXPIRED",
+                    "This suggestion expired. Generate a new suggestion or keep writing manually.");
+        String route = "client/projects/" + p + "/ai-drafts/" + id + "/accept",
+                hash = IdempotencyRepository.hash(json.writeValueAsString(input));
+        var replay = requests.replay(w, contact, route, key, hash, now);
+        if (replay.isPresent())
+            return json.readValue(
+                    replay.get(),
+                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        if (!j.state().equals("SUCCEEDED") || j.result() == null)
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "AI_NOT_ACCEPTABLE",
+                    "Only a successful, unaccepted suggestion can be used.");
+        long current = policy.version(a, j.item());
+        if (input.expectedAnswerVersion() == null
+                || input.expectedAnswerVersion() != j.version()
+                || current != j.version())
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "ANSWER_VERSION_CONFLICT",
+                    "Your answer changed. Copy or compare this suggestion; the newer answer has"
+                        + " been kept.",
+                    current);
+        var schema = jobs.schema(w, p, id);
+        if (schema == null
+                || !schema.equals(
+                        com.ayaantrix.collector.project.repository.ProjectStructureRepository
+                                .definition(field)))
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "STRUCTURE_CONFLICT",
+                    "The question changed. Your answer is unchanged; generate a new suggestion.",
+                    a.project().structureVersion());
+        var previous = drafts.read(cookie, p, j.item()).get("answer");
+        var value = json.createObjectNode().put("text", j.result().path("draft").asText());
+        // Normal draft service owns current field/file validation, optimistic writes and audit.
+        var saved =
+                drafts.save(
+                        cookie,
+                        p,
+                        j.item(),
+                        new com.ayaantrix.collector.collection.dto.ClientAnswerDtos.Save(
+                                value, current, a.project().structureVersion(), UUID.randomUUID()));
+        var acceptance = json.createObjectNode().put("acceptedAt", now.toString());
+        acceptance.set("previousAnswer", json.valueToTree(previous));
+        acceptance.set("acceptedAnswer", json.valueToTree(saved.answer()));
+        if (!jobs.accept(w, p, id, acceptance, now))
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "AI_NOT_ACCEPTABLE",
+                    "This suggestion was already used or expired.");
+        audit.writeClient(w, p, contact, "AI_DRAFT_ACCEPTED", id, now);
+        var response = Map.<String, Object>of("answer", saved.answer());
+        requests.remember(
+                w, contact, route, key, hash, json.writeValueAsString(response), 200, now);
+        return response;
     }
 
     public Map<String, Object> get(String cookie, UUID p, UUID id) {

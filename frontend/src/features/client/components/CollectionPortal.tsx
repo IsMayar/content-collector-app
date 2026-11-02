@@ -109,6 +109,7 @@ export function CollectionPortal({
                   onSaved={onRefresh}
                   canUpload={data.capabilities.canUpload}
                   canRespond={data.capabilities.canSubmit}
+                  aiEnabled={data.project.aiEnabled}
                 />
               ))}
             </section>

@@ -1362,10 +1362,25 @@ async function command(input) {
       )
       await expect(input).toHaveValue('Retained offline draft')
       await clientContext.setOffline(false)
-      await field.getByRole('button', { name: 'Retry save' }).click()
+      phase = 'client-drafts:offline-retry'
+      // The bounded retry may finish as connectivity returns. Resolve the action/state
+      // in one browser turn rather than waiting for a button that can disappear.
+      await field.evaluate((node) => {
+        const retry = [...node.querySelectorAll('button')].find(
+          (button) => button.textContent.trim() === 'Retry save',
+        )
+        if (retry) retry.click()
+        else if (
+          !node
+            .querySelector('[role="status"]')
+            ?.textContent?.includes('Saved at')
+        )
+          throw new Error('Expected retry action or confirmed saved state')
+      })
       await expect(field.getByRole('status')).toContainText('Saved at')
       saved = (await run(root + '/items/' + item.id, clientPage, false)).data
         .answer
+      assert.equal(saved.value.text, 'Retained offline draft')
       // A second browser tab/client writer advances the persisted version.
       phase = 'client-drafts:external-write'
       const external = await run(
@@ -1876,6 +1891,121 @@ async function command(input) {
       )
       assert.equal(saved.status, 200)
       assert.equal(saved.data.answer.version, before.version + 1)
+      break
+    }
+    case 'client-ai-acceptance': {
+      phase = 'client-ai-acceptance'
+      const root = `client/projects/${settings.previewProject}`
+      const item = input.item
+      const checklist = (await run(root + '/checklist', clientPage, false)).data
+      assert.equal(checklist.project.aiEnabled, true)
+      const section = checklist.sections.find((s) =>
+        s.items.some((i) => i.id === item),
+      )
+      const original = (await run(`${root}/items/${item}`, clientPage, false))
+        .data.answer
+      await clientPage.reload()
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: section.title, exact: true })
+        .click()
+      const field = clientPage.locator('#item-' + item)
+      const notes = field.getByLabel('Facts to include (one per line)')
+      async function generate() {
+        await notes.fill('Family owned practice\nServing our local community')
+        await field
+          .getByRole('checkbox', { name: /I consent to sending/ })
+          .check()
+        await field
+          .getByRole('button', { name: 'Draft from my notes', exact: true })
+          .click()
+        await expect(
+          field.getByRole('button', { name: 'Use this draft', exact: true }),
+        ).toBeVisible()
+      }
+      await generate()
+      assert.deepEqual(
+        (await run(`${root}/items/${item}`, clientPage, false)).data.answer,
+        original,
+      )
+      await field
+        .getByRole('button', { name: 'Discard suggestion', exact: true })
+        .click()
+      assert.deepEqual(
+        (await run(`${root}/items/${item}`, clientPage, false)).data.answer,
+        original,
+      )
+      await generate()
+      await field
+        .getByRole('button', { name: 'Use this draft', exact: true })
+        .click()
+      await expect(
+        clientPage.getByRole('dialog', { name: 'Use this AI draft?' }),
+      ).toBeVisible()
+      assert.deepEqual(
+        (await run(`${root}/items/${item}`, clientPage, false)).data.answer,
+        original,
+      )
+      const accepting = clientPage.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/accept'),
+      )
+      await clientPage
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Save as draft', exact: true })
+        .click()
+      assert.equal((await accepting).status(), 200)
+      await expect(
+        field.getByLabel('Your response', { exact: true }),
+      ).toHaveValue('Family owned practice Serving our local community')
+      const accepted = (await run(`${root}/items/${item}`, clientPage, false))
+        .data
+      assert.equal(accepted.answer.version, original.version + 1)
+      assert.equal(accepted.item.state, 'DRAFT')
+      await expect(field.getByText(/has not been submitted/)).toBeVisible()
+      // A different tab/client writer advances the draft while another suggestion is shown.
+      await field
+        .getByRole('button', { name: 'Regenerate', exact: true })
+        .click()
+      await generate()
+      const newer = await run(
+        {
+          url: `${root}/items/${item}/answer`,
+          method: 'PUT',
+          body: {
+            value: { text: 'A newer manually saved answer.' },
+            expectedVersion: accepted.answer.version,
+            expectedStructureVersion: checklist.project.structureVersion,
+            saveOperationId: crypto.randomUUID(),
+          },
+        },
+        clientPage,
+        false,
+      )
+      assert.equal(newer.status, 200)
+      await field
+        .getByRole('button', { name: 'Use this draft', exact: true })
+        .click()
+      const stale = clientPage.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          new URL(r.url()).pathname.endsWith('/accept'),
+      )
+      await clientPage
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Save as draft', exact: true })
+        .click()
+      assert.equal((await stale).status(), 409)
+      assert.equal(
+        (await run(`${root}/items/${item}`, clientPage, false)).data.answer
+          .value.text,
+        'A newer manually saved answer.',
+      )
+      await clientPage
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Cancel', exact: true })
+        .click()
       break
     }
     case 'review-decisions': {
@@ -2949,6 +3079,8 @@ for await (const line of lines) {
   } catch (error) {
     if (
       (phase.startsWith('client-attachments') ||
+        phase.startsWith('client-ai') ||
+        phase.startsWith('client-drafts') ||
         phase.startsWith('review-decisions')) &&
       clientPage
     ) {

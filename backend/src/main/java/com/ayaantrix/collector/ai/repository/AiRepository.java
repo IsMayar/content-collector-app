@@ -225,6 +225,43 @@ public class AiRepository {
                 j.id());
     }
 
+    public void captureSchema(UUID w, UUID p, UUID id, JsonNode schema) {
+        jdbc.update(
+                "update collector.ai_draft_jobs set schema_snapshot=?::jsonb where workspace_id=?"
+                    + " and project_id=? and id=? and state='QUEUED' and schema_snapshot is null",
+                schema.toString(),
+                w,
+                p,
+                id);
+    }
+
+    public JsonNode schema(UUID w, UUID p, UUID id) {
+        var rows =
+                jdbc.query(
+                        "select schema_snapshot::text from collector.ai_draft_jobs where"
+                            + " workspace_id=? and project_id=? and id=?",
+                        (s, n) -> s.getString(1) == null ? null : json.readTree(s.getString(1)),
+                        w,
+                        p,
+                        id);
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    public boolean accept(UUID w, UUID p, UUID id, JsonNode snapshot, Instant now) {
+        return jdbc.update(
+                        "update collector.ai_draft_jobs set"
+                            + " state='ACCEPTED',acceptance_json=?::jsonb,updated_at=? where"
+                            + " workspace_id=? and project_id=? and id=? and state='SUCCEEDED' and"
+                            + " expires_at>?",
+                        snapshot.toString(),
+                        Timestamp.from(now),
+                        w,
+                        p,
+                        id,
+                        Timestamp.from(now))
+                == 1;
+    }
+
     public void maintenance(Instant now) {
         for (var j :
                 jdbc.query(
@@ -249,9 +286,10 @@ public class AiRepository {
         }
         jdbc.update(
                 "update collector.ai_draft_jobs set"
-                    + " state='EXPIRED',input_json=null,result_json=null,updated_at=? where"
-                    + " expires_at<=? and state not in ('RUNNING','QUEUED') and (state<>'EXPIRED'"
-                    + " or input_json is not null or result_json is not null)",
+                    + " state='EXPIRED',input_json=null,result_json=null,schema_snapshot=null,acceptance_json=null,updated_at=?"
+                    + " where expires_at<=? and state not in ('RUNNING','QUEUED') and"
+                    + " (state<>'EXPIRED' or input_json is not null or result_json is not null or"
+                    + " schema_snapshot is not null or acceptance_json is not null)",
                 Timestamp.from(now),
                 Timestamp.from(now));
     }

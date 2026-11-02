@@ -42,9 +42,14 @@ class RealAuthenticationBrowserCheck {
         final List<Message> messages=new CopyOnWriteArrayList<>();
         public void send(Message message){messages.add(message);}
     }
+    static class BrowserAiProvider implements com.ayaantrix.collector.ai.provider.AiDraftProvider {
+        volatile boolean fail=true;
+        public boolean available(){return true;}
+        public Output generate(Input input,java.time.Duration remaining){if(fail)throw new Failure("AI_TIMEOUT",false);return new Output(new com.ayaantrix.collector.ai.dto.AiDtos.Result(String.join(" ",input.facts()),input.facts(),List.of(),List.of("Local test suggestion; review before use.")),100,50);}
+    }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class Configuration {
-        @Bean @Primary com.ayaantrix.collector.ai.provider.AiDraftProvider browserAiProvider(){return new com.ayaantrix.collector.ai.provider.AiDraftProvider(){public boolean available(){return true;}public Output generate(Input input,java.time.Duration remaining){throw new Failure("AI_TIMEOUT",false);}};}
+        @Bean @Primary BrowserAiProvider browserAiProvider(){return new BrowserAiProvider();}
         @Bean org.springframework.web.servlet.config.annotation.WebMvcConfigurer safeBrowserDiagnostics(){return new org.springframework.web.servlet.config.annotation.WebMvcConfigurer(){public void extendHandlerExceptionResolvers(java.util.List<org.springframework.web.servlet.HandlerExceptionResolver> resolvers){resolvers.addFirst((request,response,handler,error)->{Throwable root=error;while(root.getCause()!=null)root=root.getCause();if(!(error instanceof com.ayaantrix.collector.common.error.ApiException)){System.out.println("SAFE_BROWSER_ERROR "+root.getClass().getName());java.util.Arrays.stream(root.getStackTrace()).limit(6).forEach(frame->System.out.println("SAFE_BROWSER_FRAME "+frame));}return null;});}};}
         @Bean @Primary Mailbox browserMailbox(){return new Mailbox();}
         @Bean @Primary AccountRegistrationWorkflowTests.TestClock browserClock(){var clock=new AccountRegistrationWorkflowTests.TestClock();clock.now.set(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));return clock;}
@@ -128,6 +133,8 @@ class RealAuthenticationBrowserCheck {
                     jdbc.update("update collector.projects set ai_enabled=true where id=?",clientProject);
                     jdbc.update("update collector.items set schema_json=jsonb_set(schema_json,'{ai}','{\"enabled\":true,\"targetWords\":150}'::jsonb) where id=?",aiItem);
                     io.step(Map.of("action","client-ai-failure","item",aiItem.toString()));
+                    app.getBean(BrowserAiProvider.class).fail=false;
+                    io.step(Map.of("action","client-ai-acceptance","item",aiItem.toString()));
                     io.step(Map.of("action","client-attachments"));
                     assertThat(jdbc.queryForObject("select count(*) from collector.submission_revisions where project_id=?",Integer.class,clientProject)).isEqualTo(2);
                     assertThat(jdbc.queryForObject("select count(*) from collector.revision_assets where project_id=?",Integer.class,clientProject)).isEqualTo(2);

@@ -111,9 +111,11 @@ public class ClientPortalService {
             safe.add(shown);
         }
         var preview = presentation.present(p, access.workspace().name());
+        var meta=preview.project();
+        var clientProject=new com.ayaantrix.collector.project.dto.ProjectClientDtos.PreviewProject(meta.id(),meta.title(),meta.projectType(),meta.state(),meta.dueDate(),meta.structureVersion(),meta.agencyDisplayName(),p.aiEnabled());
         return Map.of(
                 "project",
-                preview.project(),
+                clientProject,
                 "sections",
                 safe,
                 "progress",

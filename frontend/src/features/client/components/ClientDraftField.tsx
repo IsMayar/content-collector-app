@@ -1,3 +1,4 @@
+import { AiAssistant } from '@/features/ai/components/AiAssistant'
 import { ClientComments } from '@/features/review/components/ClientComments'
 import { ClientSubmissionHistory } from './ClientSubmissionHistory'
 import { SubmissionControls } from './SubmissionControls'
@@ -20,6 +21,7 @@ export function ClientDraftField({
   onSaved,
   canUpload = false,
   canRespond = false,
+  aiEnabled = false,
 }: {
   item: Item
   projectId: string
@@ -27,7 +29,9 @@ export function ClientDraftField({
   onSaved: () => void
   canUpload?: boolean
   canRespond?: boolean
+  aiEnabled?: boolean
 }) {
+  const [aiBusy, setAiBusy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [save] = useSaveDraftMutation()
   const [read] = useLazyReadDraftQuery()
@@ -113,7 +117,7 @@ export function ClientDraftField({
                 field.onChange(value)
                 draft.edit(value)
               }}
-              disabled={!item.canEdit || submitting}
+              disabled={!item.canEdit || submitting || aiBusy}
               root={`client/projects/${projectId}`}
               preview={!canUpload}
               liveUploads={canUpload}
@@ -136,14 +140,14 @@ export function ClientDraftField({
             <button
               type="submit"
               className="secondary-button"
-              disabled={submitting}
+              disabled={submitting || aiBusy}
             >
               Save draft
             </button>
             <button
               type="button"
               className="secondary-button"
-              disabled={submitting}
+              disabled={submitting || aiBusy}
               onClick={() => draft.edit({} as AnswerValue)}
             >
               Clear answer
@@ -174,12 +178,33 @@ export function ClientDraftField({
           </div>
         )}
       </form>
+      {aiEnabled &&
+        item.type === 'LONG_TEXT' &&
+        item.ai?.enabled &&
+        item.canEdit && (
+          <AiAssistant
+            root={`client/projects/${projectId}`}
+            item={{ id: item.id, ai: item.ai, answer: { value: state.value } }}
+            answerVersion={state.version}
+            dirty={state.dirty || !!state.conflict || submitting || aiBusy}
+            onBusyChange={setAiBusy}
+            beforeAccept={() =>
+              !draft.state.dirty &&
+              !draft.state.conflict &&
+              draft.state.version === state.version
+            }
+            onAccepted={(answer) => {
+              draft.applyAccepted(answer, answer.version - 1)
+              onSaved()
+            }}
+          />
+        )}
       <SubmissionControls
         item={item}
         projectId={projectId}
         structureVersion={structureVersion}
         draft={draft}
-        canRespond={canRespond}
+        canRespond={canRespond && !aiBusy}
         onRefresh={onSaved}
         onBusyChange={setSubmitting}
       />
@@ -187,7 +212,7 @@ export function ClientDraftField({
       <ClientComments
         projectId={projectId}
         itemId={item.id}
-        canRespond={canRespond}
+        canRespond={canRespond && !aiBusy}
       />
       {state.conflict && (
         <section aria-label="Compare draft versions">

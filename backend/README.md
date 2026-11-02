@@ -617,3 +617,8 @@ From backend/, focused local verification:
 ```
 
 Provider failures never block ordinary writing. T25 suggestion acceptance is not implemented. See [T24 report](../docs/T24_IMPLEMENTATION.md) for request/response contracts, conservative accounting, full verification and exact pending gates.
+
+
+## T25 explicit AI acceptance
+
+T25 supersedes the T24-era acceptance gap above. Client preview now uses the real job API; explicit cookie/CSRF/idempotent POST `client/projects/{p}/ai-drafts/{job}/accept` accepts only a successful unexpired own-contact suggestion at its exact base answer version and unchanged question definition. Normal draft-service validation/persistence is reused; no automatic submission, review or extra provider call. V20 adds accepted/schema/recovery snapshots to the existing job and retains the previous answer only until the original job expiry. Original V1–V19 migrations and provider-disabled defaults are preserved. See [T25 contracts and evidence](../docs/T25_IMPLEMENTATION.md).

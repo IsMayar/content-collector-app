@@ -215,3 +215,23 @@ describe('server-confirmed client draft autosave', () => {
     expect(d.state.value).toEqual({ text: 'Keep edits' })
   })
 })
+
+it('adopts server-confirmed AI acceptance without a second autosave and keeps concurrent local edits', async () => {
+  const send = vi.fn()
+  const saved = {
+    itemId: 'item',
+    value: { text: 'AI proposal' },
+    version: 2,
+    savedAt: '2026-11-02T00:00:00Z',
+  }
+  const draft = new DraftAutosave({ text: 'Original' }, 1, 1, send)
+  expect(draft.applyAccepted(saved, 1)).toBe(true)
+  expect(draft.state.value).toEqual(saved.value)
+  expect(draft.state.dirty).toBe(false)
+  expect(send).not.toHaveBeenCalled()
+  draft.edit({ text: 'New local words' })
+  expect(draft.applyAccepted({ ...saved, version: 3 }, 2)).toBe(false)
+  expect(draft.state.value).toEqual({ text: 'New local words' })
+  expect(draft.state.conflict?.version).toBe(3)
+  draft.pause()
+})

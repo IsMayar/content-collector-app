@@ -19,6 +19,8 @@ public final class AiDtos {
         }
     }
 
+    public record Accept(@NotNull @Min(0) Long expectedAnswerVersion) {}
+
     public record Result(
             String draft,
             List<String> factsUsed,

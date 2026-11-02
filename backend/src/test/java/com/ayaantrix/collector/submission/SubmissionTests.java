@@ -1649,7 +1649,7 @@ class SubmissionTests {
     }
 
     @Test
-    void aiHttpCsrfContactScopeAndNoAcceptance() throws Exception {
+    void aiHttpCsrfContactScopeAndAcceptanceRequiresKey() throws Exception {
         var f = aiFixture(ProjectType.WEBSITE);
         String root = "/api/v1/client/projects/" + f.f().project().id();
         var cookie = new jakarta.servlet.http.Cookie(cookieName(), f.cookie());
@@ -1687,7 +1687,233 @@ class SubmissionTests {
                                 .cookie(cookie)
                                 .contentType("application/json")
                                 .content("{}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isBadRequest());
+    }
+
+    Map<String, Object> acceptAi(AiFixture f, UUID id, long version, String key) {
+        return ai().accept(
+                        f.cookie(),
+                        f.f().project().id(),
+                        id,
+                        new com.ayaantrix.collector.ai.dto.AiDtos.Accept(version),
+                        key);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProjectType.class)
+    void aiAcceptanceIsExplicitIdempotentAndPreservesOriginal(ProjectType type) {
+        var f = aiFixture(type);
+        save(f.f(), f.cookie(), f.item(), text("My original words"), 0);
+        UUID id =
+                UUID.fromString(
+                        ai().create(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        f.item(),
+                                        aiInput(1),
+                                        "create")
+                                .get("jobId")
+                                .toString());
+        aiWorker().dispatchOne();
+        assertThat(policyAnswer(f).path("text").asText()).isEqualTo("My original words");
+        var result = acceptAi(f, id, 1, "accept");
+        assertThat(json.valueToTree(result).path("answer").path("version").asLong()).isEqualTo(2);
+        assertThat(policyAnswer(f).path("text").asText()).contains("Family owned practice");
+        JsonNode replay = json.readTree(json.writeValueAsString(acceptAi(f, id, 1, "accept")));
+        JsonNode expected = json.readTree(json.writeValueAsString(result));
+        assertThat(replay).isEqualTo(expected);
+        code(() -> acceptAi(f, id, 2, "again"), "AI_NOT_ACCEPTABLE");
+        var previous =
+                json.readTree(
+                        jdbc.queryForObject(
+                                "select acceptance_json::text from collector.ai_draft_jobs where"
+                                    + " id=?",
+                                String.class,
+                                id));
+        assertThat(previous.path("previousAnswer").path("value").path("text").asText())
+                .isEqualTo("My original words");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.items where id=?",
+                                String.class,
+                                f.item()))
+                .isEqualTo("DRAFT");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.submission_revisions where"
+                                    + " project_id=?",
+                                Integer.class,
+                                f.f().project().id()))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.audit_logs where"
+                                    + " action='AI_DRAFT_ACCEPTED' and resource_id=?",
+                                Integer.class,
+                                id))
+                .isEqualTo(1);
+    }
+
+    JsonNode policyAnswer(AiFixture f) {
+        return json.valueToTree(
+                        drafts().read(f.cookie(), f.f().project().id(), f.item()).get("answer"))
+                .path("value");
+    }
+
+    @Test
+    void aiAcceptanceNeverOverwritesNewerAnswerAndValidatesCurrentSchema() {
+        var f = aiFixture(ProjectType.WEBSITE);
+        var id = aiCreate(f, "create");
+        aiWorker().dispatchOne();
+        save(f.f(), f.cookie(), f.item(), text("Newer manual answer"), 0);
+        code(() -> acceptAi(f, id, 0, "stale"), "ANSWER_VERSION_CONFLICT");
+        code(() -> acceptAi(f, id, 1, "force"), "ANSWER_VERSION_CONFLICT");
+        assertThat(policyAnswer(f).path("text").asText()).isEqualTo("Newer manual answer");
+        var other = aiFixture(ProjectType.WEBSITE);
+        var second = aiCreate(other, "create");
+        aiWorker().dispatchOne();
+        jdbc.update(
+                "update collector.items set"
+                    + " schema_json=jsonb_set(schema_json,'{validation,maxLength}','3'::jsonb)"
+                    + " where id=?",
+                other.item());
+        code(() -> acceptAi(other, second, 0, "schema"), "STRUCTURE_CONFLICT");
+        assertThat(policyAnswer(other)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {"QUEUED", "FAILED", "REFUSED", "EXPIRED", "REVOKED", "SUBMITTED", "LEGACY"})
+    void aiAcceptanceRejectsUnavailableAndUnsafeJobs(String state) {
+        var f = aiFixture(ProjectType.WEBSITE);
+        var id = aiCreate(f, "create");
+        if (!state.equals("QUEUED")) {
+            context.getBean(AiFake.class).failure =
+                    state.equals("FAILED")
+                            ? "AI_TIMEOUT"
+                            : state.equals("REFUSED") ? "AI_REFUSED" : null;
+            aiWorker().dispatchOne();
+        }
+        if (state.equals("EXPIRED")) {
+            jdbc.update(
+                    "update collector.ai_draft_jobs set created_at=created_at-interval '31"
+                        + " days',expires_at=expires_at-interval '31 days' where id=?",
+                    id);
+            code(() -> acceptAi(f, id, 0, "expired"), "AI_EXPIRED");
+            return;
+        }
+        if (state.equals("REVOKED")) {
+            as(
+                    f.f().tenant().actor(),
+                    () -> {
+                        access().revoke(
+                                        f.f().tenant().workspace(),
+                                        f.f().project().id(),
+                                        f.f().contact());
+                        return null;
+                    });
+            assertThatThrownBy(() -> acceptAi(f, id, 0, "revoked"))
+                    .isInstanceOf(ApiException.class);
+            return;
+        }
+        if (state.equals("SUBMITTED")) {
+            save(f.f(), f.cookie(), f.item(), text("Client submission"), 0);
+            submit(f.f(), f.cookie(), f.item(), 1, "submit");
+            code(() -> acceptAi(f, id, 1, "submitted"), "AI_UNAVAILABLE");
+            return;
+        }
+        if (state.equals("LEGACY")) {
+            jdbc.update("update collector.ai_draft_jobs set schema_snapshot=null where id=?", id);
+            code(() -> acceptAi(f, id, 0, "legacy"), "STRUCTURE_CONFLICT");
+            return;
+        }
+        code(() -> acceptAi(f, id, 0, "accept"), "AI_NOT_ACCEPTABLE");
+        assertThat(policyAnswer(f)).isEmpty();
+    }
+
+    @Test
+    void aiAcceptanceUsesNormalAnswerValidation() {
+        var f = aiFixture(ProjectType.WEBSITE);
+        jdbc.update(
+                "update collector.items set"
+                    + " schema_json=jsonb_set(schema_json,'{validation,maxLength}','3'::jsonb)"
+                    + " where id=?",
+                f.item());
+        var command = aiInput(0);
+        UUID id =
+                UUID.fromString(
+                        ai().create(f.cookie(), f.f().project().id(), f.item(), command, "create")
+                                .get("jobId")
+                                .toString());
+        aiWorker().dispatchOne();
+        assertThatThrownBy(() -> acceptAi(f, id, 0, "accept")).isInstanceOf(ApiException.class);
+        assertThat(policyAnswer(f)).isEmpty();
+        assertThat(aiJob(f, id).path("state").asText()).isEqualTo("SUCCEEDED");
+    }
+
+    @Test
+    void aiAcceptanceConcurrencyRollbackAndTenantIsolation() throws Exception {
+        var f = aiFixture(ProjectType.WEBSITE);
+        var id = aiCreate(f, "create");
+        aiWorker().dispatchOne();
+        assertThatThrownBy(
+                        () ->
+                                tx().executeWithoutResult(
+                                                status -> {
+                                                    acceptAi(f, id, 0, "rollback");
+                                                    throw new IllegalStateException();
+                                                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(policyAnswer(f)).isEmpty();
+        assertThat(aiJob(f, id).path("state").asText()).isEqualTo("SUCCEEDED");
+        var other = aiFixture(ProjectType.WEBSITE);
+        assertThatThrownBy(
+                        () ->
+                                ai().accept(
+                                                other.cookie(),
+                                                f.f().project().id(),
+                                                id,
+                                                new com.ayaantrix.collector.ai.dto.AiDtos.Accept(
+                                                        0L),
+                                                "foreign"))
+                .isInstanceOf(ApiException.class);
+        var pool = Executors.newFixedThreadPool(2);
+        var start = new CountDownLatch(1);
+        try {
+            var a =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                try {
+                                    acceptAi(f, id, 0, "a");
+                                    return "ok";
+                                } catch (ApiException e) {
+                                    return e.getCode();
+                                }
+                            });
+            var b =
+                    pool.submit(
+                            () -> {
+                                start.await();
+                                try {
+                                    acceptAi(f, id, 0, "b");
+                                    return "ok";
+                                } catch (ApiException e) {
+                                    return e.getCode();
+                                }
+                            });
+            start.countDown();
+            assertThat(List.of(a.get(15, TimeUnit.SECONDS), b.get(15, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder("ok", "AI_NOT_ACCEPTABLE");
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select version from collector.answers where item_id=?",
+                                Long.class,
+                                f.item()))
+                .isEqualTo(1);
     }
 
     com.ayaantrix.collector.export.service.ExportService exports() {

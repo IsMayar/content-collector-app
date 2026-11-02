@@ -1,5 +1,6 @@
 package com.ayaantrix.collector.ai.controller;
 
+import com.ayaantrix.collector.ai.dto.AiDtos.Accept;
 import com.ayaantrix.collector.ai.dto.AiDtos.Create;
 import com.ayaantrix.collector.ai.service.AiService;
 import com.ayaantrix.collector.clientaccess.security.ClientSessionCookies;
@@ -33,6 +34,18 @@ public class AiController {
         return ResponseEntity.status(202)
                 .cacheControl(CacheControl.noStore())
                 .body(service.create(cookies.read(request), p, i, input, key));
+    }
+
+    @PostMapping("/ai-drafts/{id}/accept")
+    public ResponseEntity<Map<String, Object>> accept(
+            @PathVariable UUID p,
+            @PathVariable UUID id,
+            @Valid @RequestBody Accept input,
+            @RequestHeader(value = "Idempotency-Key", required = false) String key,
+            HttpServletRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(service.accept(cookies.read(request), p, id, input, key));
     }
 
     @GetMapping("/ai-drafts/{id}")

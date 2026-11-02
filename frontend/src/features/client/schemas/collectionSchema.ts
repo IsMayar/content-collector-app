@@ -5,6 +5,7 @@ import { savedDraftAnswer } from './draftAnswerSchema'
 const base = portalFoundationSchema
 const section = base.shape.sections.element
 export const collectionSchema = base.extend({
+  project: base.shape.project.extend({ aiEnabled: z.boolean() }),
   collection: z.literal(true),
   capabilities: z.object({
     canRespond: z.boolean(),
@@ -23,6 +24,18 @@ export const collectionSchema = base.extend({
             'APPROVED',
           ]),
           canEdit: z.boolean(),
+          ai: z
+            .object({
+              enabled: z.boolean(),
+              targetWords: z
+                .number()
+                .int()
+                .min(30)
+                .max(500)
+                .optional()
+                .default(150),
+            })
+            .optional(),
           comments: z.array(clientCommentSchema),
           currentRevisionId: z.string().uuid().nullable().optional(),
           assets: z.array(
