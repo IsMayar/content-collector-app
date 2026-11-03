@@ -1,8 +1,8 @@
 # Implementation status
 
-Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 1 November 2026.
+Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 3 November 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4 is In progress; M5–M7 remain Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4 is In progress; M5 and M6 are In progress; M7 remains Not started.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -517,11 +517,11 @@ Milestone status: In progress
 
 ### Milestone M6 Reporting commercial readiness and visibility
 
-Milestone status: Not started
+Milestone status: In progress
 
 | Task | Deliverable                                    | Acceptance                                                | Status      |
 | ---- | ---------------------------------------------- | --------------------------------------------------------- | ----------- |
-| T29  | Server activity and minimal browser analytics  | No raw answers or tokens in events                        | Not started |
+| T29  | Server activity and minimal browser analytics  | No raw answers or tokens in events                        | Complete (local acceptance) |
 | T30  | Friction views and sample safeguards           | Incomplete observation windows are not called abandonment | Not started |
 | T31  | Owner digest and scoped status share/embed     | Token cannot reach content or file endpoints              | Not started |
 | T32  | Hosted checkout, webhook processing and portal | Sandbox subscription is source of entitlements            | Not started |
@@ -857,3 +857,10 @@ Original M5/T27 acceptance: **STOP and quiet-window sandbox cases pass**. Client
 T28 is Complete for original-roadmap local acceptance: **No blind retry of potentially sent messages**. Durable fenced receipt lookups, exact signed lost-ID correlation and stored-event replay resolve only supported provider evidence. Missing/inconclusive evidence remains UNKNOWN; no resend/requeue path is introduced. V23 extends existing delivery/verification rows, preserving V1–V22, quotas, STOP, explicit phone verification and all immutable content. Provider reconciliation defaults disabled.
 
 39 distinct affected cases passed across the focused runs/corrections; the final single full backend clean verify passed **1030 tests, zero failures/errors/skips**, including migration/upgrade/restart/Hibernate checks and executable JAR packaging. Initial clock/SQL-binding test failures were corrected before the full green run. No frontend source or browser workflow changed, so frontend/build/browser/responsive/PWA checks were intentionally skipped. M5 and all previous production/provider/device gates remain open; T26 verification history is unchanged. Protected collection edits remain outside the commit. [Exact scope, contracts, files, test evidence and limitations](T28_IMPLEMENTATION.md).
+
+
+## M6 / T29 safe activity and minimal browser analytics — 3 November 2026
+
+Original T29 acceptance: **No raw answers or tokens in events**. T29 is Complete for original-roadmap local acceptance; M6 is In progress. Existing server-authoritative audit records supply safe paginated activity to owners/assigned members. Cookie/CSRF-only browser ingestion accepts only project_opened/item_started with opaque IDs and optional untrusted time; full allowlist validation, live item visibility, session pseudonyms, scoped foreign keys, atomic batches and PostgreSQL uniqueness protect privacy/integrity. Test-project exclusions are server-controlled; raw interactions expire after90 days. V24 alone adds one table and project flag, preserving V1–V23. Frontend optional telemetry cannot block writing; mocks collect no telemetry. No T30+ metric or other later feature.
+
+11 distinct focused backend cases passed after documented fixture/pseudonym corrections. The single full backend clean verify passed **1041 tests, zero failures/errors/skips**, including Flyway fresh/upgrade/restart, Hibernate validation and executable JAR packaging. **27 affected frontend cases**, strict TypeScript/production build, changed-file ESLint/formatting and **1 real HTTPS/MSW-disabled analytics journey** passed. An additional final frontend build passed after correcting the mock integer-response contract. Unrelated frontend/responsive/PWA/provider suites were intentionally skipped. All production/provider/physical-device and earlier release gates, including T26's original verification history, are preserved. The two original collection edits are unchanged/excluded; DeliveryReconciliationRepository had no pending edit and remains unchanged. [Exact contracts, files, evidence and limitations](T29_IMPLEMENTATION.md).

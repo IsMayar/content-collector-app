@@ -64,7 +64,9 @@ class RealAuthenticationBrowserCheck {
     }
     @Test void realHttpsBrowserAuthLifecycleWithoutMocks() throws Exception {run(false);}
     @Test void realHttpsWorkspaceOnboardingWithoutMocks() throws Exception {run(true);}
-    private void run(boolean onboarding) throws Exception {
+    @Test void realHttpsAnalyticsWithoutMocks() throws Exception {run(true,true);}
+    private void run(boolean onboarding) throws Exception {run(onboarding,false);}
+    private void run(boolean onboarding,boolean analyticsOnly) throws Exception {
         String password="Synthetic browser-only password",next="Synthetic replacement browser password",email=onboarding?"browser-onboarding@example.test":"browser-only@example.test";
         String certificatePassword=UUID.randomUUID().toString();Path certificate=directory.resolve("browser.p12");
         String keytool=Path.of(System.getProperty("java.home"),"bin","keytool.exe").toString();
@@ -136,6 +138,12 @@ class RealAuthenticationBrowserCheck {
                     assertThat(app.getBean(VerificationDeliveryWorker.class).dispatchOne()).isTrue();
                     var clientMail=app.getBean(Mailbox.class).messages.stream().filter(m->m.purpose()==TokenPurpose.CLIENT_INVITE).reduce((a,b)->b).orElseThrow();
                     io.step(Map.of("action","client-open","token",clientMail.actionLink().getFragment().substring(6)));
+                    if(analyticsOnly){
+                        io.step(Map.of("action","client-analytics"));
+                        assertThat(jdbc.queryForObject("select count(*) from collector.analytics_events where project_id=? and event_type='project_opened'",Integer.class,clientProject)).isEqualTo(1);
+                        assertThat(jdbc.queryForObject("select count(*) from collector.analytics_events where project_id=? and event_type='item_started'",Integer.class,clientProject)).isPositive();
+                        io.step(Map.of("action","stop"));return;
+                    }
                     io.step(Map.of("action","email-reminders"));
                     assertThat(app.getBean(com.ayaantrix.collector.reminder.worker.ReminderWorker.class).dispatchOne()).isTrue();
                     assertThat(app.getBean(ReminderMailbox.class).messages).hasSize(1);

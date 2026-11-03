@@ -645,3 +645,10 @@ Focused verification from backend/: `.\mvnw.cmd '-Dtest=SmsRulesTests,Submission
 T28 supersedes earlier notes deferring reconciliation. PROVIDER_RECONCILIATION_ENABLED=false is the default. Approved sandbox enablement requires existing provider configuration plus receipt-read permission. The worker only queries known receipts; signed callbacks can bind new sends through exact opaque correlation metadata. Preserve the complete attempt query in Twilio's signed status URL; configure the base status URL without a query. No inconclusive/404 receipt permits replay. Legacy uncorrelated UNKNOWN sends remain held for provider investigation. Existing email/SMS/provider/physical-device gates remain open.
 
 Focused command from backend/: `.\mvnw.cmd '-Dtest=ProviderReceiptTests,SubmissionTests#reconcile*+reminder*+sms*' test`. Final full clean verify passed1030 tests, zero failures/errors/skips. No frontend/browser workflow changed. [T28 implementation, limitations and evidence](../docs/T28_IMPLEMENTATION.md).
+
+
+## T29 safe activity and browser interactions
+
+No new credentials or provider flags are required. V24 migrates automatically through the existing startup flow. Client event ingestion uses the existing secure cookie/CSRF transport; owners/assigned members read the paginated agency activity route. Operator-managed synthetic projects should set collector.projects.analytics_excluded=true before using client links. This excludes new customer-analytics events; it does not alter audit/security history. Raw events expire after90 days through the daily cleanup job; collector.analytics.cleanup-poll-ms defaults86400000. No arbitrary browser metadata is accepted.
+
+Focused command from backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#analytics*' test`. Focused real HTTPS command: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsAnalyticsWithoutMocks' test`. Existing local setup is unchanged. [T29 contracts, test evidence and gates](../docs/T29_IMPLEMENTATION.md).

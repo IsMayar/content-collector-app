@@ -1,3 +1,4 @@
+import { useInteraction } from '../hooks/useInteraction'
 import { AiAssistant } from '@/features/ai/components/AiAssistant'
 import { ClientComments } from '@/features/review/components/ClientComments'
 import { ClientSubmissionHistory } from './ClientSubmissionHistory'
@@ -31,6 +32,7 @@ export function ClientDraftField({
   canRespond?: boolean
   aiEnabled?: boolean
 }) {
+  const interaction = useInteraction(projectId)
   const [aiBusy, setAiBusy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [save] = useSaveDraftMutation()
@@ -76,6 +78,7 @@ export function ClientDraftField({
   }, [draft])
   return (
     <article
+      onFocusCapture={() => interaction(item.id)}
       id={'item-' + item.id}
       className="product-panel"
       aria-labelledby={'question-' + item.id}

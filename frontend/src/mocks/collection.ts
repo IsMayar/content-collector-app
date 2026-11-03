@@ -228,7 +228,8 @@ registerProductResolver((request, path, _search, body) => {
   )
   if (area === 'checklist' && method === 'GET')
     return response(checklist(r, true))
-  if (area === 'events') return response({ accepted: true }, 202)
+  // Mock mode intentionally collects no browser telemetry. Keep the real integer contract.
+  if (area === 'events') return response({ accepted: 0 }, 202)
   if (area === 'notification-preferences') {
     const prefs = productDb.preferences[contact.id] || {
       emailEnabled: true,

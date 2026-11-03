@@ -385,7 +385,11 @@ export function SnapshotValue({ value }: { value: unknown }) {
   return <p>{((v.assetIds as string[]) || []).length} attached files</p>
 }
 export function ActivityPanel({ root }: { root: string }) {
-  const q = useData<{ data: SafeAuditEvent[] }>(`${root}/activity`)
+  const [page, setPage] = useState(0)
+  const q = useData<{
+    data: SafeAuditEvent[]
+    page?: { page: number; size: number; totalElements: number }
+  }>(`${root}/activity?page=${page}&size=20`)
   return (
     <Panel title="Project activity">
       <p className="subtle">
@@ -407,6 +411,27 @@ export function ActivityPanel({ root }: { root: string }) {
             </li>
           ))}
         </ol>
+        {q.data?.page && (
+          <nav aria-label="Activity pages" className="actions">
+            <button
+              className="secondary-button"
+              disabled={page === 0 || q.isFetching}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </button>
+            <span>Page {page + 1}</span>
+            <button
+              className="secondary-button"
+              disabled={
+                (page + 1) * 20 >= q.data.page.totalElements || q.isFetching
+              }
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </button>
+          </nav>
+        )}
       </QueryState>
     </Panel>
   )

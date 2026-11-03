@@ -306,7 +306,7 @@ class WorkspaceFoundationTests {
     }
     @Test void cleanMigrationsHibernateValidationAndRestartPreserveTenantState(){
         var owner=actor("owner@example.test");var w=create(owner);context.close();open();
-        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(23);
+        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(24);
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(as(owner,()->service.read(w.id())).workspace().id()).isEqualTo(w.id());assertThat(count("workspace_members")).isEqualTo(1);
     }

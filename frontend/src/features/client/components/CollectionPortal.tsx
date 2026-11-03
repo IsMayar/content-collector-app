@@ -1,7 +1,8 @@
 import { ClientPreferences } from './ClientPreferences'
 import { SubmissionValidationSummary } from './SubmissionValidationSummary'
 import { UnsavedDraftRecovery } from './UnsavedDraftRecovery'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useInteraction } from '../hooks/useInteraction'
 import { useNavigate } from 'react-router'
 import type { CollectionData } from '../schemas/collectionSchema'
 import { ClientDraftField } from './ClientDraftField'
@@ -15,6 +16,10 @@ export function CollectionPortal({
   data: CollectionData
   onRefresh: () => void
 }) {
+  const interaction = useInteraction(data.project.id)
+  useEffect(() => {
+    interaction()
+  }, [interaction])
   const [selected, setSelected] = useState('')
   const [preferences, setPreferences] = useState(
     () =>

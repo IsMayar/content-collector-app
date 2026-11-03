@@ -1246,6 +1246,83 @@ async function command(input) {
       assert.equal((await run('me')).status, 200)
       break
     }
+    case 'client-analytics': {
+      const root = 'client/projects/' + settings.previewProject
+      const observed = []
+      const observeEvent = (request) => {
+        if (new URL(request.url()).pathname.endsWith('/events'))
+          observed.push(request.postDataJSON())
+      }
+      clientPage.on('request', observeEvent)
+      const opened = clientPage.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname.endsWith('/events') &&
+          res.request().postDataJSON()?.events?.[0]?.type === 'project_opened',
+      )
+      await clientPage.reload()
+      assert.equal((await opened).status(), 202)
+      const data = (await run(root + '/checklist', clientPage, false)).data
+      const section = data.sections.find((s) =>
+        s.items.some(
+          (i) => i.canEdit && ['SHORT_TEXT', 'LONG_TEXT'].includes(i.type),
+        ),
+      )
+      assert.ok(section, 'Expected an editable text question')
+      await clientPage
+        .getByRole('navigation', { name: 'Requested sections' })
+        .getByRole('button', { name: section.title, exact: true })
+        .click()
+      const item = section.items.find(
+        (i) => i.canEdit && ['SHORT_TEXT', 'LONG_TEXT'].includes(i.type),
+      )
+      const started = clientPage.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname.endsWith('/events') &&
+          res.request().postDataJSON()?.events?.[0]?.type === 'item_started',
+      )
+      await clientPage
+        .locator('#item-' + item.id)
+        .getByRole('textbox')
+        .first()
+        .focus()
+      assert.equal((await started).status(), 202)
+      for (const batch of observed) {
+        assert.deepEqual(Object.keys(batch), ['events'])
+        for (const event of batch.events) {
+          assert.ok(['project_opened', 'item_started'].includes(event.type))
+          assert.ok(
+            Object.keys(event).every((key) =>
+              ['clientEventId', 'type', 'itemId'].includes(key),
+            ),
+          )
+        }
+      }
+      assert.equal(new URL(clientPage.url()).hash, '')
+      assert.ok(!clientBearerAttached && !serviceWorkerResponse)
+      const activity = await run(
+        'workspaces/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '/activity',
+      )
+      assert.equal(activity.status, 200)
+      assert.ok(activity.data.data.length > 0)
+      for (const event of activity.data.data)
+        assert.deepEqual(
+          Object.keys(event).sort(),
+          [
+            'id',
+            'action',
+            'resourceKind',
+            'resourceId',
+            'actorDisplayName',
+            'occurredAt',
+          ].sort(),
+        )
+      clientPage.off('request', observeEvent)
+      break
+    }
     case 'client-draft-collection': {
       const root = 'client/projects/' + settings.previewProject
       phase = 'client-drafts:setup'

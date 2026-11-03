@@ -412,3 +412,8 @@ The sms feature owns controller/dto/provider/repository/security/service/worker 
 ## T28 provider reconciliation
 
 DeliveryReconciliationRepository/Service/Worker in the existing reminder subpackages coordinate read-only receipt lookup and signed callback correlation for reminder deliveries and SMS verification. V23 extends existing rows; no new domain entity or REST API. Claims use separate short SKIP LOCKED transactions, bounded attempts and lease fencing; application uses workspace/project/scoped row locks. Provider HTTP remains outside transactions. Stored verified event replay handles early callbacks. No UNKNOWN path resends; inconclusive legacy receipts remain held. Existing SMS suppression/accounting and explicit code verification are preserved. [Contracts and 1030-test clean verification](../docs/T28_IMPLEMENTATION.md).
+
+
+## T29 safe activity and minimal interactions
+
+The analytics feature owns controller/service/repository/dto/worker responsibilities. It reuses live ClientAccessAuthorization, ProjectAuthorization, shared visibility and existing transactional audit records. Browser ingestion accepts only project_opened/item_started with opaque IDs; domain-separated internal session-UUID hashes, project/item/template scope and PostgreSQL uniqueness prevent token persistence and duplicate starts. Test projects use the server-controlled projects.analytics_excluded flag; agency preview has no client cookie route. Activity projects six safe fields without audit metadata or names/emails/content. V24 alone adds one interaction table and project exclusion flag; 90-day raw cleanup is transactional. T30 aggregation is deliberately separate. [Contracts and actual verification](../docs/T29_IMPLEMENTATION.md).

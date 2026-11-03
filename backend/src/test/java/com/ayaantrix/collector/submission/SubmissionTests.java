@@ -726,6 +726,308 @@ class SubmissionTests {
                         ApiException.class, e -> assertThat(e.getCode()).isEqualTo(expected));
     }
 
+    com.ayaantrix.collector.analytics.service.InteractionService interactions() {
+        return context.getBean(com.ayaantrix.collector.analytics.service.InteractionService.class);
+    }
+
+    JsonNode interaction(String type, UUID item, UUID event) {
+        var body = json.createObjectNode();
+        var e =
+                body.putArray("events")
+                        .addObject()
+                        .put("clientEventId", event.toString())
+                        .put("type", type);
+        if (item != null) e.put("itemId", item.toString());
+        return body;
+    }
+
+    long eventCount(Fixture f) {
+        return jdbc.queryForObject(
+                "select count(*) from collector.analytics_events where project_id=?",
+                Long.class,
+                f.project().id());
+    }
+
+    @Test
+    void analyticsMinimalEventsDeduplicateWithoutChangingAnswers() {
+        var f = fixture();
+        var c = enter(f).credential();
+        var i = textItem(f);
+        var id = UUID.randomUUID();
+        var body = interaction("item_started", i, id);
+        assertThat(interactions().record(c, f.project().id(), body)).containsEntry("accepted", 1);
+        assertThat(interactions().record(c, f.project().id(), body)).containsEntry("accepted", 0);
+        assertThat(
+                        interactions()
+                                .record(
+                                        c,
+                                        f.project().id(),
+                                        interaction("item_started", i, UUID.randomUUID())))
+                .containsEntry("accepted", 0);
+        assertThat(
+                        interactions()
+                                .record(
+                                        c,
+                                        f.project().id(),
+                                        interaction("project_opened", null, UUID.randomUUID())))
+                .containsEntry("accepted", 1);
+        var row =
+                jdbc.queryForMap(
+                        "select * from collector.analytics_events where project_id=? and item_id=?",
+                        f.project().id(),
+                        i);
+        assertThat(row.get("template_version_id"))
+                .isEqualTo(
+                        jdbc.queryForObject(
+                                "select source_template_version_id from collector.projects where"
+                                    + " id=?",
+                                UUID.class,
+                                f.project().id()));
+        assertThat(row.get("item_key")).isNotNull();
+        assertThat(row.get("session_pseudonym").toString().trim())
+                .hasSize(64)
+                .isNotEqualTo(c)
+                .isNotEqualTo(context.getBean(SecureAccountTokens.class).digest(c));
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.answers where project_id=?",
+                                Long.class,
+                                f.project().id()))
+                .isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"text", "token", "referrer", "phone"})
+    void analyticsRejectsExtraContentAndNeverStoresIt(String field) throws Exception {
+        var f = fixture();
+        var c = enter(f).credential();
+        var body = interaction("project_opened", null, UUID.randomUUID());
+        ((ObjectNode) body.path("events").get(0)).put(field, "PRIVATE-CONTENT");
+        mvc.perform(
+                        post("/api/v1/client/projects/" + f.project().id() + "/events")
+                                .secure(true)
+                                .with(csrf())
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), c))
+                                .contentType("application/json")
+                                .content(body.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().exists("X-Request-ID"));
+        assertThat(eventCount(f)).isZero();
+    }
+
+    @Test
+    void analyticsRejectsInvalidBatchAtomicallyAndHiddenItem() {
+        var f = fixture();
+        var c = enter(f).credential();
+        var i = textItem(f);
+        var body = interaction("project_opened", null, UUID.randomUUID());
+        ((tools.jackson.databind.node.ArrayNode) body.path("events"))
+                .addObject()
+                .put("clientEventId", UUID.randomUUID().toString())
+                .put("type", "answer_saved");
+        code(() -> interactions().record(c, f.project().id(), body), "INVALID_INTERACTION_EVENT");
+        assertThat(eventCount(f)).isZero();
+        jdbc.update("update collector.items set enabled=false where id=?", i);
+        code(
+                () ->
+                        interactions()
+                                .record(
+                                        c,
+                                        f.project().id(),
+                                        interaction("item_started", i, UUID.randomUUID())),
+                "NOT_FOUND");
+        assertThat(eventCount(f)).isZero();
+    }
+
+    @Test
+    void analyticsSessionIsolationExclusionAndReceiveTime() {
+        var f = fixture();
+        var c = enter(f).credential();
+        var body = interaction("project_opened", null, UUID.randomUUID());
+        ((ObjectNode) body.path("events").get(0)).put("occurredAt", "2001-01-01T00:00:00Z");
+        interactions().record(c, f.project().id(), body);
+        assertThat(
+                        jdbc.queryForObject(
+                                        "select received_at from collector.analytics_events where"
+                                            + " project_id=?",
+                                        java.sql.Timestamp.class,
+                                        f.project().id())
+                                .toInstant())
+                .isEqualTo(NOW);
+        var next = enter(f).credential();
+        assertThat(interactions().record(next, f.project().id(), body))
+                .containsEntry("accepted", 1);
+        jdbc.update(
+                "update collector.projects set analytics_excluded=true where id=?",
+                f.project().id());
+        assertThat(
+                        interactions()
+                                .record(
+                                        c,
+                                        f.project().id(),
+                                        interaction(
+                                                "item_started", textItem(f), UUID.randomUUID())))
+                .containsEntry("accepted", 0);
+        assertThat(eventCount(f)).isEqualTo(2);
+    }
+
+    @Test
+    void analyticsAuthorizationCsrfAndTenantBinding() throws Exception {
+        var f = fixture();
+        var c = enter(f).credential();
+        var other = fixture();
+        var body = interaction("project_opened", null, UUID.randomUUID()).toString();
+        var path = "/api/v1/client/projects/" + f.project().id() + "/events";
+        mvc.perform(
+                        post(path)
+                                .secure(true)
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), c))
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(
+                        post(path)
+                                .secure(true)
+                                .with(csrf())
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isUnauthorized());
+        code(
+                () -> interactions().record(c, other.project().id(), json.readTree(body)),
+                "NOT_FOUND");
+        jdbc.update(
+                "update collector.client_sessions set revoked_at=now() where project_id=?",
+                f.project().id());
+        code(
+                () -> interactions().record(c, f.project().id(), json.readTree(body)),
+                "CLIENT_ACCESS_UNAVAILABLE");
+        assertThat(eventCount(f)).isZero();
+    }
+
+    @Test
+    void analyticsConcurrentStartsAndRetention() throws Exception {
+        var f = fixture();
+        var c = enter(f).credential();
+        var i = textItem(f);
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var start = new CountDownLatch(1);
+            var work =
+                    (java.util.concurrent.Callable<Integer>)
+                            () -> {
+                                start.await();
+                                return interactions()
+                                        .record(
+                                                c,
+                                                f.project().id(),
+                                                interaction("item_started", i, UUID.randomUUID()))
+                                        .get("accepted");
+                            };
+            var a = pool.submit(work);
+            var b = pool.submit(work);
+            start.countDown();
+            assertThat(a.get(30, TimeUnit.SECONDS) + b.get(30, TimeUnit.SECONDS)).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        jdbc.update(
+                "update collector.analytics_events set received_at=? where project_id=?",
+                java.sql.Timestamp.from(NOW.minus(Duration.ofDays(91))),
+                f.project().id());
+        context.getBean(com.ayaantrix.collector.analytics.worker.InteractionRetention.class)
+                .purge();
+        assertThat(eventCount(f)).isZero();
+    }
+
+    @Test
+    void analyticsActivityPermissionRevocationIsLive() {
+        var f = fixture();
+        var actor = actor();
+        var member =
+                new WorkspaceMember(f.tenant().workspace(), actor.id(), WorkspaceRole.MEMBER, NOW);
+        context.getBean(WorkspaceMemberRepository.class).saveAndFlush(member);
+        var service =
+                context.getBean(com.ayaantrix.collector.analytics.service.ActivityService.class);
+        code(
+                () ->
+                        as(
+                                actor,
+                                () ->
+                                        service.read(
+                                                f.tenant().workspace(), f.project().id(), 0, 20)),
+                "NOT_FOUND");
+        jdbc.update(
+                "insert into"
+                    + " collector.project_members(workspace_id,project_id,workspace_member_id,can_review,can_export,created_at,updated_at)"
+                    + " values(?,?,?,false,false,?,?)",
+                f.tenant().workspace(),
+                f.project().id(),
+                member.id(),
+                java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        assertThat(as(actor, () -> service.read(f.tenant().workspace(), f.project().id(), 0, 20)))
+                .isNotNull();
+        jdbc.update(
+                "delete from collector.project_members where workspace_member_id=?", member.id());
+        code(
+                () ->
+                        as(
+                                actor,
+                                () ->
+                                        service.read(
+                                                f.tenant().workspace(), f.project().id(), 0, 20)),
+                "NOT_FOUND");
+        jdbc.update(
+                "update collector.workspace_members set state='DISABLED' where id=?", member.id());
+        code(
+                () ->
+                        as(
+                                actor,
+                                () ->
+                                        service.read(
+                                                f.tenant().workspace(), f.project().id(), 0, 20)),
+                "NOT_FOUND");
+    }
+
+    @Test
+    void analyticsActivityIsScopedPaginatedAndContentFree() throws Exception {
+        var f = fixture();
+        var c = enter(f).credential();
+        save(f, c, textItem(f), text("PRIVATE-ANSWER"), 0);
+        var service =
+                context.getBean(com.ayaantrix.collector.analytics.service.ActivityService.class);
+        var view =
+                as(
+                        f.tenant().actor(),
+                        () -> service.read(f.tenant().workspace(), f.project().id(), 0, 1));
+        assertThat(view.data()).hasSize(1);
+        assertThat(view.page().totalElements()).isPositive();
+        assertThat(json.writeValueAsString(view))
+                .doesNotContain("PRIVATE-ANSWER", c, "metadata_json", "email");
+        var other = fixture();
+        code(
+                () ->
+                        as(
+                                other.tenant().actor(),
+                                () ->
+                                        service.read(
+                                                f.tenant().workspace(), f.project().id(), 0, 20)),
+                "NOT_FOUND");
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        service.read(
+                                                f.tenant().workspace(), f.project().id(), -1, 20)),
+                "INVALID_PAGE");
+        mvc.perform(
+                        get(f.tenant().root() + "/projects/" + f.project().id() + "/activity")
+                                .secure(true)
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), c)))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     void immutableHistoryWithdrawResubmitAndRestart() {
         var f = fixture();
