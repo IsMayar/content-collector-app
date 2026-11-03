@@ -19,6 +19,7 @@
         <bouncycastle.version>1.85</bouncycastle.version>
 	</properties>
 	<dependencies>
+        <dependency><groupId>com.googlecode.libphonenumber</groupId><artifactId>libphonenumber</artifactId><version>9.0.40</version></dependency>
         <dependency><groupId>org.apache.pdfbox</groupId><artifactId>pdfbox</artifactId><version>3.0.7</version></dependency>
         <dependency><groupId>software.amazon.awssdk</groupId><artifactId>s3</artifactId><version>2.57.2</version></dependency>
         <dependency><groupId>software.amazon.awssdk</groupId><artifactId>url-connection-client</artifactId><version>2.57.2</version></dependency>

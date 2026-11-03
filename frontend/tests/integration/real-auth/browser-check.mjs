@@ -1574,6 +1574,89 @@ async function command(input) {
       await expect(page.getByText(/Reminder queued/)).toBeVisible()
       break
     }
+    case 'sms-request': {
+      phase = 'sms-request:preferences'
+      await clientPage.reload()
+      await expect(
+        clientPage.getByRole('button', {
+          name: 'Reminder preferences',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await clientPage
+        .getByRole('button', { name: 'Reminder preferences', exact: true })
+        .click()
+      await expect(
+        clientPage.getByRole('heading', {
+          name: 'Optional US SMS reminders',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await expect(clientPage.getByText(/SMS segments:/)).toBeVisible()
+      await clientPage.getByLabel('US mobile number').fill('+12025550123')
+      await clientPage.getByLabel(/I agree to/).check()
+      const requested = clientPage.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname.endsWith('/sms/verification'),
+      )
+      await clientPage
+        .getByRole('button', { name: 'Send verification code', exact: true })
+        .click()
+      assert.equal((await requested).status(), 202)
+      await expect(
+        clientPage.getByLabel('Verification code', { exact: true }),
+      ).toBeVisible()
+      await expect(
+        clientPage.getByText(/Synthetic verification code/),
+      ).toHaveCount(0)
+      break
+    }
+    case 'sms-confirm-withdraw': {
+      await clientPage
+        .getByLabel('Verification code', { exact: true })
+        .fill(input.code)
+      const confirmed = clientPage.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname.endsWith('/sms/verification/confirm'),
+      )
+      await clientPage
+        .getByRole('button', { name: 'Verify', exact: true })
+        .click()
+      assert.equal((await confirmed).status(), 200)
+      await expect(
+        clientPage.getByText(
+          'Your phone is verified and SMS reminders are enabled.',
+          { exact: true },
+        ),
+      ).toBeVisible()
+      const withdrawn = clientPage.waitForResponse(
+        (res) =>
+          res.request().method() === 'DELETE' &&
+          new URL(res.url()).pathname.endsWith('/sms/consent'),
+      )
+      await clientPage
+        .getByRole('button', { name: 'Opt out of SMS', exact: true })
+        .click()
+      assert.equal((await withdrawn).status(), 204)
+      await expect(
+        clientPage.getByText('SMS reminders stopped.', { exact: true }),
+      ).toBeVisible()
+      assert.equal(
+        (
+          await run(
+            'client/projects/' +
+              settings.previewProject +
+              '/notification-preferences',
+            clientPage,
+            false,
+          )
+        ).data.emailEnabled,
+        true,
+      )
+      break
+    }
     case 'email-reminder-history': {
       await page
         .getByRole('button', { name: 'Delivery activity', exact: true })
@@ -2423,6 +2506,31 @@ async function command(input) {
         settings.previewProject +
         '?tab=review'
       async function action(name, reason) {
+        await waitState('authenticated')
+        await expect(page.getByLabel('Project action')).toBeVisible()
+        // A preceding item/lifecycle mutation can still be refreshing the shared
+        // project query. Capture an action only after the current server version
+        // is in the RTK cache; preserve the real optimistic-concurrency assertion.
+        const version = (await run(agency)).data.project.version
+        await expect
+          .poll(() =>
+            page.evaluate(
+              async ({ agency, version }) => {
+                const { store } = await import('/src/app/store/store.ts')
+                const { workspaceApi } =
+                  await import('/src/services/api/resourceApi.ts')
+                const query = workspaceApi.endpoints.read.select(agency)(
+                  store.getState(),
+                )
+                return (
+                  query.status === 'fulfilled' &&
+                  query.data?.project?.version === version
+                )
+              },
+              { agency, version },
+            ),
+          )
+          .toBe(true)
         await page.getByLabel('Project action').selectOption(name)
         if (reason)
           await page

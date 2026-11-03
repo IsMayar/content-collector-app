@@ -33,6 +33,15 @@ export interface Entitlements {
   smsEnabled: boolean
 }
 export interface NotificationPreferences {
+  smsAvailable?: boolean
+  smsConsentTextVersion?: string
+  smsUsage?: {
+    allowance: number
+    usedSegments: number
+    reservedSegments: number
+    spendingLimitMicrousd: number
+  }
+
   emailEnabled: boolean
   timezone: Timezone | null
   smsStatus:

@@ -45,6 +45,9 @@ class RealAuthenticationBrowserCheck {
     static class ReminderMailbox implements com.ayaantrix.collector.reminder.service.EmailSender {
       final List<Message> messages=new CopyOnWriteArrayList<>();public boolean available(){return true;}public Result send(Message message){messages.add(message);return new Result("ACCEPTED",UUID.randomUUID().toString(),null);}
     }
+    static class BrowserSms implements com.ayaantrix.collector.sms.provider.SmsSender {
+      boolean enabled=false;final List<String> messages=new CopyOnWriteArrayList<>();public boolean available(){return enabled;}public String scope(){return "MG"+"0".repeat(32);}public com.ayaantrix.collector.reminder.service.EmailSender.Result send(UUID id,String phone,String body){messages.add(body);return new com.ayaantrix.collector.reminder.service.EmailSender.Result("ACCEPTED","SM"+UUID.randomUUID().toString().replace("-",""),null);}
+    }
     static class BrowserAiProvider implements com.ayaantrix.collector.ai.provider.AiDraftProvider {
         volatile boolean fail=true;
         public boolean available(){return true;}
@@ -52,6 +55,7 @@ class RealAuthenticationBrowserCheck {
     }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class Configuration {
+        @Bean @Primary BrowserSms browserSms(){return new BrowserSms();}
         @Bean @Primary ReminderMailbox reminderMailbox(){return new ReminderMailbox();}
         @Bean @Primary BrowserAiProvider browserAiProvider(){return new BrowserAiProvider();}
         @Bean org.springframework.web.servlet.config.annotation.WebMvcConfigurer safeBrowserDiagnostics(){return new org.springframework.web.servlet.config.annotation.WebMvcConfigurer(){public void extendHandlerExceptionResolvers(java.util.List<org.springframework.web.servlet.HandlerExceptionResolver> resolvers){resolvers.addFirst((request,response,handler,error)->{Throwable root=error;while(root.getCause()!=null)root=root.getCause();if(!(error instanceof com.ayaantrix.collector.common.error.ApiException)){System.out.println("SAFE_BROWSER_ERROR "+root.getClass().getName());java.util.Arrays.stream(root.getStackTrace()).limit(6).forEach(frame->System.out.println("SAFE_BROWSER_FRAME "+frame));}return null;});}};}
@@ -75,7 +79,7 @@ class RealAuthenticationBrowserCheck {
             "--spring.datasource.username="+POSTGRES.getUsername(),"--spring.datasource.password="+POSTGRES.getPassword(),
             "--collector.jwt.private-key="+keys.privateFile(),"--collector.jwt.public-keys="+keys.publicFile(),"--collector.jwt.key-id="+keys.kid(),
             "--collector.delivery.encryption-key="+pepper,"--collector.delivery.encryption-key-id=browser-test","--collector.jwt.issuer=https://browser.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+pepper,
-            "--collector.ai.worker-enabled=true","--AI_MODEL=synthetic-structured-fixture","--AI_INPUT_MICROUSD_PER_TOKEN=1","--AI_OUTPUT_MICROUSD_PER_TOKEN=2","--AI_MONTHLY_BUDGET_MICROUSD=10000000","--collector.workspace.trial-ai-drafts=20","--collector.exports.worker-enabled=true","--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false"),java.util.Arrays.stream(storage.args()).map(v->v.equals("--collector.storage.worker-enabled=false")?"--collector.storage.worker-enabled=true":v)).toArray(String[]::new))) {
+            "--collector.workspace.trial-sms-segments=25","--collector.sms.segment-cost-microusd=100","--collector.sms.monthly-budget-microusd=100000","--collector.ai.worker-enabled=true","--AI_MODEL=synthetic-structured-fixture","--AI_INPUT_MICROUSD_PER_TOKEN=1","--AI_OUTPUT_MICROUSD_PER_TOKEN=2","--AI_MONTHLY_BUDGET_MICROUSD=10000000","--collector.workspace.trial-ai-drafts=20","--collector.exports.worker-enabled=true","--collector.auth.cookie-secure=true","--server.servlet.session.cookie.secure=true","--collector.delivery.worker-enabled=false"),java.util.Arrays.stream(storage.args()).map(v->v.equals("--collector.storage.worker-enabled=false")?"--collector.storage.worker-enabled=true":v)).toArray(String[]::new))) {
             var clock=app.getBean(AccountRegistrationWorkflowTests.TestClock.class);var users=app.getBean(UserAccountRepository.class);
             UserAccount user=null;
             if(!onboarding){user=new UserAccount(email,"Synthetic Browser User",app.getBean(PasswordEncoder.class).encode(password),clock.instant());user.markVerified(clock.instant());users.saveAndFlush(user);}
@@ -137,6 +141,14 @@ class RealAuthenticationBrowserCheck {
                     assertThat(app.getBean(ReminderMailbox.class).messages).hasSize(1);
                     assertThat(jdbc.queryForObject("select state from collector.reminder_deliveries where project_id=?",String.class,clientProject)).isEqualTo("ACCEPTED");
                     io.step(Map.of("action","email-reminder-history"));
+                    app.getBean(BrowserSms.class).enabled=true;
+                    io.step(Map.of("action","sms-request"));
+                    assertThat(app.getBean(com.ayaantrix.collector.sms.worker.SmsVerificationWorker.class).dispatchOne()).isTrue();
+                    String smsCode=java.util.regex.Pattern.compile("\\b[0-9]{6}\\b").matcher(app.getBean(BrowserSms.class).messages.getFirst()).results().findFirst().orElseThrow().group();
+                    io.step(Map.of("action","sms-confirm-withdraw","code",smsCode));
+                    assertThat(jdbc.queryForObject("select status from collector.sms_consents where project_id=?",String.class,clientProject)).isEqualTo("OPTED_OUT");
+                    app.getBean(BrowserSms.class).enabled=false;
+
                     io.step(Map.of("action","client-draft-collection"));
                     UUID aiItem=jdbc.queryForObject("select id from collector.items where project_id=? and field_type='LONG_TEXT' and state in ('NOT_STARTED','DRAFT') order by id limit 1",UUID.class,clientProject);
                     jdbc.update("update collector.projects set ai_enabled=true where id=?",clientProject);

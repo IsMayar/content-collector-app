@@ -65,10 +65,7 @@ export function CollectionPortal({
       </Heading>
       <ErrorNotice error={command.error} />
       {preferences && (
-        <ClientPreferences
-          root={`client/projects/${data.project.id}`}
-          emailOnly
-        />
+        <ClientPreferences root={`client/projects/${data.project.id}`} />
       )}
       <UnsavedDraftRecovery projectId={data.project.id} />
       {!data.capabilities.canRespond && (

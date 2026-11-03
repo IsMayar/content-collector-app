@@ -629,3 +629,12 @@ T25 supersedes the T24-era acceptance gap above. Client preview now uses the rea
 Existing local initialization/startup commands remain unchanged. `REMINDER_WORKER_ENABLED` and `REMINDER_EMAIL_ENABLED` default false. Before any sandbox enablement, configure server-only `EMAIL_API_KEY`, verified platform `EMAIL_FROM`, `EMAIL_WEBHOOK_SECRET`, canonical HTTPS `EMAIL_WEBHOOK_URL` and existing public `APP_BASE_URL`/delivery encryption. An enabled adapter requires webhook configuration; platform From and verified owner Reply-To remain distinct. Configure SPF/DKIM and signed bounce/complaint events with the provider before production. No SMS or unknown-outcome replay is enabled. Unknown deliveries must await T28 reconciliation rather than manual blind resend.
 
 Focused verification from backend/: `.\mvnw.cmd '-Dtest=ReminderCalendarTests,SubmissionTests#reminder*' test`. [Contracts, persistence, configuration, tests and production gates](../docs/T26_IMPLEMENTATION.md).
+
+
+## T27 SMS (disabled by default)
+
+Keep SMS_ENABLED, SMS_ONBOARDING_APPROVED and SMS_WORKER_ENABLED false until the actual sender/campaign is approved. Review TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_MESSAGING_SERVICE_SID, canonical HTTPS TWILIO_INBOUND_URL/STATUS_URL, SMS_SEGMENT_COST_MICROUSD (carrier-inclusive upper bound), and SMS_MONTHLY_BUDGET_MICROUSD. Existing token pepper/encryption and TRIAL_SMS_SEGMENTS apply; trial allowance remains at most25. SMS_WORKER_ENABLED dispatches verification; REMINDER_WORKER_ENABLED runs the shared email/SMS reminder outbox. No server credential belongs in VITE_ variables.
+
+Configure Messaging Service Advanced Opt-Out for provider-managed STOP/START/HELP responses; account for provider-generated responses and carrier fees during production cost review. START does not automatically restore app reminders: the client must explicitly consent and verify again. Clients must save their own timezone before phone verification. Unknown sends are held for T28 reconciliation; do not manually replay them.
+
+Focused verification from backend/: `.\mvnw.cmd '-Dtest=SmsRulesTests,SubmissionTests#sms*+reminder*' test`. No live text is required. [T27 contracts, database, verification and production gates](../docs/T27_IMPLEMENTATION.md).

@@ -1,3 +1,4 @@
+import { env } from '@/config/env'
 import type { NotificationPreferences } from '@/features/workspace/types/workspace.types'
 import { usePortalData } from '@/services/api/resourceApi'
 import { Notice } from '@/shared/components/Feedback'
@@ -15,14 +16,13 @@ export function ClientPreferences({
   const q = usePortalData<NotificationPreferences>(
     `${root}/notification-preferences`,
   )
+  const smsAvailable = !emailOnly && (q.data?.smsAvailable ?? env.mocksEnabled)
   const command = useCommand(true)
   const [verification, setVerification] = useState('')
   const [message, setMessage] = useState('')
   return (
     <div className="sms-preferences">
-      <Panel
-        title={emailOnly ? 'Reminder preferences' : 'Stay updated by text'}
-      >
+      <Panel title="Reminder preferences">
         <ErrorNotice
           error={
             command.error ||
@@ -43,7 +43,7 @@ export function ClientPreferences({
                   `${root}/notification-preferences`,
                   {
                     emailEnabled: v.has('emailEnabled'),
-                    timezone: v.get('timezone'),
+                    timezone: v.get('timezone') || null,
                   },
                   'PUT',
                 )
@@ -62,20 +62,39 @@ export function ClientPreferences({
             <Field label="Your timezone">
               <input
                 name="timezone"
-                defaultValue={q.data.timezone || 'America/New_York'}
-                required
+                defaultValue={q.data.timezone || ''}
+                placeholder="e.g. America/New_York"
               />
             </Field>
             <button className="secondary-button">Save preferences</button>
           </form>
         )}
-        {!emailOnly && (
+        {!emailOnly && !smsAvailable && (
+          <p role="status">
+            SMS reminders are unavailable until the provider and sender are
+            approved. Email preferences remain available.
+          </p>
+        )}
+        {q.data?.smsUsage && (
+          <p role="status">
+            SMS segments: {q.data.smsUsage.usedSegments} used,{' '}
+            {q.data.smsUsage.reservedSegments} reserved of{' '}
+            {q.data.smsUsage.allowance}. Spending cap: $
+            {(q.data.smsUsage.spendingLimitMicrousd / 1000000).toFixed(2)}.
+            Verification messages also use this allowance.
+          </p>
+        )}
+        {smsAvailable && (
           <div className="sms-enrolment">
             <section>
               <h3>Optional US SMS reminders</h3>
+              {!q.data?.timezone && (
+                <p>Save your timezone above before requesting a code.</p>
+              )}
               <p>
                 Consent is optional. Message and data rates may apply. Reply
-                STOP to opt out. No real messages are sent in this demo.
+                STOP to opt out or HELP for help. Messages are limited to this
+                project; you can withdraw at any time.
               </p>
               <Badge>{q.data?.smsStatus || 'NOT_CONFIGURED'}</Badge>
               <form
@@ -88,12 +107,17 @@ export function ClientPreferences({
                     {
                       phoneE164: v.get('phone'),
                       consent: v.has('consent'),
-                      consentTextVersion: '2026-10-22',
+                      consentTextVersion:
+                        q.data?.smsConsentTextVersion || '2026-11-03',
                     },
                   )
                   if (result) {
                     setVerification(result.verificationId)
-                    setMessage('Synthetic verification code: 123456')
+                    setMessage(
+                      env.mocksEnabled
+                        ? 'Synthetic verification code: 123456'
+                        : 'Verification queued. Enter the code sent to your phone. It expires in 10 minutes.',
+                    )
                   }
                 }}
               >
@@ -110,7 +134,10 @@ export function ClientPreferences({
                   <input required name="consent" type="checkbox" />I agree to
                   project reminder texts at this number.
                 </label>
-                <button className="secondary-button" disabled={command.pending}>
+                <button
+                  className="secondary-button"
+                  disabled={command.pending || !q.data?.timezone}
+                >
                   Send verification code
                 </button>
               </form>
@@ -125,12 +152,14 @@ export function ClientPreferences({
                     e.preventDefault()
                     const code = new FormData(e.currentTarget).get('code')
                     if (
-                      await command.run(`${root}/sms/confirm`, {
+                      await command.run(`${root}/sms/verification/confirm`, {
                         verificationId: verification,
                         code,
                       })
                     ) {
-                      setMessage('SMS consent verified in the demo.')
+                      setMessage(
+                        'Your phone is verified and SMS reminders are enabled.',
+                      )
                       setVerification('')
                     }
                   }}

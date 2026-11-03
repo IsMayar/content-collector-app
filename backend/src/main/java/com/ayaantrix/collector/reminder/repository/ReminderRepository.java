@@ -39,6 +39,7 @@ public class ReminderRepository {
             UUID workspace,
             UUID project,
             UUID contact,
+            String channel,
             long policy,
             UUID rule,
             boolean manual,
@@ -224,15 +225,34 @@ public class ReminderRepository {
             String recipient,
             Instant due,
             Instant now) {
+        return enqueue(
+                "EMAIL", w, p, c, version, rule, manual, date, dispatch, zone, recipient, due, now);
+    }
+
+    public UUID enqueue(
+            String channel,
+            UUID w,
+            UUID p,
+            UUID c,
+            long version,
+            UUID rule,
+            boolean manual,
+            LocalDate date,
+            LocalDate dispatch,
+            String zone,
+            String recipient,
+            Instant due,
+            Instant now) {
         UUID id = UUID.randomUUID();
         jdbc.update(
                 "insert into"
                     + " collector.reminder_deliveries(id,workspace_id,project_id,contact_id,channel,policy_version,rule_id,manual,occurrence_date,dispatch_date,timezone,recipient_key,due_at,available_at,state,created_at,updated_at)"
-                    + " values(?,?,?,?,'EMAIL',?,?,?,?,?,?,?,?,?,'QUEUED',?,?)",
+                    + " values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,'QUEUED',?,?)",
                 id,
                 w,
                 p,
                 c,
+                channel,
                 version,
                 rule,
                 manual,
@@ -253,6 +273,7 @@ public class ReminderRepository {
                 r.getObject("workspace_id", UUID.class),
                 r.getObject("project_id", UUID.class),
                 r.getObject("contact_id", UUID.class),
+                r.getString("channel"),
                 r.getLong("policy_version"),
                 r.getObject("rule_id", UUID.class),
                 r.getBoolean("manual"),
@@ -288,6 +309,10 @@ public class ReminderRepository {
     }
 
     public Optional<Delivery> claim(Instant now) {
+        return claim(now, true, false);
+    }
+
+    public Optional<Delivery> claim(Instant now, boolean email, boolean sms) {
         jdbc.update(
                 "update collector.reminder_deliveries set"
                     + " state='UNKNOWN',failure_code='DELIVERY_OUTCOME_UNKNOWN',encrypted_payload=null,lease_id=null,lease_until=null,updated_at=?"
@@ -297,9 +322,12 @@ public class ReminderRepository {
         var list =
                 jdbc.query(
                         "select * from collector.reminder_deliveries where state='QUEUED' and"
-                                + " available_at<=? order by due_at for update skip locked limit 1",
+                            + " available_at<=? and ((channel='EMAIL' and ?) or (channel='SMS' and"
+                            + " ?)) order by due_at for update skip locked limit 1",
                         this::row,
-                        Timestamp.from(now));
+                        Timestamp.from(now),
+                        email,
+                        sms);
         if (list.isEmpty()) return Optional.empty();
         var d = list.getFirst();
         jdbc.update(
@@ -384,7 +412,7 @@ public class ReminderRepository {
                 (rs, n) -> {
                     var m = new LinkedHashMap<String, Object>();
                     m.put("id", rs.getObject("id", UUID.class));
-                    m.put("channel", "EMAIL");
+                    m.put("channel", rs.getString("channel"));
                     m.put("dueAt", rs.getTimestamp("due_at").toInstant());
                     m.put("state", rs.getString("state"));
                     m.put("failureCode", rs.getString("failure_code"));
@@ -518,7 +546,7 @@ public class ReminderRepository {
         return Boolean.TRUE.equals(
                 jdbc.queryForObject(
                         "select exists(select 1 from collector.reminder_deliveries where id=? and"
-                            + " lease_id=? and state='SENDING' and lease_until>?)",
+                                + " lease_id=? and state='SENDING' and lease_until>?)",
                         Boolean.class,
                         d.id(),
                         d.lease(),

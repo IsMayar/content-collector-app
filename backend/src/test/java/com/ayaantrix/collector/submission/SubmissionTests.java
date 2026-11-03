@@ -106,6 +106,12 @@ class SubmissionTests {
 
         @Bean
         @Primary
+        SmsFake smsFake() {
+            return new SmsFake();
+        }
+
+        @Bean
+        @Primary
         ReminderMail reminderMail() {
             return new ReminderMail();
         }
@@ -176,6 +182,31 @@ class SubmissionTests {
     private MockMvc mvc;
     private String hash;
 
+    static class SmsFake implements com.ayaantrix.collector.sms.provider.SmsSender {
+        boolean enabled = false;
+        final List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        String outcome = "ACCEPTED";
+
+        public boolean available() {
+            return enabled;
+        }
+
+        public String scope() {
+            return "MG" + "0".repeat(32);
+        }
+
+        public com.ayaantrix.collector.reminder.service.EmailSender.Result send(
+                UUID id, String phone, String body) {
+            messages.add(body);
+            return new com.ayaantrix.collector.reminder.service.EmailSender.Result(
+                    outcome,
+                    outcome.equals("ACCEPTED")
+                            ? "SM" + UUID.randomUUID().toString().replace("-", "")
+                            : null,
+                    null);
+        }
+    }
+
     static class ReminderMail implements com.ayaantrix.collector.reminder.service.EmailSender {
         java.util.List<Message> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
         volatile String outcome = "ACCEPTED";
@@ -223,6 +254,14 @@ class SubmissionTests {
                                 "--AI_MONTHLY_BUDGET_MICROUSD=10000000",
                                 "--collector.workspace.trial-ai-drafts=20",
                                 "--collector.delivery.worker-enabled=false",
+                                "--collector.sms.segment-cost-microusd=100",
+                                "--collector.sms.monthly-budget-microusd=100000",
+                                "--collector.workspace.trial-sms-segments=25",
+                                "--collector.sms.auth-token=synthetic-webhook-secret",
+                                "--collector.sms.account-sid=AC" + "0".repeat(32),
+                                "--collector.sms.messaging-service-sid=MG" + "0".repeat(32),
+                                "--collector.sms.inbound-url=http://localhost/api/v1/webhooks/twilio/inbound",
+                                "--collector.sms.status-url=http://localhost/api/v1/webhooks/twilio/status",
                                 "--collector.reminders.webhook-secret=whsec_"
                                         + Base64.getEncoder().encodeToString(new byte[32]),
                                 "--collector.reminders.webhook-url=http://localhost/api/v1/webhooks/email",
@@ -254,6 +293,16 @@ class SubmissionTests {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        jdbc.update(
+                "delete from collector.sms_destinations where sender_scope=?",
+                context.getBean(SmsFake.class).scope());
+        jdbc.update("delete from collector.account_request_limits where operation like 'SMS_%'");
+        jdbc.update(
+                "update collector.sms_verifications set state='REVOKED',encrypted_payload=null"
+                        + " where state in ('QUEUED','SENDING','SENT')");
+        context.getBean(SmsFake.class).enabled = false;
+        context.getBean(SmsFake.class).messages.clear();
+        context.getBean(SmsFake.class).outcome = "ACCEPTED";
         context.getBean(ReminderMail.class).messages.clear();
         context.getBean(ReminderMail.class).outcome = "ACCEPTED";
         jdbc.update(
@@ -4253,5 +4302,487 @@ class SubmissionTests {
                                 id))
                 .isEqualTo("ACCEPTED");
         assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
+    }
+
+    com.ayaantrix.collector.sms.service.SmsService sms() {
+        return context.getBean(com.ayaantrix.collector.sms.service.SmsService.class);
+    }
+
+    com.ayaantrix.collector.sms.worker.SmsVerificationWorker smsWorker() {
+        return context.getBean(com.ayaantrix.collector.sms.worker.SmsVerificationWorker.class);
+    }
+
+    record SmsFixture(Fixture f, String cookie, String zone) {}
+
+    SmsFixture smsFixture() {
+        context.getBean(SmsFake.class).enabled = true;
+        var day = NOW.atZone(ZoneOffset.UTC).toLocalDate();
+        while (day.getDayOfWeek().getValue() > 5) day = day.plusDays(1);
+        context.getBean(TestClock.class).time =
+                day.atTime(NOW.atZone(ZoneOffset.UTC).toLocalTime()).toInstant(ZoneOffset.UTC);
+        var f = fixture();
+        String cookie = enter(f).credential();
+        String zone =
+                ZoneOffset.ofHours(
+                                12
+                                        - context.getBean(TestClock.class)
+                                                .instant()
+                                                .atZone(ZoneOffset.UTC)
+                                                .getHour())
+                        .getId();
+        reminders()
+                .preferences(
+                        cookie,
+                        f.project().id(),
+                        new com.ayaantrix.collector.reminder.dto.ReminderDtos.ChangePreferences(
+                                true, zone));
+        return new SmsFixture(f, cookie, zone);
+    }
+
+    UUID smsStart(SmsFixture f) {
+        return sms().start(
+                        f.cookie(),
+                        f.f().project().id(),
+                        new com.ayaantrix.collector.sms.dto.SmsDtos.Start(
+                                "+12025550123",
+                                com.ayaantrix.collector.sms.service.SmsService.CONSENT_VERSION,
+                                true),
+                        UUID.randomUUID().toString());
+    }
+
+    void smsVerify(SmsFixture f, UUID id) {
+        assertThat(smsWorker().dispatchOne()).isTrue();
+        String message = context.getBean(SmsFake.class).messages.getLast();
+        String code =
+                java.util.regex.Pattern.compile("\\b[0-9]{6}\\b")
+                        .matcher(message)
+                        .results()
+                        .findFirst()
+                        .orElseThrow()
+                        .group();
+        assertThat(
+                        sms().confirm(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                id, code)))
+                .isEqualTo("VERIFIED_OPTED_IN");
+    }
+
+    @Test
+    void smsRequiresRecipientConsentTimezoneAndUSPhone() {
+        var f = smsFixture();
+        code(
+                () ->
+                        sms().start(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Start(
+                                                "+14165550123",
+                                                com.ayaantrix.collector.sms.service.SmsService
+                                                        .CONSENT_VERSION,
+                                                true),
+                                        "ca"),
+                "VALIDATION_FAILED");
+        code(
+                () ->
+                        sms().start(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Start(
+                                                "+12025550123", "old", true),
+                                        "old"),
+                "SMS_CONSENT_REQUIRED");
+        code(
+                () ->
+                        sms().start(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Start(
+                                                "+12025550123",
+                                                com.ayaantrix.collector.sms.service.SmsService
+                                                        .CONSENT_VERSION,
+                                                false),
+                                        "no"),
+                "SMS_CONSENT_REQUIRED");
+        var id = smsStart(f);
+        smsVerify(f, id);
+        assertThat(sms().status(f.f().tenant().workspace(), f.f().project().id(), f.f().contact()))
+                .isEqualTo("VERIFIED_OPTED_IN");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select encrypted_payload is null from collector.sms_verifications"
+                                        + " where id=?",
+                                Boolean.class,
+                                id))
+                .isTrue();
+        sms().withdraw(f.cookie(), f.f().project().id());
+        assertThat(reminders().preferences(f.cookie(), f.f().project().id()).emailEnabled())
+                .isTrue();
+        assertThat(sms().status(f.f().tenant().workspace(), f.f().project().id(), f.f().contact()))
+                .isEqualTo("OPTED_OUT");
+    }
+
+    @Test
+    void smsVerificationWrongAttemptsPersistAndTenantBindingHolds() {
+        var f = smsFixture();
+        var id = smsStart(f);
+        smsWorker().dispatchOne();
+        var other = smsFixture();
+        code(
+                () ->
+                        sms().confirm(
+                                        other.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                id, "000000")),
+                "NOT_FOUND");
+        for (int i = 0; i < 5; i++)
+            assertThat(
+                            sms().confirm(
+                                            f.cookie(),
+                                            f.f().project().id(),
+                                            new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                    id, "not-six-digits")))
+                    .isEqualTo("INVALID_CODE");
+        code(
+                () ->
+                        sms().confirm(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                id, "000000")),
+                "SMS_VERIFICATION_LIMIT");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select attempts from collector.sms_verifications where id=?",
+                                Integer.class,
+                                id))
+                .isEqualTo(5);
+    }
+
+    @Test
+    void smsOutboxUsesConfirmedConsentAndChargesExactSegments() {
+        var f = smsFixture();
+        smsVerify(f, smsStart(f));
+        var project = f.f();
+        UUID id =
+                as(
+                        project.tenant().actor(),
+                        () ->
+                                reminders()
+                                        .send(
+                                                project.tenant().workspace(),
+                                                project.project().id(),
+                                                new com.ayaantrix.collector.reminder.dto
+                                                        .ReminderDtos.Send(
+                                                        project.contact(), "SMS"),
+                                                "sms-send"));
+        reminderWorker().dispatchOne();
+        String body = context.getBean(SmsFake.class).messages.getLast();
+        assertThat(body).contains("Reply STOP", "/client/access#token=");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("ACCEPTED");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select sms_segments from collector.reminder_deliveries where id=?",
+                                Integer.class,
+                                id))
+                .isEqualTo(com.ayaantrix.collector.sms.service.SmsRules.segments(body));
+        assertThat(
+                        jdbc.queryForObject(
+                                "select reserved_segments from collector.sms_usage where"
+                                        + " workspace_id=?",
+                                Integer.class,
+                                project.tenant().workspace()))
+                .isZero();
+    }
+
+    @Test
+    void smsStopSuppressesScopeAndStartRequiresFreshClientVerification() {
+        var f = smsFixture();
+        smsVerify(f, smsStart(f));
+        var repo = context.getBean(com.ayaantrix.collector.sms.repository.SmsRepository.class);
+        String hash =
+                com.ayaantrix.collector.common.repository.IdempotencyRepository.hash(
+                        "+12025550123");
+        tx().executeWithoutResult(
+                        t ->
+                                repo.inbound(
+                                        "SM" + "1".repeat(32),
+                                        context.getBean(SmsFake.class).scope(),
+                                        hash,
+                                        "STOP",
+                                        context.getBean(TestClock.class).instant()));
+        assertThat(sms().status(f.f().tenant().workspace(), f.f().project().id(), f.f().contact()))
+                .isEqualTo("OPTED_OUT");
+        context.getBean(TestClock.class).time =
+                context.getBean(TestClock.class).instant().plusSeconds(61);
+        tx().executeWithoutResult(
+                        t ->
+                                repo.inbound(
+                                        "SM" + "2".repeat(32),
+                                        context.getBean(SmsFake.class).scope(),
+                                        hash,
+                                        "START",
+                                        context.getBean(TestClock.class).instant()));
+        assertThat(sms().status(f.f().tenant().workspace(), f.f().project().id(), f.f().contact()))
+                .isEqualTo("OPTED_OUT");
+        smsVerify(f, smsStart(f));
+        assertThat(sms().status(f.f().tenant().workspace(), f.f().project().id(), f.f().contact()))
+                .isEqualTo("VERIFIED_OPTED_IN");
+    }
+
+    @Test
+    void smsQuietWindowDefersWithoutSendingThenResumes() {
+        var f = smsFixture();
+        smsVerify(f, smsStart(f));
+        var project = f.f();
+        UUID id =
+                as(
+                        project.tenant().actor(),
+                        () ->
+                                reminders()
+                                        .send(
+                                                project.tenant().workspace(),
+                                                project.project().id(),
+                                                new com.ayaantrix.collector.reminder.dto
+                                                        .ReminderDtos.Send(
+                                                        project.contact(), "SMS"),
+                                                "quiet-send"));
+        var clock = context.getBean(TestClock.class);
+        clock.time = clock.instant().plusSeconds(8 * 3600);
+        assertThat(com.ayaantrix.collector.sms.service.SmsRules.quiet(clock.instant(), f.zone()))
+                .isTrue();
+        reminderWorker().dispatchOne();
+        assertThat(context.getBean(SmsFake.class).messages).hasSize(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("QUEUED");
+        clock.time =
+                com.ayaantrix.collector.sms.service.SmsRules.nextAllowed(clock.instant(), f.zone());
+        reminderWorker().dispatchOne();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("ACCEPTED");
+    }
+
+    @Test
+    void smsUnknownVerificationNeverResendsOrActivates() {
+        var f = smsFixture();
+        var id = smsStart(f);
+        context.getBean(SmsFake.class).outcome = "UNKNOWN";
+        smsWorker().dispatchOne();
+        assertThat(smsWorker().dispatchOne()).isFalse();
+        assertThat(context.getBean(SmsFake.class).messages).hasSize(1);
+        code(
+                () ->
+                        sms().confirm(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                id, "123456")),
+                "SMS_VERIFICATION_UNAVAILABLE");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select reserved_segments from collector.sms_usage where"
+                                    + " workspace_id=?",
+                                Integer.class,
+                                f.f().tenant().workspace()))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select used_segments from collector.sms_usage where"
+                                    + " workspace_id=?",
+                                Integer.class,
+                                f.f().tenant().workspace()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void smsReservationConcurrencyAndRollback() throws Exception {
+        var f = smsFixture();
+        var repo = context.getBean(com.ayaantrix.collector.sms.repository.SmsRepository.class);
+        var budget = sms().budget(f.f().tenant().workspace());
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var a =
+                    pool.submit(
+                            () ->
+                                    tx().execute(
+                                                    t ->
+                                                            repo.reserve(
+                                                                    f.f().tenant().workspace(),
+                                                                    budget,
+                                                                    20,
+                                                                    2000)));
+            var b =
+                    pool.submit(
+                            () ->
+                                    tx().execute(
+                                                    t ->
+                                                            repo.reserve(
+                                                                    f.f().tenant().workspace(),
+                                                                    budget,
+                                                                    20,
+                                                                    2000)));
+            assertThat(List.of(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true, false);
+        } finally {
+            pool.shutdownNow();
+        }
+        var other = smsFixture();
+        try {
+            tx().executeWithoutResult(
+                            t -> {
+                                smsStart(other);
+                                throw new IllegalStateException("rollback");
+                            });
+        } catch (IllegalStateException expected) {
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.sms_verifications where"
+                                    + " workspace_id=?",
+                                Integer.class,
+                                other.f().tenant().workspace()))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.sms_consents where workspace_id=?",
+                                Integer.class,
+                                other.f().tenant().workspace()))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.sms_usage where workspace_id=?",
+                                Integer.class,
+                                other.f().tenant().workspace()))
+                .isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"expired", "revoked"})
+    void smsConfirmationRechecksGrantAndExpiry(String kind) {
+        var f = smsFixture();
+        var id = smsStart(f);
+        smsWorker().dispatchOne();
+        if (kind.equals("expired")) {
+            context.getBean(TestClock.class).time =
+                    context.getBean(TestClock.class).instant().plusSeconds(601);
+            code(
+                    () ->
+                            sms().confirm(
+                                            f.cookie(),
+                                            f.f().project().id(),
+                                            new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                    id, "123456")),
+                    "SMS_VERIFICATION_UNAVAILABLE");
+        } else {
+            as(
+                    f.f().tenant().actor(),
+                    () -> {
+                        access().revoke(
+                                        f.f().tenant().workspace(),
+                                        f.f().project().id(),
+                                        f.f().contact());
+                        return true;
+                    });
+            code(
+                    () ->
+                            sms().confirm(
+                                            f.cookie(),
+                                            f.f().project().id(),
+                                            new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                    id, "123456")),
+                    "CLIENT_ACCESS_UNAVAILABLE");
+        }
+    }
+
+    @Test
+    void smsHttpCsrfAndSignedStopAreRequiredAndDeduplicated() throws Exception {
+        var f = smsFixture();
+        String path = "/api/v1/client/projects/" + f.f().project().id() + "/sms/verification",
+                body =
+                        "{\"phoneE164\":\"+12025550123\",\"consent\":true,\"consentTextVersion\":\"2026-11-03\"}";
+        mvc.perform(
+                        post(path)
+                                .header("Idempotency-Key", "csrf")
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), f.cookie()))
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isForbidden());
+        smsVerify(f, smsStart(f));
+        var params =
+                new TreeMap<>(
+                        Map.of(
+                                "AccountSid",
+                                "AC" + "0".repeat(32),
+                                "MessagingServiceSid",
+                                "MG" + "0".repeat(32),
+                                "MessageSid",
+                                "SM" + "3".repeat(32),
+                                "From",
+                                "+12025550123",
+                                "OptOutType",
+                                "STOP"));
+        String url = "http://localhost/api/v1/webhooks/twilio/inbound";
+        var signed = new StringBuilder(url);
+        params.forEach((k, v) -> signed.append(k).append(v));
+        var mac = javax.crypto.Mac.getInstance("HmacSHA1");
+        mac.init(
+                new javax.crypto.spec.SecretKeySpec(
+                        "synthetic-webhook-secret"
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "HmacSHA1"));
+        String sig =
+                Base64.getEncoder()
+                        .encodeToString(
+                                mac.doFinal(
+                                        signed.toString()
+                                                .getBytes(
+                                                        java.nio.charset.StandardCharsets.UTF_8)));
+        String form =
+                params.entrySet().stream()
+                        .map(
+                                e ->
+                                        java.net.URLEncoder.encode(
+                                                        e.getKey(),
+                                                        java.nio.charset.StandardCharsets.UTF_8)
+                                                + "="
+                                                + java.net.URLEncoder.encode(
+                                                        e.getValue(),
+                                                        java.nio.charset.StandardCharsets.UTF_8))
+                        .collect(java.util.stream.Collectors.joining("&"));
+        mvc.perform(
+                        post("/api/v1/webhooks/twilio/inbound")
+                                .contentType("application/x-www-form-urlencoded")
+                                .content(form))
+                .andExpect(status().isUnauthorized());
+        for (int n = 0; n < 2; n++)
+            mvc.perform(
+                            post("/api/v1/webhooks/twilio/inbound")
+                                    .header("X-Twilio-Signature", sig)
+                                    .contentType("application/x-www-form-urlencoded")
+                                    .content(form))
+                    .andExpect(status().isOk());
+        assertThat(sms().status(f.f().tenant().workspace(), f.f().project().id(), f.f().contact()))
+                .isEqualTo("OPTED_OUT");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.sms_events where event_key=?",
+                                Integer.class,
+                                "inbound:" + params.get("MessageSid")))
+                .isEqualTo(1);
     }
 }

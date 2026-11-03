@@ -42,6 +42,9 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/notification-preferences").permitAll()
                         .requestMatchers(HttpMethod.PUT,"/api/v1/client/projects/*/notification-preferences").permitAll()
                         .requestMatchers(HttpMethod.POST,"/api/v1/webhooks/email").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/client/projects/*/sms/verification","/api/v1/client/projects/*/sms/verification/confirm").permitAll()
+                        .requestMatchers(HttpMethod.DELETE,"/api/v1/client/projects/*/sms/consent").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/webhooks/twilio/inbound","/api/v1/webhooks/twilio/status").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/me","/api/v1/me/sessions").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/auth/logout-all").authenticated()
                         .requestMatchers(HttpMethod.DELETE,"/api/v1/me/sessions/*").authenticated()
@@ -101,7 +104,7 @@ public class SecurityConfiguration {
                 )
 
                 .headers(headers -> headers.referrerPolicy(policy -> policy.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(request -> "POST".equals(request.getMethod()) && (request.getContextPath()+"/api/v1/webhooks/email").equals(request.getRequestURI())))
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(request -> "POST".equals(request.getMethod()) && java.util.Set.of(request.getContextPath()+"/api/v1/webhooks/email",request.getContextPath()+"/api/v1/webhooks/twilio/inbound",request.getContextPath()+"/api/v1/webhooks/twilio/status").contains(request.getRequestURI())))
 
                 // CSRF remains enabled for future
                 // cookie-authenticated write requests.

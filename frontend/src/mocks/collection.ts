@@ -250,7 +250,18 @@ registerProductResolver((request, path, _search, body) => {
       contact.emailRemindersEnabled = prefs.emailEnabled
       contact.timezone = prefs.timezone
     }
-    return response(prefs)
+    const result = {
+      ...prefs,
+      smsAvailable: true,
+      smsConsentTextVersion: '2026-11-03',
+      smsUsage: {
+        usedSegments: 0,
+        reservedSegments: 0,
+        allowance: 25,
+        spendingLimitMicrousd: 1000000,
+      },
+    }
+    return response(method === 'PUT' ? { preferences: result } : result)
   }
   if (area === 'sms') {
     const prefs = productDb.preferences[contact.id] || {
@@ -258,7 +269,7 @@ registerProductResolver((request, path, _search, body) => {
       timezone: 'America/New_York',
       smsStatus: 'NOT_CONFIGURED' as NotificationPreferences['smsStatus'],
     }
-    if (itemId === 'verification') {
+    if (itemId === 'verification' && sub !== 'confirm') {
       requireRule(
         body.consent === true && /^\+1\d{10}$/.test(String(body.phoneE164)),
         422,
@@ -269,9 +280,9 @@ registerProductResolver((request, path, _search, body) => {
       smsCodes.set(verificationId, contact.id)
       prefs.smsStatus = 'UNVERIFIED'
       productDb.preferences[contact.id] = prefs
-      return response({ verificationId, demoCode: '123456' }, 201)
+      return response({ verificationId }, 202)
     }
-    if (itemId === 'confirm') {
+    if (itemId === 'verification' && sub === 'confirm') {
       requireRule(
         smsCodes.get(String(body.verificationId)) === contact.id &&
           body.code === '123456',

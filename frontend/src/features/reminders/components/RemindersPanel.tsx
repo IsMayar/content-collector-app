@@ -116,7 +116,7 @@ export function RemindersPanel({ root }: { root: string }) {
               {tab === 'policy' && (
                 <section className="policy-channels">
                   <h3>Reminder channels</h3>
-                  {['EMAIL'].map((c) => (
+                  {['EMAIL', 'SMS'].map((c) => (
                     <article key={c}>
                       <span className="channel-symbol" aria-hidden="true">
                         {c === 'EMAIL' ? 'âœ‰' : 'â–¤'}
@@ -178,7 +178,7 @@ export function RemindersPanel({ root }: { root: string }) {
                       <Field label="Reminder channel">
                         <select name={`channel${i}`} defaultValue={r.channel}>
                           <option>EMAIL</option>
-                          <option disabled>SMS</option>
+                          <option>SMS</option>
                         </select>
                       </Field>
                       <Field label="Days relative to due date">
@@ -272,7 +272,7 @@ export function RemindersPanel({ root }: { root: string }) {
                     }}
                   >
                     <option>EMAIL</option>
-                    <option disabled>SMS</option>
+                    <option>SMS</option>
                   </select>
                 </Field>
               </div>
@@ -324,6 +324,12 @@ export function RemindersPanel({ root }: { root: string }) {
                   <p>{preview.body}</p>
                   <Badge>{preview.eligible ? 'ELIGIBLE' : 'SUPPRESSED'}</Badge>
                   <p>{preview.reasons.join(' ')}</p>
+                  {preview.estimatedSegments !== null && (
+                    <p>
+                      Estimated SMS segments: {preview.estimatedSegments}. Your
+                      workspace allowance and spending cap apply.
+                    </p>
+                  )}
                 </blockquote>
               )}
               {!preview && (

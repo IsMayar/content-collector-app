@@ -4,7 +4,12 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { RemindersPanel } from '@/features/reminders/components/RemindersPanel'
 import { ClientPreferences } from '@/features/client/components/ClientPreferences'
 import { validateProductRead } from '@/services/api/resourceSchemas'
-const mocks = vi.hoisted(() => ({ run: vi.fn() }))
+vi.mock('@/config/env', () => ({ env: { mocksEnabled: false } }))
+const mocks = vi.hoisted(() => ({
+  run: vi.fn(),
+  smsAvailable: false,
+  timezone: 'Asia/Kabul' as string | null,
+}))
 const rule = {
   id: 'rule',
   channel: 'EMAIL',
@@ -35,13 +40,25 @@ vi.mock('@/services/api/resourceApi', () => ({
   usePortalData: () => ({
     data: {
       emailEnabled: true,
-      timezone: 'Asia/Kabul',
+      timezone: mocks.timezone,
       smsStatus: 'NOT_CONFIGURED',
+      smsAvailable: mocks.smsAvailable,
+      smsConsentTextVersion: '2026-11-03',
+      smsUsage: {
+        allowance: 25,
+        usedSegments: 2,
+        reservedSegments: 1,
+        spendingLimitMicrousd: 1000000,
+      },
     },
     isError: false,
   }),
 }))
-beforeEach(() => mocks.run.mockReset())
+beforeEach(() => {
+  mocks.run.mockReset()
+  mocks.smsAvailable = false
+  mocks.timezone = 'Asia/Kabul'
+})
 it('reads wrapped policy and saves explicit enabled rules with optimistic version', async () => {
   mocks.run.mockResolvedValue({ policy })
   render(<RemindersPanel root="workspaces/w/projects/p" />)
@@ -125,4 +142,85 @@ it('rejects obsolete policy and invalid delivery response shapes', () => {
       data: [{ id: 'a', state: 'SENT' }],
     }).success,
   ).toBe(false)
+})
+
+it('uses recipient consent and catalog confirmation route without showing a synthetic real code', async () => {
+  mocks.smsAvailable = true
+  mocks.run
+    .mockResolvedValueOnce({ verificationId: 'verification' })
+    .mockResolvedValueOnce({ smsStatus: 'VERIFIED_OPTED_IN' })
+  render(<ClientPreferences root="client/projects/p" />)
+  expect(screen.getByText(/2 used, 1 reserved of 25/)).toBeInTheDocument()
+  await userEvent.type(
+    screen.getByLabelText('US mobile number'),
+    '+12025550123',
+  )
+  await userEvent.click(screen.getByLabelText(/I agree/))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Send verification code' }),
+  )
+  expect(mocks.run).toHaveBeenCalledWith('client/projects/p/sms/verification', {
+    phoneE164: '+12025550123',
+    consent: true,
+    consentTextVersion: '2026-11-03',
+  })
+  expect(
+    screen.queryByText(/Synthetic verification code/),
+  ).not.toBeInTheDocument()
+  await userEvent.type(
+    await screen.findByLabelText('Verification code'),
+    '654321',
+  )
+  await userEvent.click(screen.getByRole('button', { name: /^Verify$/ }))
+  expect(mocks.run).toHaveBeenLastCalledWith(
+    'client/projects/p/sms/verification/confirm',
+    { verificationId: 'verification', code: '654321' },
+  )
+  expect(
+    await screen.findByText(
+      'Your phone is verified and SMS reminders are enabled.',
+    ),
+  ).toBeInTheDocument()
+})
+it('does not report SMS consent success when the server rejects confirmation', async () => {
+  mocks.smsAvailable = true
+  mocks.run
+    .mockResolvedValueOnce({ verificationId: 'verification' })
+    .mockResolvedValueOnce(undefined)
+  render(<ClientPreferences root="client/projects/p" />)
+  await userEvent.type(
+    screen.getByLabelText('US mobile number'),
+    '+12025550123',
+  )
+  await userEvent.click(screen.getByLabelText(/I agree/))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Send verification code' }),
+  )
+  await userEvent.type(
+    await screen.findByLabelText('Verification code'),
+    '000000',
+  )
+  await userEvent.click(screen.getByRole('button', { name: /^Verify$/ }))
+  expect(
+    screen.queryByText('Your phone is verified and SMS reminders are enabled.'),
+  ).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Verification code')).toHaveValue('000000')
+})
+
+it('email opt-out remains independent of SMS timezone enrollment', async () => {
+  mocks.timezone = null
+  mocks.run.mockResolvedValue({
+    preferences: { emailEnabled: false, timezone: null },
+  })
+  render(<ClientPreferences root="client/projects/p" />)
+  await userEvent.click(screen.getByLabelText('Email reminders'))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Save preferences' }),
+  )
+  expect(mocks.run).toHaveBeenCalledWith(
+    'client/projects/p/notification-preferences',
+    { emailEnabled: false, timezone: null },
+    'PUT',
+  )
+  expect(await screen.findByText('Preferences saved.')).toBeInTheDocument()
 })

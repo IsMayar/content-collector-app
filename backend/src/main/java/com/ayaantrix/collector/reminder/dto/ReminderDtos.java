@@ -39,7 +39,10 @@ public final class ReminderDtos {
             boolean emailEnabled,
             String timezone,
             String smsStatus,
-            String emailSuppressionReason) {}
+            String emailSuppressionReason,
+            boolean smsAvailable,
+            String smsConsentTextVersion,
+            Map<String, Object> smsUsage) {}
 
     public record ChangePreferences(@NotNull Boolean emailEnabled, String timezone) {}
 }

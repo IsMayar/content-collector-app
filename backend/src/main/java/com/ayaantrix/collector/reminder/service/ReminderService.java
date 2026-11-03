@@ -29,6 +29,7 @@ public class ReminderService {
     private final AuditRepository audit;
     private final IdempotencyRepository requests;
     private final Clock clock;
+    private final com.ayaantrix.collector.sms.service.SmsService sms;
 
     public ReminderService(
             ProjectAuthorization agency,
@@ -38,7 +39,9 @@ public class ReminderService {
             ReminderRepository repo,
             AuditRepository audit,
             IdempotencyRepository requests,
-            Clock clock) {
+            Clock clock,
+            com.ayaantrix.collector.sms.service.SmsService sms) {
+        this.sms = sms;
         this.agency = agency;
         this.projects = projects;
         this.structure = structure;
@@ -69,7 +72,7 @@ public class ReminderService {
         zone(input.timezone());
         var ids = new HashSet<UUID>();
         for (var r : input.rules()) {
-            if (!"EMAIL".equals(r.channel()) || !ids.add(r.id())) throw invalid();
+            if (!Set.of("EMAIL", "SMS").contains(r.channel()) || !ids.add(r.id())) throw invalid();
             try {
                 LocalTime.parse(r.localTime());
             } catch (DateTimeException e) {
@@ -107,16 +110,23 @@ public class ReminderService {
         long missing = missing(w, p);
         return new Preview(
                 input.channel(),
-                "Your content for " + project.title() + " is still needed",
-                "Please complete "
-                        + missing
-                        + " required content items for "
-                        + project.title()
-                        + ". A fresh secure project link and reminder preferences link will be"
-                        + " included when sent.",
+                input.channel().equals("SMS")
+                        ? null
+                        : "Your content for " + project.title() + " is still needed",
+                input.channel().equals("SMS")
+                        ? sms.previewBody(project.title(), missing)
+                        : "Please complete "
+                                + missing
+                                + " required content items for "
+                                + project.title()
+                                + ". A fresh secure project link and reminder preferences link will"
+                                + " be included when sent.",
                 reasons.isEmpty(),
                 reasons,
-                null);
+                input.channel().equals("SMS")
+                        ? com.ayaantrix.collector.sms.service.SmsRules.segments(
+                                sms.previewBody(project.title(), missing))
+                        : null);
     }
 
     public UUID send(UUID w, UUID p, Send input, String key) {
@@ -138,6 +148,7 @@ public class ReminderService {
         var day = now.atZone(zone).toLocalDate();
         var id =
                 repo.enqueue(
+                        input.channel(),
                         w,
                         p,
                         c.id(),
@@ -147,7 +158,7 @@ public class ReminderService {
                         day,
                         day,
                         zone.getId(),
-                        recipient(c),
+                        recipient(w, p, c, input.channel()),
                         now,
                         now);
         requests.remember(w, actor, route, key, hash, "\"" + id + "\"", 202, now);
@@ -164,16 +175,26 @@ public class ReminderService {
             UUID except) {
         var r = new ArrayList<String>();
         UUID w = project.workspaceId(), p = project.id();
-        if (!"EMAIL".equals(channel)) r.add("SMS_UNAVAILABLE");
+        if (!Set.of("EMAIL", "SMS").contains(channel)) r.add("CHANNEL_UNAVAILABLE");
+        if (channel.equals("SMS"))
+            r.addAll(
+                    sms.reasons(
+                            w,
+                            p,
+                            c.id(),
+                            com.ayaantrix.collector.sms.service.SmsRules.segments(
+                                    sms.previewBody(project.title(), missing(w, p))),
+                            !except.equals(NONE) && sms.reserved(except)));
         if (!"ACTIVE".equals(project.state().name())) r.add("PROJECT_NOT_ACTIVE");
         if (!policy.enabled() || policy.paused()) r.add("POLICY_PAUSED");
         if (clients.available(w, p, c.id(), true).isEmpty()) r.add("GRANT_UNAVAILABLE");
-        if (!c.emailEnabled()) r.add("EMAIL_DISABLED");
-        if (c.suppression() != null) r.add("EMAIL_SUPPRESSED");
+        if (channel.equals("EMAIL") && !c.emailEnabled()) r.add("EMAIL_DISABLED");
+        if (channel.equals("EMAIL") && c.suppression() != null) r.add("EMAIL_SUPPRESSED");
         if (missing(w, p) == 0) r.add("NO_CLIENT_ACTION");
         var now = clock.instant();
         var zone = zone(c.timezone() == null ? policy.timezone() : c.timezone());
-        if (!repo.dayAvailable(w, recipient(c), now.atZone(zone).toLocalDate(), except, now))
+        if (!repo.dayAvailable(
+                w, recipient(w, p, c, channel), now.atZone(zone).toLocalDate(), except, now))
             r.add("DAILY_LIMIT");
         var monday =
                 now.atZone(zone(policy.timezone()))
@@ -196,6 +217,10 @@ public class ReminderService {
         return IdempotencyRepository.hash(c.email().toLowerCase(Locale.ROOT));
     }
 
+    public String recipient(UUID w, UUID p, ReminderRepository.Contact c, String channel) {
+        return channel.equals("SMS") ? sms.numberKey(w, p, c.id()) : recipient(c);
+    }
+
     public Map<String, Object> history(UUID w, UUID p, int page, int size) {
         owner(w, p, false);
         if (page < 0 || size < 1 || size > 100 || page > 100000) throw invalid();
@@ -210,6 +235,9 @@ public class ReminderService {
     public Preferences preferences(String cookie, UUID p) {
         var a = clients.require(cookie, p);
         return prefs(
+                a.grant().workspace(),
+                p,
+                a.grant().contact(),
                 repo.contact(a.grant().workspace(), p, a.grant().contact())
                         .orElseThrow(ProjectAuthorization::missing));
     }
@@ -218,6 +246,7 @@ public class ReminderService {
         var a = clients.require(cookie, p);
         if (input.timezone() != null) zone(input.timezone());
         repo.preferences(a.grant().workspace(), p, a.grant().contact(), input, clock.instant());
+        sms.timezoneChanged(a.grant().workspace(), p, a.grant().contact(), input.timezone());
         audit.writeClient(
                 a.grant().workspace(),
                 p,
@@ -226,12 +255,22 @@ public class ReminderService {
                 a.grant().contact(),
                 clock.instant());
         return prefs(
+                a.grant().workspace(),
+                p,
+                a.grant().contact(),
                 repo.contact(a.grant().workspace(), p, a.grant().contact())
                         .orElseThrow(ProjectAuthorization::missing));
     }
 
-    private Preferences prefs(ReminderRepository.Contact c) {
-        return new Preferences(c.emailEnabled(), c.timezone(), "NOT_CONFIGURED", c.suppression());
+    private Preferences prefs(UUID w, UUID p, UUID contact, ReminderRepository.Contact c) {
+        return new Preferences(
+                c.emailEnabled(),
+                c.timezone(),
+                sms.status(w, p, contact),
+                c.suppression(),
+                sms.available(),
+                com.ayaantrix.collector.sms.service.SmsService.CONSENT_VERSION,
+                sms.usage(w));
     }
 
     public static ZoneId zone(String zone) {
