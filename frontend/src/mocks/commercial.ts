@@ -33,6 +33,15 @@ const shares = new Map<
 registerProductResolver((request, path, _search, body) => {
   const [domain, wid, resource, pid, area, id] = path
   const method = request.method
+  if (
+    domain === 'workspaces' &&
+    resource === 'analytics' &&
+    pid === 'templates' &&
+    method === 'GET'
+  ) {
+    agencyActor(request, wid, true)
+    return response({ data: [] })
+  }
   if (domain === 'demo' && wid === 'scenario') {
     requireRule(env.development || env.test, 404, 'NOT_FOUND', 'Unavailable.')
     const scenario = String(body.scenario)
@@ -328,29 +337,31 @@ registerProductResolver((request, path, _search, body) => {
     )
     if (area === 'analytics')
       return response({
-        progress: progressFor(r.structure, r.answers),
-        sections: r.structure
-          .filter((s) => s.enabled)
-          .map((s) => ({
-            id: s.id,
-            title: s.title,
-            progress: progressFor([s], r.answers),
-          })),
-        generatedAt: now(),
-        friction: r.structure
-          .flatMap((s) => s.items)
-          .slice(0, 5)
-          .map((i, index) => ({
-            itemKey: i.key,
-            templateVersionId: 'synthetic',
-            eligibleStarts: index === 0 ? 18 : 4,
-            completedObservationWindows: index === 0 ? 12 : 3,
-            startsWithoutSubmission: index === 0 ? 3 : 1,
-            rate: index === 0 ? 0.25 : null,
-            insufficientData: index !== 0,
-            medianFirstSubmissionSeconds: index === 0 ? 3600 : null,
-            completedSubmissions: index === 0 ? 9 : 2,
-          })),
+        metrics: {
+          progress: progressFor(r.structure, r.answers),
+          sections: r.structure
+            .filter((s) => s.enabled)
+            .map((s) => ({
+              id: s.id,
+              title: s.title,
+              progress: progressFor([s], r.answers),
+            })),
+          generatedAt: now(),
+          friction: r.structure
+            .flatMap((s) => s.items)
+            .slice(0, 5)
+            .map((i, index) => ({
+              itemKey: i.key,
+              templateVersionId: 'synthetic',
+              eligibleStarts: index === 0 ? 18 : 4,
+              completedObservationWindows: index === 0 ? 12 : 3,
+              startsWithoutSubmission: index === 0 ? 3 : 1,
+              rate: index === 0 ? 0.25 : null,
+              insufficientData: index !== 0,
+              medianFirstSubmissionSeconds: index === 0 ? 3600 : null,
+              completedSubmissions: index === 0 ? 9 : 0,
+            })),
+        },
       })
     if (!id && method === 'POST') {
       requireRule(

@@ -417,3 +417,8 @@ DeliveryReconciliationRepository/Service/Worker in the existing reminder subpack
 ## T29 safe activity and minimal interactions
 
 The analytics feature owns controller/service/repository/dto/worker responsibilities. It reuses live ClientAccessAuthorization, ProjectAuthorization, shared visibility and existing transactional audit records. Browser ingestion accepts only project_opened/item_started with opaque IDs; domain-separated internal session-UUID hashes, project/item/template scope and PostgreSQL uniqueness prevent token persistence and duplicate starts. Test projects use the server-controlled projects.analytics_excluded flag; agency preview has no client cookie route. Activity projects six safe fields without audit metadata or names/emails/content. V24 alone adds one interaction table and project exclusion flag; 90-day raw cleanup is transactional. T30 aggregation is deliberately separate. [Contracts and actual verification](../docs/T29_IMPLEMENTATION.md).
+
+
+## T30 read-only friction projections
+
+AnalyticsRepository selects scoped T29 start timestamps/context and first immutable submission timestamps only; AnalyticsService reuses live project/owner authorization and shared progress. FrictionCalculator separates open versus seven-day-complete observations, enforces10-start/10-completed-window thresholds, and groups template versions/stable keys/project types independently. Duration samples count each observed project/item once and exclude approval delay. No new entity, write path, migration or aggregate archive; retained-cohort reads honor90-day raw retention and test-project exclusions. [Exact definitions, contracts and verification](../docs/T30_IMPLEMENTATION.md).

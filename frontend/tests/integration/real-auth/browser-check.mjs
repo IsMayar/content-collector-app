@@ -1323,6 +1323,72 @@ async function command(input) {
       clientPage.off('request', observeEvent)
       break
     }
+    case 'friction-analytics': {
+      const root =
+        'workspaces/' +
+        settings.workspace +
+        '/projects/' +
+        settings.previewProject
+      const result = await run(root + '/analytics')
+      assert.equal(result.status, 200)
+      const metric = result.data.metrics.friction.find(
+        (m) => m.itemKey === input.itemKey,
+      )
+      assert.equal(metric.eligibleStarts, 11)
+      assert.equal(metric.completedObservationWindows, 9)
+      assert.equal(metric.startsWithoutSubmission, 9)
+      assert.equal(metric.insufficientData, true)
+      assert.equal(metric.rate, null)
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '?tab=analytics',
+      )
+      await page
+        .getByRole('button', { name: 'Item friction', exact: true })
+        .click()
+      const row = page.getByRole('row').filter({
+        has: page.getByRole('rowheader', {
+          name: input.itemKey,
+          exact: true,
+        }),
+      })
+      await expect(
+        row.getByText('Insufficient data', { exact: true }),
+      ).toBeVisible()
+      await expect(
+        row.getByText('2 still observing', { exact: true }),
+      ).toBeVisible()
+      await expect(row.getByRole('cell').nth(3)).not.toContainText('%')
+      const templates = await run(
+        'workspaces/' + settings.workspace + '/analytics/templates',
+      )
+      assert.equal(templates.status, 200)
+      assert.ok(
+        templates.data.data.some(
+          (m) =>
+            m.itemKey === input.itemKey &&
+            m.templateVersionId === metric.templateVersionId &&
+            m.projectType === 'WEBSITE',
+        ),
+      )
+      await page.goto(origin + '/app/w/' + settings.workspace + '/insights')
+      await expect(
+        page.getByRole('heading', {
+          name: 'Template friction comparisons',
+          exact: true,
+        }),
+      ).toBeVisible()
+      await expect(
+        page.getByText('Template version ' + metric.templateVersionId, {
+          exact: true,
+        }),
+      ).toBeVisible()
+      break
+    }
     case 'client-draft-collection': {
       const root = 'client/projects/' + settings.previewProject
       phase = 'client-drafts:setup'

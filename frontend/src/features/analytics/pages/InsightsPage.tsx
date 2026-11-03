@@ -1,3 +1,4 @@
+import { TemplateFrictionPanel } from '../components/TemplateFrictionPanel'
 import { AnalyticsPanel } from '@/features/analytics/components/AnalyticsPanel'
 import type { Project } from '@/features/projects/types/project.types'
 import { useData } from '@/services/api/resourceApi'
@@ -13,7 +14,7 @@ import type { Paged } from '@/shared/types/common.types'
 import { useState } from 'react'
 import { Link } from 'react-router'
 export function InsightsPage() {
-  const { id, base } = useWorkspace()
+  const { id, base, owner } = useWorkspace()
   const q = useData<Paged<Project>>(`workspaces/${id}/projects?size=100`)
   const [project, setProject] = useState('')
   const projects = q.data?.data || []
@@ -116,6 +117,7 @@ export function InsightsPage() {
           />
         )}
       </QueryState>
+      {owner && <TemplateFrictionPanel workspaceId={id} />}
     </div>
   )
 }

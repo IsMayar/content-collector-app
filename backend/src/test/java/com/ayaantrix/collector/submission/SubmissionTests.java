@@ -748,6 +748,161 @@ class SubmissionTests {
                 f.project().id());
     }
 
+    com.ayaantrix.collector.analytics.service.AnalyticsService friction() {
+        return context.getBean(com.ayaantrix.collector.analytics.service.AnalyticsService.class);
+    }
+
+    void startObservation(Fixture f, UUID item, Instant start) {
+        jdbc.update(
+                """
+                insert into collector.analytics_events(id,workspace_id,project_id,template_version_id,session_pseudonym,client_event_id,event_type,item_id,item_key,received_at)
+                select ?,p.workspace_id,p.id,p.source_template_version_id,?,?,'item_started',i.id,i.item_key,? from collector.projects p join collector.items i on i.workspace_id=p.workspace_id and i.project_id=p.id where p.id=? and i.id=?
+                """,
+                UUID.randomUUID(),
+                com.ayaantrix.collector.common.repository.IdempotencyRepository.hash(
+                        UUID.randomUUID().toString()),
+                UUID.randomUUID(),
+                java.sql.Timestamp.from(start),
+                f.project().id(),
+                item);
+    }
+
+    @Test
+    void frictionLiveProgressAndImmutableFirstSubmission() throws Exception {
+        var f = fixture();
+        var c = enter(f).credential();
+        var i = textItem(f);
+        startObservation(f, i, NOW.minus(Duration.ofDays(8)));
+        save(f, c, i, text("Private immutable answer"), 0);
+        submit(f, c, i, 1, "friction-first");
+        var history =
+                jdbc.queryForList(
+                        "select value_snapshot::text from collector.submission_revisions where"
+                            + " project_id=?",
+                        String.class,
+                        f.project().id());
+        var result =
+                as(
+                        f.tenant().actor(),
+                        () -> friction().project(f.tenant().workspace(), f.project().id()));
+        var m = result.friction().getFirst();
+        assertThat(m.eligibleStarts()).isEqualTo(1);
+        assertThat(m.completedObservationWindows()).isEqualTo(1);
+        assertThat(m.startsWithoutSubmission()).isEqualTo(1);
+        assertThat(m.rate()).isNull();
+        assertThat(m.medianFirstSubmissionSeconds()).isEqualTo(691200.0);
+        assertThat(result.progress().submittedRequired()).isEqualTo(1);
+        assertThat(json.writeValueAsString(result))
+                .doesNotContain(
+                        "Private immutable answer", c, "value_snapshot", "session_pseudonym");
+        assertThat(
+                        jdbc.queryForList(
+                                "select value_snapshot::text from collector.submission_revisions"
+                                    + " where project_id=?",
+                                String.class,
+                                f.project().id()))
+                .isEqualTo(history);
+        mvc.perform(
+                        get(f.tenant().root() + "/projects/" + f.project().id() + "/analytics")
+                                .secure(true)
+                                .header("Authorization", bearer(f.tenant())))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Request-ID"))
+                .andExpect(jsonPath("$.metrics.friction[0].rate").isEmpty());
+    }
+
+    @Test
+    void frictionCountsOpenWindowsExclusionsAndEmptyProgress() {
+        var f = fixture();
+        var i = textItem(f);
+        for (int n = 0; n < 10; n++) startObservation(f, i, NOW.minus(Duration.ofDays(8)));
+        startObservation(f, i, NOW.minusSeconds(1));
+        var m =
+                as(
+                                f.tenant().actor(),
+                                () -> friction().project(f.tenant().workspace(), f.project().id()))
+                        .friction()
+                        .getFirst();
+        assertThat(m.completedObservationWindows()).isEqualTo(10);
+        assertThat(m.eligibleStarts()).isEqualTo(11);
+        assertThat(m.rate()).isEqualTo(1.0);
+        var templates = as(f.tenant().actor(), () -> friction().templates(f.tenant().workspace()));
+        assertThat(templates).hasSize(1);
+        assertThat(templates.getFirst().projectType()).isEqualTo("WEBSITE");
+        jdbc.update(
+                "update collector.projects set analytics_excluded=true where id=?",
+                f.project().id());
+        assertThat(as(f.tenant().actor(), () -> friction().templates(f.tenant().workspace())))
+                .isEmpty();
+        jdbc.update(
+                "update collector.items set enabled=false where project_id=?", f.project().id());
+        assertThat(
+                        as(
+                                        f.tenant().actor(),
+                                        () ->
+                                                friction()
+                                                        .project(
+                                                                f.tenant().workspace(),
+                                                                f.project().id()))
+                                .progress()
+                                .requiredTotal())
+                .isZero();
+    }
+
+    @Test
+    void frictionAuthorizationRemainsLiveAndTemplateComparisonsOwnerOnly() throws Exception {
+        var f = fixture();
+        var other = fixture();
+        code(
+                () ->
+                        as(
+                                other.tenant().actor(),
+                                () -> friction().project(f.tenant().workspace(), f.project().id())),
+                "NOT_FOUND");
+        var actor = actor();
+        var member =
+                new WorkspaceMember(f.tenant().workspace(), actor.id(), WorkspaceRole.MEMBER, NOW);
+        context.getBean(WorkspaceMemberRepository.class).saveAndFlush(member);
+        code(
+                () -> as(actor, () -> friction().project(f.tenant().workspace(), f.project().id())),
+                "NOT_FOUND");
+        jdbc.update(
+                "insert into"
+                    + " collector.project_members(workspace_id,project_id,workspace_member_id,can_review,can_export,created_at,updated_at)"
+                    + " values(?,?,?,false,false,?,?)",
+                f.tenant().workspace(),
+                f.project().id(),
+                member.id(),
+                java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        assertThat(as(actor, () -> friction().project(f.tenant().workspace(), f.project().id())))
+                .isNotNull();
+        code(() -> as(actor, () -> friction().templates(f.tenant().workspace())), "ACCESS_DENIED");
+        jdbc.update(
+                "delete from collector.project_members where workspace_member_id=?", member.id());
+        code(
+                () -> as(actor, () -> friction().project(f.tenant().workspace(), f.project().id())),
+                "NOT_FOUND");
+        var c = enter(f).credential();
+        mvc.perform(
+                        get(f.tenant().root() + "/analytics/templates")
+                                .secure(true)
+                                .cookie(new jakarta.servlet.http.Cookie(cookieName(), c)))
+                .andExpect(status().isForbidden());
+        as(
+                f.tenant().actor(),
+                () -> {
+                    context.getBean(AgencySessions.class).logoutAll(f.tenant().actor().jwt());
+                    return null;
+                });
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () -> friction().project(f.tenant().workspace(), f.project().id())),
+                "INVALID_CREDENTIALS");
+    }
+
     @Test
     void analyticsMinimalEventsDeduplicateWithoutChangingAnswers() {
         var f = fixture();
@@ -780,7 +935,7 @@ class SubmissionTests {
                 .isEqualTo(
                         jdbc.queryForObject(
                                 "select source_template_version_id from collector.projects where"
-                                    + " id=?",
+                                        + " id=?",
                                 UUID.class,
                                 f.project().id()));
         assertThat(row.get("item_key")).isNotNull();
@@ -849,7 +1004,7 @@ class SubmissionTests {
         assertThat(
                         jdbc.queryForObject(
                                         "select received_at from collector.analytics_events where"
-                                            + " project_id=?",
+                                                + " project_id=?",
                                         java.sql.Timestamp.class,
                                         f.project().id())
                                 .toInstant())

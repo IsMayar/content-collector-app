@@ -66,7 +66,9 @@ class RealAuthenticationBrowserCheck {
     @Test void realHttpsWorkspaceOnboardingWithoutMocks() throws Exception {run(true);}
     @Test void realHttpsAnalyticsWithoutMocks() throws Exception {run(true,true);}
     private void run(boolean onboarding) throws Exception {run(onboarding,false);}
-    private void run(boolean onboarding,boolean analyticsOnly) throws Exception {
+    @Test void realHttpsFrictionWithoutMocks() throws Exception {run(true,true,true);}
+    private void run(boolean onboarding,boolean analyticsOnly) throws Exception {run(onboarding,analyticsOnly,false);}
+    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly) throws Exception {
         String password="Synthetic browser-only password",next="Synthetic replacement browser password",email=onboarding?"browser-onboarding@example.test":"browser-only@example.test";
         String certificatePassword=UUID.randomUUID().toString();Path certificate=directory.resolve("browser.p12");
         String keytool=Path.of(System.getProperty("java.home"),"bin","keytool.exe").toString();
@@ -142,6 +144,15 @@ class RealAuthenticationBrowserCheck {
                         io.step(Map.of("action","client-analytics"));
                         assertThat(jdbc.queryForObject("select count(*) from collector.analytics_events where project_id=? and event_type='project_opened'",Integer.class,clientProject)).isEqualTo(1);
                         assertThat(jdbc.queryForObject("select count(*) from collector.analytics_events where project_id=? and event_type='item_started'",Integer.class,clientProject)).isPositive();
+                        if(frictionOnly){
+                            UUID observed=jdbc.queryForObject("select item_id from collector.analytics_events where project_id=? and event_type='item_started' order by received_at limit 1",UUID.class,clientProject);
+                            String key=jdbc.queryForObject("select item_key from collector.items where id=?",String.class,observed);
+                            for(int n=0;n<10;n++)jdbc.update("""
+                              insert into collector.analytics_events(id,workspace_id,project_id,template_version_id,session_pseudonym,client_event_id,event_type,item_id,item_key,received_at)
+                              select ?,workspace_id,id,source_template_version_id,?,?,'item_started',?,?,? from collector.projects where id=?
+                              """,UUID.randomUUID(),com.ayaantrix.collector.common.repository.IdempotencyRepository.hash(UUID.randomUUID().toString()),UUID.randomUUID(),observed,key,java.sql.Timestamp.from(clock.instant().minusSeconds(n<9?8*86400:60)),clientProject);
+                            io.step(Map.of("action","friction-analytics","itemKey",key));
+                        }
                         io.step(Map.of("action","stop"));return;
                     }
                     io.step(Map.of("action","email-reminders"));

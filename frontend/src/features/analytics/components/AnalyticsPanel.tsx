@@ -1,5 +1,5 @@
-import type { ProjectAnalytics } from '@/features/analytics/types/analytics.types'
-import { useData } from '@/services/api/resourceApi'
+import { useProjectAnalyticsQuery } from '../api/analyticsApi'
+import { FrictionTable } from './FrictionTable'
 import { Notice } from '@/shared/components/Feedback'
 import {
   ErrorNotice,
@@ -13,7 +13,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 export function AnalyticsPanel({ root }: { root: string }) {
-  const q = useData<ProjectAnalytics>(`${root}/analytics`)
+  const q = useProjectAnalyticsQuery(root)
   const [tab, setTab] = useState('overview'),
     [filter, setFilter] = useState('')
   const [copied, setCopied] = useState('')
@@ -53,64 +53,67 @@ export function AnalyticsPanel({ root }: { root: string }) {
                 </article>
               ))}
             </div>
-            <div className="analytics-overview">
-              <Panel title="Submissions and approvals">
-                <p className="subtle">Visible required content by section</p>
-                <div className="section-chart">
-                  {q.data?.sections?.map((section) => {
-                    const submitted = section.progress.submittedRequired,
-                      approved = section.progress.approvedRequired
-                    return (
-                      <div key={section.id}>
-                        <span>{section.title}</span>
-                        <div>
-                          <meter
-                            aria-label={`${section.title} submitted`}
-                            min={0}
-                            max={section.progress.requiredTotal || 1}
-                            value={submitted}
-                          />
-                          <meter
-                            aria-label={`${section.title} approved`}
-                            min={0}
-                            max={section.progress.requiredTotal || 1}
-                            value={approved}
-                          />
+            {q.data?.progress.requiredTotal === 0 && <p>No required items</p>}
+            {!!q.data?.sections?.length && (
+              <div className="analytics-overview">
+                <Panel title="Submissions and approvals">
+                  <p className="subtle">Visible required content by section</p>
+                  <div className="section-chart">
+                    {q.data?.sections?.map((section) => {
+                      const submitted = section.progress.submittedRequired,
+                        approved = section.progress.approvedRequired
+                      return (
+                        <div key={section.id}>
+                          <span>{section.title}</span>
+                          <div>
+                            <meter
+                              aria-label={`${section.title} submitted`}
+                              min={0}
+                              max={section.progress.requiredTotal || 1}
+                              value={submitted}
+                            />
+                            <meter
+                              aria-label={`${section.title} approved`}
+                              min={0}
+                              max={section.progress.requiredTotal || 1}
+                              value={approved}
+                            />
+                          </div>
+                          <small>
+                            {submitted} / {approved}
+                          </small>
                         </div>
-                        <small>
-                          {submitted} / {approved}
-                        </small>
-                      </div>
-                    )
-                  })}
-                </div>
-                <p className="chart-legend">● Submitted · ● Approved</p>
-              </Panel>
-              <Panel title="Items by section">
-                <div className="reference-table-wrap">
-                  <table className="reference-table">
-                    <thead>
-                      <tr>
-                        <th>Section</th>
-                        <th>Submitted</th>
-                        <th>Approved</th>
-                        <th>Client action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {q.data?.sections?.map((s) => (
-                        <tr key={s.id}>
-                          <td>{s.title}</td>
-                          <td>{s.progress.submittedRequired}</td>
-                          <td>{s.progress.approvedRequired}</td>
-                          <td>{s.progress.clientActionRequired}</td>
+                      )
+                    })}
+                  </div>
+                  <p className="chart-legend">● Submitted · ● Approved</p>
+                </Panel>
+                <Panel title="Items by section">
+                  <div className="reference-table-wrap">
+                    <table className="reference-table">
+                      <thead>
+                        <tr>
+                          <th>Section</th>
+                          <th>Submitted</th>
+                          <th>Approved</th>
+                          <th>Client action</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Panel>
-            </div>
+                      </thead>
+                      <tbody>
+                        {q.data?.sections?.map((s) => (
+                          <tr key={s.id}>
+                            <td>{s.title}</td>
+                            <td>{s.progress.submittedRequired}</td>
+                            <td>{s.progress.approvedRequired}</td>
+                            <td>{s.progress.clientActionRequired}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </div>
+            )}
             <p className="subtle">
               Generated{' '}
               {q.data && new Date(q.data.generatedAt).toLocaleString()}. Current
@@ -121,9 +124,13 @@ export function AnalyticsPanel({ root }: { root: string }) {
         {tab === 'friction' && (
           <Panel title="Item friction">
             <p>
-              Friction means a start without submission after a completed 7-day
-              observation window. It does not mean abandonment. At least 10
-              eligible starts and 10 completed windows are required.
+              Counts cover starts in the last 90 days. A start without
+              submission within a completed seven-day window is a friction
+              signal, not proof of abandonment. Open windows remain pending
+              observation. Percentages use only completed windows and require at
+              least 10 eligible starts and 10 completed windows. Median time
+              includes only observed first submissions, with its sample count;
+              agency approval time is excluded.
             </p>
             <label className="board-search">
               <input
@@ -134,53 +141,11 @@ export function AnalyticsPanel({ root }: { root: string }) {
               />
             </label>
             <QueryState query={q}>
-              <div className="table-scroll">
-                <table>
-                  <caption>
-                    Item collection friction · synthetic observations in demo
-                    mode
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Item</th>
-                      <th scope="col">Eligible starts</th>
-                      <th scope="col">Completed windows</th>
-                      <th scope="col">Without submission</th>
-                      <th scope="col">Rate</th>
-                      <th scope="col">Open windows</th>
-                      <th scope="col">Median first submission</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {q.data?.friction
-                      .filter((m) =>
-                        m.itemKey.toLowerCase().includes(filter.toLowerCase()),
-                      )
-                      .map((m, i) => (
-                        <tr key={`${m.itemKey}-${i}`}>
-                          <th scope="row">{m.itemKey}</th>
-                          <td>{m.eligibleStarts}</td>
-                          <td>{m.completedObservationWindows}</td>
-                          <td>{m.startsWithoutSubmission}</td>
-                          <td>
-                            {m.insufficientData
-                              ? 'Insufficient data'
-                              : `${Math.round((m.rate || 0) * 100)}%`}
-                          </td>
-                          <td>
-                            {m.eligibleStarts - m.completedObservationWindows}{' '}
-                            still observing
-                          </td>
-                          <td>
-                            {m.medianFirstSubmissionSeconds === null
-                              ? 'Insufficient data'
-                              : `${Math.round(m.medianFirstSubmissionSeconds / 60)} min (${m.completedSubmissions} submissions)`}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+              <FrictionTable
+                rows={(q.data?.friction || []).filter((m) =>
+                  m.itemKey.toLowerCase().includes(filter.toLowerCase()),
+                )}
+              />
             </QueryState>
           </Panel>
         )}

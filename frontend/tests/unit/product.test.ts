@@ -712,11 +712,13 @@ describe('administration reference boards', () => {
   })
   it('allows assigned analytics while keeping share management owner-only and section counts visibility-aware', async () => {
     login('member@studio.example')
-    const data = await json<{
-      progress: import('@/features/projects/types/project.types').Progress
-      sections: {
+    const { metrics: data } = await json<{
+      metrics: {
         progress: import('@/features/projects/types/project.types').Progress
-      }[]
+        sections: {
+          progress: import('@/features/projects/types/project.types').Progress
+        }[]
+      }
     }>(`${projectRoot}/analytics`)
     expect(
       data.sections.reduce((sum, s) => sum + s.progress.requiredTotal, 0),

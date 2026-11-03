@@ -652,3 +652,10 @@ Focused command from backend/: `.\mvnw.cmd '-Dtest=ProviderReceiptTests,Submissi
 No new credentials or provider flags are required. V24 migrates automatically through the existing startup flow. Client event ingestion uses the existing secure cookie/CSRF transport; owners/assigned members read the paginated agency activity route. Operator-managed synthetic projects should set collector.projects.analytics_excluded=true before using client links. This excludes new customer-analytics events; it does not alter audit/security history. Raw events expire after90 days through the daily cleanup job; collector.analytics.cleanup-poll-ms defaults86400000. No arbitrary browser metadata is accepted.
 
 Focused command from backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#analytics*' test`. Focused real HTTPS command: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsAnalyticsWithoutMocks' test`. Existing local setup is unchanged. [T29 contracts, test evidence and gates](../docs/T29_IMPLEMENTATION.md).
+
+
+## T30 friction reports
+
+No new runtime, provider flag or database migration. Existing agency JWT/session authorization protects project analytics; template comparisons are owner-only. Reports use the retained90-day server-timed cohort, seven-day observation windows and explicit small-sample safeguards. No history beyond retained observations is promised. Existing local startup commands remain unchanged.
+
+Focused command from backend/: `.\mvnw.cmd '-Dtest=FrictionCalculatorTests,SubmissionTests#friction*' test`. Focused HTTPS: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsFrictionWithoutMocks,SecurityConfigurationTests' verify`. [Contracts, semantics and actual evidence](../docs/T30_IMPLEMENTATION.md).
