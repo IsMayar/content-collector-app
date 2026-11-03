@@ -22,10 +22,17 @@ public class TwilioWebhookController {
     private final SmsRepository repo;
     private final SmsService sms;
     private final Clock clock;
+    private final com.ayaantrix.collector.reminder.service.DeliveryReconciliationService
+            reconciliation;
 
     public TwilioWebhookController(
-            TwilioSignatures signatures, SmsRepository repo, SmsService sms, Clock clock) {
+            TwilioSignatures signatures,
+            SmsRepository repo,
+            SmsService sms,
+            Clock clock,
+            com.ayaantrix.collector.reminder.service.DeliveryReconciliationService reconciliation) {
         this.signatures = signatures;
+        this.reconciliation = reconciliation;
         this.repo = repo;
         this.sms = sms;
         this.clock = clock;
@@ -87,7 +94,20 @@ public class TwilioWebhookController {
                 repo.inbound(
                         sid, sms.scope(), IdempotencyRepository.hash(from), type, clock.instant());
             }
-        } else repo.status(sid, values.getOrDefault("MessageStatus", ""), clock.instant());
+        } else {
+            String query = request.getQueryString();
+            UUID attempt =
+                    query == null ? null : UUID.fromString(query.substring("attempt=".length()));
+            String state = values.getOrDefault("MessageStatus", "");
+            reconciliation.evidence(
+                    attempt,
+                    "SMS",
+                    sid,
+                    values.get("To"),
+                    com.ayaantrix.collector.reminder.service.DeliveryReconciliationService
+                            .normalized("SMS", state));
+            repo.status(sid, state, clock.instant());
+        }
         return Map.of("accepted", true);
     }
 }

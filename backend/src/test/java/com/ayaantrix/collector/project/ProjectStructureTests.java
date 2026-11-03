@@ -299,7 +299,7 @@ class ProjectStructureTests {
         as(t.actor(),()->editor().patchSection(t.workspace(),p.id(),id(first),new SectionPatch("Project-only",false,1L)));var after=detail(t,p);
         context.close();open();assertThat(detail(t,p)).isEqualTo(after);assertThat(detail(t,other)).isEqualTo(untouched);
         assertThat(jdbc.queryForObject("select definition::text from collector.project_snapshots where workspace_id=? and project_id=?",String.class,t.workspace(),p.id())).isEqualTo(snapshot);assertThat(jdbc.queryForList("select definition::text from collector.template_versions order by id",String.class)).isEqualTo(catalog);
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(22);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(23);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
     }
 
     @ParameterizedTest @ValueSource(strings={"NOT_STARTED","DRAFT","SUBMITTED","APPROVED","CHANGES_REQUESTED"})

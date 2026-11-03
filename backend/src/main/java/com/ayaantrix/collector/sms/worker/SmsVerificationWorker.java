@@ -17,6 +17,8 @@ import java.util.*;
 @Component
 public class SmsVerificationWorker {
     private final SmsRepository repo;
+    private final com.ayaantrix.collector.reminder.service.DeliveryReconciliationService
+            reconciliation;
     private final SmsSender sender;
     private final SmsService service;
     private final TokenDeliveryCipher cipher;
@@ -28,6 +30,7 @@ public class SmsVerificationWorker {
 
     public SmsVerificationWorker(
             SmsRepository repo,
+            com.ayaantrix.collector.reminder.service.DeliveryReconciliationService reconciliation,
             SmsSender sender,
             SmsService service,
             TokenDeliveryCipher cipher,
@@ -38,6 +41,7 @@ public class SmsVerificationWorker {
             com.ayaantrix.collector.workspace.repository.WorkspaceRepository workspaces) {
         this.workspaces = workspaces;
         this.repo = repo;
+        this.reconciliation = reconciliation;
         this.sender = sender;
         this.service = service;
         this.cipher = cipher;
@@ -127,14 +131,16 @@ public class SmsVerificationWorker {
         }
         var outcome = result;
         tx.executeWithoutResult(
-                t ->
-                        repo.outcome(
-                                id,
-                                outcome.state().equals("ACCEPTED")
-                                        ? "SENT"
-                                        : outcome.state().equals("UNKNOWN") ? "UNKNOWN" : "FAILED",
-                                outcome.providerId(),
-                                clock.instant()));
+                t -> {
+                    repo.outcome(
+                            id,
+                            outcome.state().equals("ACCEPTED")
+                                    ? "SENT"
+                                    : outcome.state().equals("UNKNOWN") ? "UNKNOWN" : "FAILED",
+                            outcome.providerId(),
+                            clock.instant());
+                    reconciliation.storedAttempt(id);
+                });
         return true;
     }
 }

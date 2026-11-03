@@ -13,6 +13,17 @@ public interface EmailSender {
 
     record Result(String state, String providerId, String failureCode) {}
 
+    record Receipt(String providerId, String recipient, String state) {
+        @Override
+        public String toString() {
+            return "ProviderReceipt[redacted]";
+        }
+    }
+
+    default java.util.Optional<Receipt> lookup(String providerId) {
+        return java.util.Optional.empty();
+    }
+
     boolean available();
 
     Result send(Message message);

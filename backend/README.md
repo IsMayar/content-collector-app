@@ -638,3 +638,10 @@ Keep SMS_ENABLED, SMS_ONBOARDING_APPROVED and SMS_WORKER_ENABLED false until the
 Configure Messaging Service Advanced Opt-Out for provider-managed STOP/START/HELP responses; account for provider-generated responses and carrier fees during production cost review. START does not automatically restore app reminders: the client must explicitly consent and verify again. Clients must save their own timezone before phone verification. Unknown sends are held for T28 reconciliation; do not manually replay them.
 
 Focused verification from backend/: `.\mvnw.cmd '-Dtest=SmsRulesTests,SubmissionTests#sms*+reminder*' test`. No live text is required. [T27 contracts, database, verification and production gates](../docs/T27_IMPLEMENTATION.md).
+
+
+## T28 unknown-outcome reconciliation (disabled by default)
+
+T28 supersedes earlier notes deferring reconciliation. PROVIDER_RECONCILIATION_ENABLED=false is the default. Approved sandbox enablement requires existing provider configuration plus receipt-read permission. The worker only queries known receipts; signed callbacks can bind new sends through exact opaque correlation metadata. Preserve the complete attempt query in Twilio's signed status URL; configure the base status URL without a query. No inconclusive/404 receipt permits replay. Legacy uncorrelated UNKNOWN sends remain held for provider investigation. Existing email/SMS/provider/physical-device gates remain open.
+
+Focused command from backend/: `.\mvnw.cmd '-Dtest=ProviderReceiptTests,SubmissionTests#reconcile*+reminder*+sms*' test`. Final full clean verify passed1030 tests, zero failures/errors/skips. No frontend/browser workflow changed. [T28 implementation, limitations and evidence](../docs/T28_IMPLEMENTATION.md).

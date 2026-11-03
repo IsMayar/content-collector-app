@@ -513,7 +513,7 @@ Milestone status: In progress
 | T25  | Client suggestion preview and acceptance   | No automatic submission or overwriting newer answers | Complete |
 | T26  | Reminder policy, outbox and email delivery | No chase when all remaining work is agency review    | Complete |
 | T27  | SMS consent, verification and suppression  | STOP and quiet-window sandbox cases pass             | Complete |
-| T28  | Provider unknown-outcome reconciliation    | No blind retry of potentially sent messages          | Not started |
+| T28  | Provider unknown-outcome reconciliation    | No blind retry of potentially sent messages          | Complete (local acceptance) |
 
 ### Milestone M6 Reporting commercial readiness and visibility
 
@@ -850,3 +850,10 @@ Original title: **Reminder policy, outbox and email delivery**; acceptance: **No
 ## T27 SMS consent, verification and suppression — 3 November 2026
 
 Original M5/T27 acceptance: **STOP and quiet-window sandbox cases pass**. Client-owned consent/verification/withdrawal, sender-scope signed suppression, SMS segment/budget accounting and quiet-window dispatch extend the existing T26 outbox; production SMS stays disabled. V22 adds scoped SMS persistence without editing V1–V21 or supplied specifications.30 focused backend cases passed (14 new SMS plus16 reminder). The completed clean full regression passed **1017 tests,0 failures/errors/skips**, with migration/upgrade/restart/Hibernate validation and executable JAR packaging. **47 distinct affected frontend cases**, strict TypeScript/build and changed-file lint/format passed;24 unrelated filtered mock cases were intentionally skipped. One complete HTTPS/MSW-disabled lifecycle passed SMS consent/verification/withdrawal plus existing project/review/export/session flows after correcting lifecycle cache/auth readiness in the test (no weaker assertions or sleeps). T27 is Complete for original-roadmap sandbox/local acceptance. SMS remains off pending account/sender, Advanced Opt-Out/callback, price and real-device gates. T28 and later tasks are not implemented; M5 and all earlier release/device/provider gates remain. T26's original non-green one-shot history is preserved. [Contracts, configuration and evidence](T27_IMPLEMENTATION.md).
+
+
+## M5 / T28 provider unknown-outcome reconciliation — 3 November 2026
+
+T28 is Complete for original-roadmap local acceptance: **No blind retry of potentially sent messages**. Durable fenced receipt lookups, exact signed lost-ID correlation and stored-event replay resolve only supported provider evidence. Missing/inconclusive evidence remains UNKNOWN; no resend/requeue path is introduced. V23 extends existing delivery/verification rows, preserving V1–V22, quotas, STOP, explicit phone verification and all immutable content. Provider reconciliation defaults disabled.
+
+39 distinct affected cases passed across the focused runs/corrections; the final single full backend clean verify passed **1030 tests, zero failures/errors/skips**, including migration/upgrade/restart/Hibernate checks and executable JAR packaging. Initial clock/SQL-binding test failures were corrected before the full green run. No frontend source or browser workflow changed, so frontend/build/browser/responsive/PWA checks were intentionally skipped. M5 and all previous production/provider/device gates remain open; T26 verification history is unchanged. Protected collection edits remain outside the commit. [Exact scope, contracts, files, test evidence and limitations](T28_IMPLEMENTATION.md).

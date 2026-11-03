@@ -207,7 +207,7 @@ class IdentityPersistenceTests {
         var flyway = context.getBean(Flyway.class);
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.info().pending()).isEmpty();
-        assertThat(flyway.info().applied()).hasSize(22);
+        assertThat(flyway.info().applied()).hasSize(23);
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema='collector'", Integer.class))
                 .isEqualTo(43);
@@ -225,7 +225,7 @@ class IdentityPersistenceTests {
         var upgrade = Flyway.configure().dataSource(source).defaultSchema("public").load();
         upgrade.migrate();
         assertThat(upgrade.validateWithResult().validationSuccessful).isTrue();
-        assertThat(upgrade.info().applied()).hasSize(22);
+        assertThat(upgrade.info().applied()).hasSize(23);
         assertThat(upgradeJdbc.queryForObject("select value from collector.upgrade_probe where id=1", String.class)).isEqualTo("preserved");
         assertThat(upgradeJdbc.queryForObject("select count(*) from collector.users", Integer.class)).isZero();
     }

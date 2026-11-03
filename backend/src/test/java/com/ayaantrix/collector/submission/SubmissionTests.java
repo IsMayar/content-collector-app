@@ -186,6 +186,16 @@ class SubmissionTests {
         boolean enabled = false;
         final List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
         String outcome = "ACCEPTED";
+        final Map<String, com.ayaantrix.collector.reminder.service.EmailSender.Receipt> receipts =
+                new ConcurrentHashMap<>();
+        final java.util.concurrent.atomic.AtomicInteger lookups =
+                new java.util.concurrent.atomic.AtomicInteger();
+
+        public Optional<com.ayaantrix.collector.reminder.service.EmailSender.Receipt> lookup(
+                String id) {
+            lookups.incrementAndGet();
+            return Optional.ofNullable(receipts.get(id));
+        }
 
         public boolean available() {
             return enabled;
@@ -210,6 +220,16 @@ class SubmissionTests {
     static class ReminderMail implements com.ayaantrix.collector.reminder.service.EmailSender {
         java.util.List<Message> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
         volatile String outcome = "ACCEPTED";
+        final Map<String, Receipt> receipts = new ConcurrentHashMap<>();
+        final java.util.concurrent.atomic.AtomicInteger lookups =
+                new java.util.concurrent.atomic.AtomicInteger();
+        volatile boolean lookupThrows;
+
+        public Optional<Receipt> lookup(String id) {
+            lookups.incrementAndGet();
+            if (lookupThrows) throw new IllegalStateException("Synthetic lookup outage");
+            return Optional.ofNullable(receipts.get(id));
+        }
 
         public boolean available() {
             return true;
@@ -293,6 +313,18 @@ class SubmissionTests {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        jdbc.update(
+                "update collector.reminder_deliveries set reconciliation_count=8 where"
+                        + " state='UNKNOWN'");
+        jdbc.update(
+                "update collector.sms_verifications set reconciliation_count=8 where"
+                        + " state='UNKNOWN'");
+        context.getBean(ReminderMail.class).receipts.clear();
+        context.getBean(ReminderMail.class).lookups.set(0);
+        context.getBean(ReminderMail.class).lookupThrows = false;
+        context.getBean(SmsFake.class).receipts.clear();
+        context.getBean(SmsFake.class).lookups.set(0);
+
         jdbc.update(
                 "delete from collector.sms_destinations where sender_scope=?",
                 context.getBean(SmsFake.class).scope());
@@ -4596,14 +4628,14 @@ class SubmissionTests {
         assertThat(
                         jdbc.queryForObject(
                                 "select reserved_segments from collector.sms_usage where"
-                                    + " workspace_id=?",
+                                        + " workspace_id=?",
                                 Integer.class,
                                 f.f().tenant().workspace()))
                 .isZero();
         assertThat(
                         jdbc.queryForObject(
                                 "select used_segments from collector.sms_usage where"
-                                    + " workspace_id=?",
+                                        + " workspace_id=?",
                                 Integer.class,
                                 f.f().tenant().workspace()))
                 .isEqualTo(1);
@@ -4653,7 +4685,7 @@ class SubmissionTests {
         assertThat(
                         jdbc.queryForObject(
                                 "select count(*) from collector.sms_verifications where"
-                                    + " workspace_id=?",
+                                        + " workspace_id=?",
                                 Integer.class,
                                 other.f().tenant().workspace()))
                 .isZero();
@@ -4784,5 +4816,474 @@ class SubmissionTests {
                                 Integer.class,
                                 "inbound:" + params.get("MessageSid")))
                 .isEqualTo(1);
+    }
+
+    com.ayaantrix.collector.reminder.worker.DeliveryReconciliationWorker reconciliationWorker() {
+        return context.getBean(
+                com.ayaantrix.collector.reminder.worker.DeliveryReconciliationWorker.class);
+    }
+
+    com.ayaantrix.collector.reminder.service.DeliveryReconciliationService reconciliation() {
+        return context.getBean(
+                com.ayaantrix.collector.reminder.service.DeliveryReconciliationService.class);
+    }
+
+    com.ayaantrix.collector.reminder.repository.DeliveryReconciliationRepository
+            reconciliationRepo() {
+        return context.getBean(
+                com.ayaantrix.collector.reminder.repository.DeliveryReconciliationRepository.class);
+    }
+
+    String contactEmail(Fixture f) {
+        return jdbc.queryForObject(
+                "select email_normalized from collector.project_contacts where workspace_id=? and"
+                        + " project_id=? and id=?",
+                String.class,
+                f.tenant().workspace(),
+                f.project().id(),
+                f.contact());
+    }
+
+    UUID unknownEmail(Fixture f) {
+        enter(f);
+        context.getBean(ReminderMail.class).outcome = "UNKNOWN";
+        var id = remind(f, UUID.randomUUID().toString());
+        reminderWorker().dispatchOne();
+        return id;
+    }
+
+    String providerFor(UUID id) {
+        String provider = UUID.randomUUID().toString();
+        jdbc.update(
+                "update collector.reminder_deliveries set provider_id=? where id=?", provider, id);
+        return provider;
+    }
+
+    @Test
+    void reconcileKnownEmailUsesReadOnlyLookupAndNeverSendsAgain() {
+        var f = fixture();
+        var id = unknownEmail(f);
+        String provider = providerFor(id);
+        var mail = context.getBean(ReminderMail.class);
+        mail.receipts.put(
+                provider,
+                new com.ayaantrix.collector.reminder.service.EmailSender.Receipt(
+                        provider, contactEmail(f), "ACCEPTED"));
+        assertThat(reconciliationWorker().reconcileOne()).isTrue();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("ACCEPTED");
+        assertThat(reconciliationWorker().reconcileOne()).isFalse();
+        assertThat(mail.messages).hasSize(1);
+        assertThat(mail.lookups.get()).isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.audit_logs where resource_id=? and"
+                                        + " action like 'DELIVERY_RECONCILED_%'",
+                                Integer.class, id))
+                .isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "error", "mismatch"})
+    void reconcileInconclusiveEvidenceStaysUnknown(String kind) {
+        var f = fixture();
+        var id = unknownEmail(f);
+        String provider = providerFor(id);
+        var mail = context.getBean(ReminderMail.class);
+        if (kind.equals("error")) mail.lookupThrows = true;
+        if (kind.equals("mismatch"))
+            mail.receipts.put(
+                    provider,
+                    new com.ayaantrix.collector.reminder.service.EmailSender.Receipt(
+                            provider, "other-tenant@example.test", "DELIVERED"));
+        assertThat(reconciliationWorker().reconcileOne()).isTrue();
+        assertThat(reconciliationWorker().reconcileOne()).isFalse();
+        assertThat(reminderWorker().dispatchOne()).isFalse();
+        assertThat(mail.messages).hasSize(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("UNKNOWN");
+        assertThat(mail.lookups.get()).isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select encrypted_payload from collector.reminder_deliveries where"
+                                        + " id=?",
+                                byte[].class,
+                                id))
+                .isNull();
+    }
+
+    @Test
+    void reconcileWithoutProviderIdNeverGuesses() {
+        var f = fixture();
+        var id = unknownEmail(f);
+        assertThat(reconciliationWorker().reconcileOne()).isFalse();
+        assertThat(context.getBean(ReminderMail.class).lookups.get()).isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void reconcileFencesLateLookupsAndRollsBackAuditWithState() throws Exception {
+        var f = fixture();
+        var id = unknownEmail(f);
+        String provider = providerFor(id);
+        var now = context.getBean(TestClock.class);
+        var old =
+                tx().execute(t -> reconciliationRepo().claim(true, false, false, now.instant()))
+                        .orElseThrow();
+        now.time = now.instant().plusSeconds(61);
+        var current =
+                tx().execute(t -> reconciliationRepo().claim(true, false, false, now.instant()))
+                        .orElseThrow();
+        var proof =
+                Optional.of(
+                        new com.ayaantrix.collector.reminder.service.EmailSender.Receipt(
+                                provider, contactEmail(f), "DELIVERED"));
+        reconciliation().lookup(old, proof);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("UNKNOWN");
+        try {
+            tx().executeWithoutResult(
+                            t -> {
+                                reconciliation().lookup(current, proof);
+                                throw new IllegalStateException("rollback");
+                            });
+        } catch (IllegalStateException expected) {
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("UNKNOWN");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.audit_logs where resource_id=? and"
+                                        + " action like 'DELIVERY_RECONCILED_%'",
+                                Integer.class, id))
+                .isZero();
+        reconciliation().lookup(current, proof);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("DELIVERED");
+    }
+
+    @Test
+    void reconcileClaimsAreExclusiveAcrossPostgresTransactions() throws Exception {
+        var f = fixture();
+        var id = unknownEmail(f);
+        providerFor(id);
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var a =
+                    pool.submit(
+                            () ->
+                                    tx().execute(
+                                                    t ->
+                                                            reconciliationRepo()
+                                                                    .claim(
+                                                                            true,
+                                                                            false,
+                                                                            false,
+                                                                            context.getBean(
+                                                                                            TestClock
+                                                                                                    .class)
+                                                                                    .instant()))
+                                            .isPresent());
+            var b =
+                    pool.submit(
+                            () ->
+                                    tx().execute(
+                                                    t ->
+                                                            reconciliationRepo()
+                                                                    .claim(
+                                                                            true,
+                                                                            false,
+                                                                            false,
+                                                                            context.getBean(
+                                                                                            TestClock
+                                                                                                    .class)
+                                                                                    .instant()))
+                                            .isPresent());
+            assertThat(List.of(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true, false);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    ResultActions emailProof(
+            UUID attempt,
+            String provider,
+            String recipient,
+            String type,
+            String event,
+            String signatureOverride)
+            throws Exception {
+        String body =
+                json.writeValueAsString(
+                        Map.of(
+                                "type",
+                                type,
+                                "created_at",
+                                context.getBean(TestClock.class).instant().toString(),
+                                "data",
+                                Map.of(
+                                        "email_id",
+                                        provider,
+                                        "to",
+                                        List.of(recipient),
+                                        "tags",
+                                        Map.of("collector_delivery_id", attempt.toString()))));
+        String time = Long.toString(context.getBean(TestClock.class).instant().getEpochSecond());
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(new byte[32], "HmacSHA256"));
+        String signature =
+                signatureOverride == null
+                        ? "v1,"
+                                + Base64.getEncoder()
+                                        .encodeToString(
+                                                mac.doFinal(
+                                                        (event + "." + time + "." + body)
+                                                                .getBytes(
+                                                                        java.nio.charset
+                                                                                .StandardCharsets
+                                                                                .UTF_8)))
+                        : signatureOverride;
+        return mvc.perform(
+                post("/api/v1/webhooks/email")
+                        .header("svix-id", event)
+                        .header("svix-timestamp", time)
+                        .header("svix-signature", signature)
+                        .contentType("application/json")
+                        .content(body));
+    }
+
+    @Test
+    void reconcileEmailWebhookCorrelatesLostReceiptAndRejectsWrongTenantOrSignature()
+            throws Exception {
+        var f = fixture();
+        var id = unknownEmail(f);
+        String provider = UUID.randomUUID().toString(), event = "msg_" + UUID.randomUUID();
+        emailProof(id, provider, contactEmail(f), "email.delivered", event, "bad")
+                .andExpect(status().isUnauthorized());
+        var other = fixture();
+        emailProof(id, provider, contactEmail(other), "email.delivered", event, null)
+                .andExpect(status().isBadRequest());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select provider_id from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isNull();
+        for (int n = 0; n < 2; n++)
+            emailProof(id, provider, contactEmail(f), "email.delivered", event, null)
+                    .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("DELIVERED");
+        assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.audit_logs where resource_id=? and"
+                                        + " action like 'DELIVERY_RECONCILED_%'",
+                                Integer.class, id))
+                .isEqualTo(1);
+    }
+
+    ResultActions smsProof(UUID attempt, String sid, String to, String state, boolean tamper)
+            throws Exception {
+        String query = "attempt=" + attempt, url = "http://localhost/api/v1/webhooks/twilio/status";
+        var params =
+                new TreeMap<>(
+                        Map.of(
+                                "AccountSid",
+                                "AC" + "0".repeat(32),
+                                "MessagingServiceSid",
+                                "MG" + "0".repeat(32),
+                                "MessageSid",
+                                sid,
+                                "To",
+                                to,
+                                "MessageStatus",
+                                state));
+        var signed = new StringBuilder(url + "?" + query);
+        params.forEach((k, v) -> signed.append(k).append(v));
+        var mac = javax.crypto.Mac.getInstance("HmacSHA1");
+        mac.init(
+                new javax.crypto.spec.SecretKeySpec(
+                        "synthetic-webhook-secret"
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "HmacSHA1"));
+        String signature =
+                Base64.getEncoder()
+                        .encodeToString(
+                                mac.doFinal(
+                                        signed.toString()
+                                                .getBytes(
+                                                        java.nio.charset.StandardCharsets.UTF_8)));
+        String form =
+                params.entrySet().stream()
+                        .map(
+                                e ->
+                                        java.net.URLEncoder.encode(
+                                                        e.getKey(),
+                                                        java.nio.charset.StandardCharsets.UTF_8)
+                                                + "="
+                                                + java.net.URLEncoder.encode(
+                                                        e.getValue(),
+                                                        java.nio.charset.StandardCharsets.UTF_8))
+                        .collect(java.util.stream.Collectors.joining("&"));
+        return mvc.perform(
+                post("/api/v1/webhooks/twilio/status")
+                        .queryParam(
+                                "attempt",
+                                tamper ? UUID.randomUUID().toString() : attempt.toString())
+                        .header("X-Twilio-Signature", signature)
+                        .contentType("application/x-www-form-urlencoded")
+                        .content(form));
+    }
+
+    @Test
+    void reconcileSmsLostReceiptPreservesStopAndSpentQuota() throws Exception {
+        var f = smsFixture();
+        smsVerify(f, smsStart(f));
+        var project = f.f();
+        context.getBean(SmsFake.class).outcome = "UNKNOWN";
+        UUID id =
+                as(
+                        project.tenant().actor(),
+                        () ->
+                                reminders()
+                                        .send(
+                                                project.tenant().workspace(),
+                                                project.project().id(),
+                                                new com.ayaantrix.collector.reminder.dto
+                                                        .ReminderDtos.Send(
+                                                        project.contact(), "SMS"),
+                                                "unknown-sms"));
+        reminderWorker().dispatchOne();
+        int spent =
+                jdbc.queryForObject(
+                        "select used_segments from collector.sms_usage where workspace_id=?",
+                        Integer.class,
+                        project.tenant().workspace());
+        tx().executeWithoutResult(
+                        t ->
+                                context.getBean(
+                                                com.ayaantrix.collector.sms.repository.SmsRepository
+                                                        .class)
+                                        .inbound(
+                                                "SM" + "4".repeat(32),
+                                                context.getBean(SmsFake.class).scope(),
+                                                com.ayaantrix.collector.common.repository
+                                                        .IdempotencyRepository.hash("+12025550123"),
+                                                "STOP",
+                                                context.getBean(TestClock.class).instant()));
+        String sid = "SM" + "5".repeat(32);
+        smsProof(id, sid, "+12025550123", "delivered", true).andExpect(status().isUnauthorized());
+        smsProof(id, sid, "+12025550123", "delivered", false).andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("DELIVERED");
+        assertThat(
+                        sms().status(
+                                        project.tenant().workspace(),
+                                        project.project().id(),
+                                        project.contact()))
+                .isEqualTo("OPTED_OUT");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select used_segments from collector.sms_usage where"
+                                        + " workspace_id=?",
+                                Integer.class,
+                                project.tenant().workspace()))
+                .isEqualTo(spent);
+        assertThat(context.getBean(SmsFake.class).messages).hasSize(2);
+    }
+
+    @Test
+    void reconcileVerificationDoesNotAcceptConsentWithoutTheCode() throws Exception {
+        var f = smsFixture();
+        var id = smsStart(f);
+        context.getBean(SmsFake.class).outcome = "UNKNOWN";
+        smsWorker().dispatchOne();
+        String code =
+                java.util.regex.Pattern.compile("\\b[0-9]{6}\\b")
+                        .matcher(context.getBean(SmsFake.class).messages.getFirst())
+                        .results()
+                        .findFirst()
+                        .orElseThrow()
+                        .group();
+        smsProof(id, "SM" + "6".repeat(32), "+12025550123", "sent", false)
+                .andExpect(status().isOk());
+        assertThat(sms().status(f.f().tenant().workspace(), f.f().project().id(), f.f().contact()))
+                .isEqualTo("UNVERIFIED");
+        assertThat(
+                        sms().confirm(
+                                        f.cookie(),
+                                        f.f().project().id(),
+                                        new com.ayaantrix.collector.sms.dto.SmsDtos.Confirm(
+                                                id, code)))
+                .isEqualTo("VERIFIED_OPTED_IN");
+        assertThat(context.getBean(SmsFake.class).messages).hasSize(1);
+    }
+
+    @Test
+    void reconcileEarlyCallbackSurvivesLostSendResponseWithoutAnotherProviderCall()
+            throws Exception {
+        var f = fixture();
+        var id = unknownEmail(f);
+        jdbc.update("update collector.reminder_deliveries set state='SENDING' where id=?", id);
+        String provider = UUID.randomUUID().toString();
+        emailProof(
+                        id,
+                        provider,
+                        contactEmail(f),
+                        "email.delivered",
+                        "msg_" + UUID.randomUUID(),
+                        null)
+                .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("SENDING");
+        jdbc.update("update collector.reminder_deliveries set state='UNKNOWN' where id=?", id);
+        reconciliation().storedAttempt(id);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.reminder_deliveries where id=?",
+                                String.class,
+                                id))
+                .isEqualTo("DELIVERED");
+        assertThat(context.getBean(ReminderMail.class).lookups.get()).isZero();
+        assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
     }
 }

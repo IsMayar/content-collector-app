@@ -30,6 +30,7 @@ public class ReminderWorker {
     private final TokenDeliveryCipher cipher;
     private final AccountTokenRepository tokens;
     private final EmailSender sender;
+    private final DeliveryReconciliationService reconciliation;
     private final com.ayaantrix.collector.sms.service.SmsService sms;
     private final JsonMapper json;
     private final Clock clock;
@@ -47,6 +48,7 @@ public class ReminderWorker {
             TokenDeliveryCipher cipher,
             AccountTokenRepository tokens,
             EmailSender sender,
+            DeliveryReconciliationService reconciliation,
             com.ayaantrix.collector.sms.service.SmsService sms,
             JsonMapper json,
             Clock clock,
@@ -61,6 +63,7 @@ public class ReminderWorker {
         this.cipher = cipher;
         this.tokens = tokens;
         this.sender = sender;
+        this.reconciliation = reconciliation;
         this.sms = sms;
         this.json = json;
         this.clock = clock;
@@ -407,6 +410,7 @@ public class ReminderWorker {
                             finalResult.providerId(),
                             finalResult.failureCode(),
                             clock.instant());
+                    reconciliation.storedAttempt(d.id());
                     repo.applyEvents(finalResult.providerId(), clock.instant());
                     sms.receipt(finalResult.providerId());
                     sms.settle(d.workspace());

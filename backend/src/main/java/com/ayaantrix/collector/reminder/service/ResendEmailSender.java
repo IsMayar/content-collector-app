@@ -67,7 +67,15 @@ public class ResendEmailSender implements EmailSender {
                                                             "subject",
                                                             m.subject(),
                                                             "text",
-                                                            m.body()))))
+                                                            m.body(),
+                                                            "tags",
+                                                            List.of(
+                                                                    Map.of(
+                                                                            "name",
+                                                                            "collector_delivery_id",
+                                                                            "value",
+                                                                            m.deliveryId()
+                                                                                    .toString()))))))
                             .build();
             var response = http.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
@@ -89,5 +97,46 @@ public class ResendEmailSender implements EmailSender {
         } catch (Exception e) {
             return new Result("UNKNOWN", null, "PROVIDER_OUTCOME_UNKNOWN");
         }
+    }
+
+    @Override
+    public Optional<Receipt> lookup(String id) {
+        if (!enabled || id == null || !id.matches("[0-9a-fA-F-]{36}")) return Optional.empty();
+        try {
+            var request =
+                    HttpRequest.newBuilder(URI.create("https://api.resend.com/emails/" + id))
+                            .timeout(Duration.ofSeconds(20))
+                            .header("Authorization", "Bearer " + key)
+                            .GET()
+                            .build();
+            var response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (var body = response.body()) {
+                byte[] raw = body.readNBytes(65537);
+                if (response.statusCode() != 200 || raw.length > 65536) return Optional.empty();
+                return receipt(json.readTree(raw), id);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<Receipt> receipt(tools.jackson.databind.JsonNode data, String expected) {
+        if (!expected.equals(data.path("id").asString()) || data.path("to").size() != 1)
+            return Optional.empty();
+        String state =
+                switch (data.path("last_event").asString()) {
+                    case "sent", "scheduled", "opened", "clicked" -> "ACCEPTED";
+                    case "delivered" -> "DELIVERED";
+                    case "bounced" -> "BOUNCED";
+                    case "complained", "suppressed" -> "SUPPRESSED";
+                    case "failed" -> "FAILED";
+                    default -> null;
+                };
+        return state == null
+                ? Optional.empty()
+                : Optional.of(new Receipt(expected, data.path("to").get(0).asString(), state));
     }
 }

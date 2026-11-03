@@ -337,7 +337,7 @@ public class SmsRepository {
         var rows =
                 jdbc.queryForList(
                         "update collector.sms_verifications set"
-                            + " state=?,provider_id=?,encrypted_payload=null,settled=true,lease_id=null,lease_until=null,updated_at=?"
+                            + " state=?,provider_id=coalesce(?,provider_id),encrypted_payload=null,settled=true,lease_id=null,lease_until=null,updated_at=?"
                             + " where id=? and state='SENDING' and not settled returning"
                             + " workspace_id,usage_period,segments,reserved_cost",
                         state,
@@ -613,7 +613,7 @@ public class SmsRepository {
     public boolean freshConsent(String scope, String hash, Instant consented) {
         return !jdbc.queryForObject(
                 "select exists(select 1 from collector.sms_destinations where sender_scope=? and"
-                    + " phone_hash=? and last_stop_at>=?)",
+                        + " phone_hash=? and last_stop_at>=?)",
                 Boolean.class,
                 scope,
                 hash,

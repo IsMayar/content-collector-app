@@ -68,7 +68,7 @@ public class TwilioSmsSender implements SmsSender {
                             + "&Body="
                             + enc(body)
                             + "&StatusCallback="
-                            + enc(statusUrl);
+                            + enc(statusUrl + "?attempt=" + id);
             var req =
                     HttpRequest.newBuilder(
                                     URI.create(
@@ -110,5 +110,64 @@ public class TwilioSmsSender implements SmsSender {
 
     private static String enc(String s) {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
+    }
+
+    @Override
+    public Optional<com.ayaantrix.collector.reminder.service.EmailSender.Receipt> lookup(
+            String id) {
+        if (!enabled || id == null || !id.matches("SM[0-9a-fA-F]{32}")) return Optional.empty();
+        try {
+            var request =
+                    HttpRequest.newBuilder(
+                                    URI.create(
+                                            "https://api.twilio.com/2010-04-01/Accounts/"
+                                                    + account
+                                                    + "/Messages/"
+                                                    + id
+                                                    + ".json"))
+                            .timeout(Duration.ofSeconds(20))
+                            .header(
+                                    "Authorization",
+                                    "Basic "
+                                            + Base64.getEncoder()
+                                                    .encodeToString(
+                                                            (account + ":" + token)
+                                                                    .getBytes(
+                                                                            StandardCharsets
+                                                                                    .UTF_8)))
+                            .GET()
+                            .build();
+            var response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (var body = response.body()) {
+                byte[] raw = body.readNBytes(65537);
+                if (response.statusCode() != 200 || raw.length > 65536) return Optional.empty();
+                return receipt(json.readTree(raw), id, account, scope);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<com.ayaantrix.collector.reminder.service.EmailSender.Receipt> receipt(
+            tools.jackson.databind.JsonNode data, String expected, String account, String scope) {
+        if (!expected.equals(data.path("sid").asString())
+                || !account.equals(data.path("account_sid").asString())
+                || !scope.equals(data.path("messaging_service_sid").asString()))
+            return Optional.empty();
+        String state =
+                switch (data.path("status").asString()) {
+                    case "accepted", "queued", "sending", "sent" -> "ACCEPTED";
+                    case "delivered" -> "DELIVERED";
+                    case "failed", "undelivered", "canceled" -> "FAILED";
+                    default -> null;
+                };
+        return state == null
+                ? Optional.empty()
+                : Optional.of(
+                        new com.ayaantrix.collector.reminder.service.EmailSender.Receipt(
+                                expected, data.path("to").asString(), state));
     }
 }

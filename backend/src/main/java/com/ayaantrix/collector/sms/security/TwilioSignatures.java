@@ -32,10 +32,16 @@ public class TwilioSignatures {
             String signature) {
         try {
             String canonical = kind.equals("inbound") ? inbound : status;
+            if (query != null) {
+                if (!kind.equals("status")
+                        || !query.matches(
+                                "attempt=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+                    return false;
+                canonical = canonical + "?" + query;
+            }
             if (secret.isBlank()
                     || canonical.isBlank()
-                    || query != null
-                    || !canonical.equals(url)
+                    || !canonical.equals(url + (query == null ? "" : "?" + query))
                     || !account.equals(parameters.get("AccountSid"))
                     || !scope.equals(parameters.get("MessagingServiceSid"))
                     || signature == null

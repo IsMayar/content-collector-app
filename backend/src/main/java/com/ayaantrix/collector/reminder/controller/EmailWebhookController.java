@@ -24,6 +24,8 @@ public class EmailWebhookController {
     private final ReminderRepository repo;
     private final JsonMapper json;
     private final Clock clock;
+    private final com.ayaantrix.collector.reminder.service.DeliveryReconciliationService
+            reconciliation;
     private final com.ayaantrix.collector.workspace.repository.WorkspaceRepository workspaces;
     private final com.ayaantrix.collector.project.repository.ProjectRepository projects;
 
@@ -33,9 +35,11 @@ public class EmailWebhookController {
             ReminderRepository repo,
             JsonMapper json,
             Clock clock,
+            com.ayaantrix.collector.reminder.service.DeliveryReconciliationService reconciliation,
             com.ayaantrix.collector.workspace.repository.WorkspaceRepository workspaces,
             com.ayaantrix.collector.project.repository.ProjectRepository projects) {
         this.workspaces = workspaces;
+        this.reconciliation = reconciliation;
         this.projects = projects;
         this.repo = repo;
         this.json = json;
@@ -103,6 +107,28 @@ public class EmailWebhookController {
             Instant occurred = Instant.parse(payload.path("created_at").asString());
             if (provider.isBlank() || provider.length() > 200 || type.length() > 80)
                 throw new IllegalArgumentException();
+            var data = payload.path("data");
+            String tagged = null;
+            var tags = data.path("tags");
+            if (tags.isObject()) tagged = tags.path("collector_delivery_id").asString(null);
+            else if (tags.isArray())
+                for (var tag : tags)
+                    if (tag.path("name").asString().equals("collector_delivery_id")) {
+                        if (tagged != null) throw new IllegalArgumentException();
+                        tagged = tag.path("value").asString();
+                    }
+            UUID attempt = tagged == null ? null : UUID.fromString(tagged);
+            String recipient =
+                    data.path("to").isArray() && data.path("to").size() == 1
+                            ? data.path("to").get(0).asString()
+                            : null;
+            reconciliation.evidence(
+                    attempt,
+                    "EMAIL",
+                    provider,
+                    recipient,
+                    com.ayaantrix.collector.reminder.service.DeliveryReconciliationService
+                            .normalized("EMAIL", type));
             repo.provider(provider)
                     .ifPresent(
                             d -> {

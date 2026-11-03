@@ -482,9 +482,9 @@ public class ReminderRepository {
             jdbc.update(
                     "update collector.reminder_deliveries set"
                         + " state=?,failure_code=?,provider_event_at=?,updated_at=? where"
-                        + " provider_id=? and (provider_event_at is null or provider_event_at<=?)"
-                        + " and (state not in ('BOUNCED','SUPPRESSED') or ? in"
-                        + " ('BOUNCED','SUPPRESSED'))",
+                        + " provider_id=? and state<>'SENDING' and (provider_event_at is null or"
+                        + " provider_event_at<=?) and (state not in ('BOUNCED','SUPPRESSED') or ?"
+                        + " in ('BOUNCED','SUPPRESSED'))",
                     state,
                     state.equals("DELIVERED") ? null : type,
                     e.get("occurred_at"),
