@@ -668,3 +668,10 @@ V25 migrates through the existing startup flow; no new runtime/dependency is nee
 Owners create at-most30-day counts links and retain the once-shown fragment capability. Public reads exchange it for a separate five-minute status-only JWT; private routes keep their authentication. The backend embed endpoint enforces approved exact HTTPS ancestors. Production frontend hosting must deny framing for ordinary/private pages and preserve the backend embed exception; host-specific compatibility remains unverified. [Exact APIs, configuration, tests and gates](../docs/T31_IMPLEMENTATION.md).
 
 Focused command from backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#status*+digest*' test`. HTTPS: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsVisibilityWithoutMocks' verify`. Existing PowerShell startup/database commands are unchanged.
+
+
+## T32 hosted billing sandbox
+
+V26 applies through the existing Flyway startup flow. No new runtime/dependency is required. BILLING_ENABLED and BILLING_WORKER_ENABLED default false. Put an approved sk_test_ key, whsec_ endpoint secret, server-owned Solo/Agency price IDs and STRIPE_PORTAL_CONFIGURATION_ID in backend/.env; keep APP_BASE_URL fixed to the HTTPS frontend origin. The portal configuration must disable subscription updates and cancel only at period end. Configure the raw signed POST /api/v1/webhooks/stripe endpoint before enabling a sandbox worker. Live keys are rejected; production checkout remains an explicit launch gate. Local verification uses deterministic provider fixtures without paid calls.
+
+From backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#billing*,StripeBillingProviderTests' test`. Focused HTTPS: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsBillingWithoutMocks' test`. Existing setup/start commands are unchanged. [Contracts, operations and evidence](../docs/T32_IMPLEMENTATION.md).

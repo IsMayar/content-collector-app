@@ -53,8 +53,16 @@ class RealAuthenticationBrowserCheck {
         public boolean available(){return true;}
         public Output generate(Input input,java.time.Duration remaining){if(fail)throw new Failure("AI_TIMEOUT",false);return new Output(new com.ayaantrix.collector.ai.dto.AiDtos.Result(String.join(" ",input.facts()),input.facts(),List.of(),List.of("Local test suggestion; review before use.")),100,50);}
     }
+    static class BrowserBilling implements com.ayaantrix.collector.billing.service.BillingProvider {
+        volatile Snapshot snapshot;
+        public String customer(UUID workspace){return "cus_browserbilling";}
+        public String checkout(UUID w,UUID operation,String customer,PlanKey plan){return "https://checkout.stripe.com/c/pay/synthetic";}
+        public String portal(UUID w,UUID operation,String customer){return "https://billing.stripe.com/p/session/synthetic";}
+        public Snapshot current(String customer){return snapshot;}
+    }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class Configuration {
+        @Bean @Primary BrowserBilling browserBilling(){return new BrowserBilling();}
         @Bean @Primary BrowserSms browserSms(){return new BrowserSms();}
         @Bean @Primary ReminderMailbox reminderMailbox(){return new ReminderMailbox();}
         @Bean @Primary BrowserAiProvider browserAiProvider(){return new BrowserAiProvider();}
@@ -70,7 +78,9 @@ class RealAuthenticationBrowserCheck {
     private void run(boolean onboarding,boolean analyticsOnly) throws Exception {run(onboarding,analyticsOnly,false);}
     @Test void realHttpsVisibilityWithoutMocks() throws Exception {run(true,true,false,true);}
     private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly) throws Exception {run(onboarding,analyticsOnly,frictionOnly,false);}
-    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly) throws Exception {
+    @Test void realHttpsBillingWithoutMocks() throws Exception {run(true,false,false,false,true);}
+    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly) throws Exception {run(onboarding,analyticsOnly,frictionOnly,visibilityOnly,false);}
+    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly,boolean billingOnly) throws Exception {
         String password="Synthetic browser-only password",next="Synthetic replacement browser password",email=onboarding?"browser-onboarding@example.test":"browser-only@example.test";
         String certificatePassword=UUID.randomUUID().toString();Path certificate=directory.resolve("browser.p12");
         String keytool=Path.of(System.getProperty("java.home"),"bin","keytool.exe").toString();
@@ -81,7 +91,7 @@ class RealAuthenticationBrowserCheck {
         var keys=SigningKeyFixture.create(directory.resolve("signing"),"browser-only");byte[] bytes=new byte[32];new java.security.SecureRandom().nextBytes(bytes);String pepper=Base64.getEncoder().encodeToString(bytes);
         var storage=new com.ayaantrix.collector.attachment.StorageFixture();storage.start();
         try(storage;ConfigurableApplicationContext app=new SpringApplicationBuilder(CollectorApplication.class,Configuration.class).profiles("test").run(java.util.stream.Stream.concat(java.util.stream.Stream.of(
-            "--server.port=0","--server.address=127.0.0.1","--spring.datasource.url="+POSTGRES.getJdbcUrl(),
+            "--server.port=0","--collector.billing.webhook-secret=whsec_browser_synthetic","--server.address=127.0.0.1","--spring.datasource.url="+POSTGRES.getJdbcUrl(),
             "--spring.datasource.username="+POSTGRES.getUsername(),"--spring.datasource.password="+POSTGRES.getPassword(),
             "--collector.jwt.private-key="+keys.privateFile(),"--collector.jwt.public-keys="+keys.publicFile(),"--collector.jwt.key-id="+keys.kid(),
             "--collector.delivery.encryption-key="+pepper,"--collector.delivery.encryption-key-id=browser-test","--collector.jwt.issuer=https://browser.test","--collector.jwt.audience=collector-api","--collector.auth.token-hash-pepper="+pepper,
@@ -109,6 +119,21 @@ class RealAuthenticationBrowserCheck {
                     assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("TRIALING");
                     assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("AGENCY");
                     assertThat(jdbc.queryForObject("select current_period_end-current_period_start=interval '14 days' from collector.subscriptions where workspace_id=?",Boolean.class,workspace)).isTrue();
+                    if(billingOnly){
+                        io.step(Map.of("action","billing-prepare"));
+                        UUID operation=jdbc.queryForObject("select id from collector.billing_operations where workspace_id=? and kind='CHECKOUT'",UUID.class,workspace);
+                        app.getBean(BrowserBilling.class).snapshot=new com.ayaantrix.collector.billing.service.BillingProvider.Snapshot("sub_browser",workspace,operation,PlanKey.AGENCY,"active",clock.instant(),clock.instant().plusSeconds(30*86400),false,true);
+                        String body="{\"id\":\"evt_BrowserBilling\",\"livemode\":false,\"type\":\"invoice.paid\",\"data\":{\"object\":{\"customer\":\"cus_browserbilling\"}}}";
+                        long timestamp=clock.instant().getEpochSecond();var mac=javax.crypto.Mac.getInstance("HmacSHA256");mac.init(new javax.crypto.spec.SecretKeySpec("whsec_browser_synthetic".getBytes(StandardCharsets.UTF_8),"HmacSHA256"));
+                        String signature="t="+timestamp+",v1="+HexFormat.of().formatHex(mac.doFinal((timestamp+"."+body).getBytes(StandardCharsets.UTF_8)));
+                        io.step(Map.of("action","billing-event","body",body,"signature",signature));
+                        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("TRIALING");
+                        app.getBean(com.ayaantrix.collector.billing.service.BillingService.class).reconcile(workspace);
+                        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("ACTIVE");
+                        io.step(Map.of("action","billing-confirm"));
+                        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("ACTIVE");
+                        io.step(Map.of("action","stop"));return;
+                    }
                     io.step(Map.of("action","workspace-projects"));
                     assertThat(jdbc.queryForObject("select count(*) from collector.projects where workspace_id=?",Integer.class,workspace)).isEqualTo(3);
                     assertThat(jdbc.queryForObject("select count(*) from collector.project_snapshots where workspace_id=?",Integer.class,workspace)).isEqualTo(3);

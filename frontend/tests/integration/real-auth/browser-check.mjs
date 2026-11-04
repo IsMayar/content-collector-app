@@ -1389,6 +1389,79 @@ async function command(input) {
       ).toBeVisible()
       break
     }
+    case 'billing-prepare': {
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/billing?view=status&success=true&plan=AGENCY',
+      )
+      await expect(
+        page.getByRole('heading', {
+          name: 'Subscription status',
+          exact: true,
+          level: 1,
+        }),
+      ).toBeVisible()
+      await expect(
+        page.getByText('TRIALING', { exact: true }).first(),
+      ).toBeVisible()
+      const key = crypto.randomUUID()
+      const args = {
+        url: 'workspaces/' + settings.workspace + '/billing/checkout',
+        method: 'POST',
+        headers: { 'Idempotency-Key': key },
+        body: { planKey: 'AGENCY' },
+      }
+      const result = await run(args)
+      assert.equal(result.status, 201)
+      assert.equal(new URL(result.data.url).hostname, 'checkout.stripe.com')
+      const replay = await run(args)
+      assert.equal(replay.data.url, result.data.url)
+      await expect(
+        page.getByText('TRIALING', { exact: true }).first(),
+      ).toBeVisible()
+      break
+    }
+    case 'billing-event': {
+      const result = await context.request.post(
+        origin + '/api/v1/webhooks/stripe',
+        {
+          headers: {
+            'Stripe-Signature': input.signature,
+            'Content-Type': 'application/json',
+          },
+          data: input.body,
+        },
+      )
+      assert.equal(result.status(), 200)
+      assert.deepEqual(await result.json(), { accepted: true })
+      break
+    }
+    case 'billing-confirm': {
+      const refreshed = page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname.endsWith('/subscription') &&
+          res.status() === 200,
+      )
+      await page
+        .getByRole('button', { name: 'Refresh status', exact: true })
+        .click()
+      await refreshed
+      await expect(
+        page.getByText('ACTIVE', { exact: true }).first(),
+      ).toBeVisible()
+      const result = await run({
+        url: 'workspaces/' + settings.workspace + '/billing/portal',
+        method: 'POST',
+        body: {},
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      })
+      assert.equal(result.status, 201)
+      assert.equal(new URL(result.data.url).hostname, 'billing.stripe.com')
+      assert.equal(serviceWorkerResponse, false)
+      break
+    }
     case 'visibility-create': {
       await page.goto(
         origin + '/app/w/' + settings.workspace + '/settings?view=digest',
@@ -3677,6 +3750,28 @@ for await (const line of lines) {
           fullPage: true,
         })
         .catch(() => {})
+    }
+    if (phase.startsWith('billing-')) {
+      await page
+        .screenshot({
+          path: fileURLToPath(
+            new URL(
+              '../../../.artifacts/real-auth/t32-billing-failure.png',
+              import.meta.url,
+            ),
+          ),
+          fullPage: true,
+        })
+        .catch(() => {})
+      http.push({
+        failure: String(error.message)
+          .replace(/https?:\/\/[^\s]+/g, '[private URL]')
+          .slice(0, 1600),
+        headings: await page
+          .getByRole('heading')
+          .allTextContents()
+          .catch(() => []),
+      })
     }
     const diagnostic = String(error.message || '')
       .split('\n')[0]

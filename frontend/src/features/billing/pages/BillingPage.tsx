@@ -1,8 +1,9 @@
 import { SettingsNav } from '@/features/auth/components/AccountPanel'
-import type {
-  Subscription,
-  UsageSummary,
-} from '@/features/billing/types/billing.types'
+import {
+  billingDestination,
+  useBillingSubscriptionQuery,
+} from '@/features/billing/api/billingApi'
+import type { UsageSummary } from '@/features/billing/types/billing.types'
 import { useData } from '@/services/api/resourceApi'
 import { Notice } from '@/shared/components/Feedback'
 import {
@@ -16,12 +17,26 @@ import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
 import { formatBytes, percent } from '@/shared/utils/domain'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { useRef, useState } from 'react'
+import { env } from '@/config/env'
+import { errorMessage } from '@/shared/utils/apiError'
 
 export function BillingPage() {
   const navigate = useNavigate()
+  const checkoutKeys = useRef<Record<string, string>>({})
+  const [redirectError, setRedirectError] = useState('')
   function hosted(url: string) {
-    const target = new URL(url, window.location.origin)
-    if (!['http:', 'https:'].includes(target.protocol)) return
+    const target = billingDestination(
+      url,
+      window.location.origin,
+      env.mocksEnabled,
+    )
+    if (!target) {
+      setRedirectError(
+        'The service returned an invalid billing destination. Please contact support.',
+      )
+      return
+    }
     if (target.origin === window.location.origin)
       navigate(target.pathname + target.search)
     else window.location.assign(target.href)
@@ -32,12 +47,12 @@ export function BillingPage() {
   const view = ['billing', 'usage', 'status'].includes(requestedView)
     ? requestedView
     : 'billing'
-  const q = useData<Subscription>(`workspaces/${id}/subscription`, {
+  const q = useBillingSubscriptionQuery(id, {
     skip: !owner,
     pollingInterval: view === 'status' ? 10000 : undefined,
   })
   const usage = useData<UsageSummary>(`workspaces/${id}/usage`, {
-    skip: !owner,
+    skip: !owner || view !== 'usage',
   })
   const command = useCommand()
   if (!owner)
@@ -235,6 +250,12 @@ export function BillingPage() {
                   const result = await command.run<{ url: string }>(
                     `workspaces/${id}/billing/checkout`,
                     { planKey: plan },
+                    'POST',
+                    {
+                      'Idempotency-Key': (checkoutKeys.current[
+                        `${id}:${plan}`
+                      ] ??= crypto.randomUUID()),
+                    },
                   )
                   if (result) hosted(result.url)
                 }}
@@ -246,6 +267,9 @@ export function BillingPage() {
         </div>
       )}
       <ErrorNotice error={command.error} />
+      <ErrorNotice
+        error={redirectError || (q.error ? errorMessage(q.error) : '')}
+      />
     </>
   )
 }

@@ -96,6 +96,9 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.PUT,"/api/v1/workspaces/*/digest-preferences").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/status-shares/exchange").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/status-shares/*/counts","/api/v1/status-shares/*/embed").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/subscription").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/billing/checkout","/api/v1/workspaces/*/billing/portal").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/webhooks/stripe").permitAll()
                         .anyRequest().denyAll()
                 )
 
@@ -113,7 +116,7 @@ public class SecurityConfiguration {
                 )
 
                 .headers(headers -> headers.frameOptions(f -> f.disable()).addHeaderWriter(new com.ayaantrix.collector.visibility.security.ShareFrameHeaders()).referrerPolicy(policy -> policy.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(request -> "POST".equals(request.getMethod()) && java.util.Set.of(request.getContextPath()+"/api/v1/status-shares/exchange",request.getContextPath()+"/api/v1/webhooks/email",request.getContextPath()+"/api/v1/webhooks/twilio/inbound",request.getContextPath()+"/api/v1/webhooks/twilio/status").contains(request.getRequestURI())))
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(request -> "POST".equals(request.getMethod()) && java.util.Set.of(request.getContextPath()+"/api/v1/status-shares/exchange",request.getContextPath()+"/api/v1/webhooks/stripe",request.getContextPath()+"/api/v1/webhooks/email",request.getContextPath()+"/api/v1/webhooks/twilio/inbound",request.getContextPath()+"/api/v1/webhooks/twilio/status").contains(request.getRequestURI())))
 
                 // CSRF remains enabled for future
                 // cookie-authenticated write requests.

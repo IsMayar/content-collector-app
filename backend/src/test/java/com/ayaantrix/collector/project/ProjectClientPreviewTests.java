@@ -212,7 +212,7 @@ class ProjectClientPreviewTests {
     }
     @Test void contactAndPreviewPersistAcrossRestartWithHibernateValidation() {
         var t=tenant();var p=create(t,ProjectType.WEBSITE);var contact=as(t.actor(),()->clients().createContact(t.workspace(),p.id(),new com.ayaantrix.collector.project.dto.ProjectClientDtos.ContactCreate(t.client(),"Synthetic","restart@example.test",NOW.plusSeconds(86400))));var preview=as(t.actor(),()->clients().preview(t.workspace(),p.id()));context.close();open();
-        assertThat(as(t.actor(),()->clients().contacts(t.workspace(),p.id()))).containsExactly(contact);assertThat(as(t.actor(),()->clients().preview(t.workspace(),p.id()))).isEqualTo(preview);assertThat(context.getBean(Flyway.class).info().applied()).hasSize(25);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+        assertThat(as(t.actor(),()->clients().contacts(t.workspace(),p.id()))).containsExactly(contact);assertThat(as(t.actor(),()->clients().preview(t.workspace(),p.id()))).isEqualTo(preview);assertThat(context.getBean(Flyway.class).info().applied()).hasSize(26);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
     }
     @Test void anonymousCsrfCrossTenantRevocationAndUnsupportedRoutesRemainClosed() throws Exception {
         var t=tenant();var p=create(t,ProjectType.WEBSITE);String root=projectRoot(t,p);var other=tenant();
@@ -250,6 +250,6 @@ class ProjectClientPreviewTests {
         data.update("insert into collector.workspaces(id,name,timezone) values(?,'Preserved studio','UTC')",workspace);
         data.update("insert into collector.clients(id,workspace_id,business_name,contact_name,email_normalized) values(?,?,'Preserved customer','Synthetic contact','preserve@example.test')",customer,workspace);
         var before=data.queryForMap("select * from collector.clients where id=?",customer);
-        try(var upgraded=start(url)){assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(25);assertThat(data.queryForMap("select * from collector.clients where id=?",customer)).isEqualTo(before);assertThat(data.queryForObject("select count(*) from collector.project_contacts",Long.class)).isZero();}
+        try(var upgraded=start(url)){assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(26);assertThat(data.queryForMap("select * from collector.clients where id=?",customer)).isEqualTo(before);assertThat(data.queryForObject("select count(*) from collector.project_contacts",Long.class)).isZero();}
     }
 }

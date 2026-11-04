@@ -94,6 +94,12 @@ class SubmissionTests {
     static class Configuration {
         @Bean
         @Primary
+        BillingFake billingFake() {
+            return new BillingFake();
+        }
+
+        @Bean
+        @Primary
         TestClock projectClock() {
             return new TestClock();
         }
@@ -258,6 +264,7 @@ class SubmissionTests {
                 new java.util.ArrayList<String>(
                         java.util.List.of(
                                 "--server.port=0",
+                                "--collector.billing.webhook-secret=whsec_synthetic_billing",
                                 "--spring.datasource.url=" + url,
                                 "--spring.datasource.username=" + POSTGRES.getUsername(),
                                 "--spring.datasource.password=" + POSTGRES.getPassword(),
@@ -312,6 +319,10 @@ class SubmissionTests {
 
     @AfterEach
     void clear() {
+        context.getBean(BillingFake.class).snapshots.clear();
+        context.getBean(BillingFake.class).beforeReturn = () -> {};
+        context.getBean(BillingFake.class).beforeRead = () -> {};
+        context.getBean(BillingFake.class).checkoutCalls.set(0);
         SecurityContextHolder.clearContext();
         jdbc.update("update collector.digest_preferences set enabled=false");
         jdbc.update(
@@ -6376,5 +6387,504 @@ class SubmissionTests {
                 .isEqualTo("DELIVERED");
         assertThat(context.getBean(ReminderMail.class).lookups.get()).isZero();
         assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
+    }
+
+    static class BillingFake implements com.ayaantrix.collector.billing.service.BillingProvider {
+        Runnable beforeReturn = () -> {};
+        Runnable beforeRead = () -> {};
+        final Map<String, Snapshot> snapshots = new ConcurrentHashMap<>();
+        final java.util.concurrent.atomic.AtomicInteger checkoutCalls =
+                new java.util.concurrent.atomic.AtomicInteger();
+
+        public String customer(UUID w) {
+            return "cus_" + w.toString().replace("-", "");
+        }
+
+        public String checkout(UUID w, UUID op, String customer, PlanKey plan) {
+            checkoutCalls.incrementAndGet();
+            beforeReturn.run();
+            return "https://checkout.stripe.com/c/pay/" + op;
+        }
+
+        public String portal(UUID w, UUID op, String customer) {
+            return "https://billing.stripe.com/p/session/" + op;
+        }
+
+        public Snapshot current(String customer) {
+            var snapshot = snapshots.get(customer);
+            beforeRead.run();
+            return snapshot;
+        }
+    }
+
+    com.ayaantrix.collector.billing.service.BillingService billing() {
+        return context.getBean(com.ayaantrix.collector.billing.service.BillingService.class);
+    }
+
+    String billingCheckout(Tenant t, String key) {
+        return as(t.actor(), () -> billing().hosted(t.workspace(), PlanKey.AGENCY, key));
+    }
+
+    void billingSnapshot(Tenant t, String state, boolean paid) {
+        UUID operation =
+                jdbc.queryForObject(
+                        "select id from collector.billing_operations where workspace_id=? and"
+                                + " kind='CHECKOUT'",
+                        UUID.class,
+                        t.workspace());
+        String customer = context.getBean(BillingFake.class).customer(t.workspace());
+        context.getBean(BillingFake.class)
+                .snapshots
+                .put(
+                        customer,
+                        new com.ayaantrix.collector.billing.service.BillingProvider.Snapshot(
+                                "sub_synthetic",
+                                t.workspace(),
+                                operation,
+                                PlanKey.AGENCY,
+                                state,
+                                NOW,
+                                NOW.plus(Duration.ofDays(30)),
+                                false,
+                                paid));
+        jdbc.update(
+                "update collector.billing_accounts set next_reconcile_at=? where workspace_id=?",
+                java.sql.Timestamp.from(context.getBean(TestClock.class).instant()),
+                t.workspace());
+    }
+
+    String billingSignature(String body, Instant when) throws Exception {
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(
+                new javax.crypto.spec.SecretKeySpec(
+                        "whsec_synthetic_billing".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        "HmacSHA256"));
+        return "t="
+                + when.getEpochSecond()
+                + ",v1="
+                + HexFormat.of()
+                        .formatHex(
+                                mac.doFinal(
+                                        (when.getEpochSecond() + "." + body)
+                                                .getBytes(
+                                                        java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void billingHostedIsIdempotentEncryptedAndCannotActivateSubscription() {
+        var t = tenant();
+        String key = UUID.randomUUID().toString();
+        String first = billingCheckout(t, key);
+        assertThat(billingCheckout(t, key)).isEqualTo(first);
+        assertThat(context.getBean(BillingFake.class).checkoutCalls).hasValue(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("TRIALING");
+        assertThat(
+                        new String(
+                                jdbc.queryForObject(
+                                        "select encrypted_url from collector.billing_operations"
+                                                + " where workspace_id=?",
+                                        byte[].class,
+                                        t.workspace()),
+                                java.nio.charset.StandardCharsets.UTF_8))
+                .doesNotContain(first);
+        assertThatThrownBy(() -> billingCheckout(t, UUID.randomUUID().toString()))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void billingOwnerOnlyTenantIsolationCsrfAndDefaultDeny() throws Exception {
+        var t = tenant();
+        var outsider = actor();
+        var member = actor();
+        jdbc.update(
+                "insert into collector.workspace_members(workspace_id,user_id,role)"
+                        + " values(?,?,'MEMBER')",
+                t.workspace(),
+                member.id());
+        for (var actor : List.of(member, outsider)) {
+            mvc.perform(
+                            get(t.root() + "/subscription")
+                                    .header("Authorization", "Bearer " + actor.access()))
+                    .andExpect(status().is4xxClientError());
+            mvc.perform(
+                            post(t.root() + "/billing/checkout")
+                                    .with(csrf().asHeader())
+                                    .header("Authorization", "Bearer " + actor.access())
+                                    .header("Idempotency-Key", UUID.randomUUID())
+                                    .contentType("application/json")
+                                    .content("{\"planKey\":\"SOLO\"}"))
+                    .andExpect(status().is4xxClientError());
+        }
+        mvc.perform(
+                        post(t.root() + "/billing/checkout")
+                                .header("Authorization", bearer(t))
+                                .header("Idempotency-Key", UUID.randomUUID())
+                                .contentType("application/json")
+                                .content("{\"planKey\":\"SOLO\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(t.root() + "/subscription").header("Authorization", bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.subscription.state").value("TRIALING"))
+                .andExpect(jsonPath("$.entitlements.planKey").exists());
+        assertThat(count(t, "billing_operations")).isZero();
+    }
+
+    @Test
+    void billingSignedEventsAreDurableDeduplicatedAndNeverTrustEventState() throws Exception {
+        var t = tenant();
+        billingCheckout(t, "signed-fixture");
+        String customer = context.getBean(BillingFake.class).customer(t.workspace());
+        String body =
+                "{\"id\":\"evt_T32Signed\",\"livemode\":false,\"type\":\"invoice.paid\",\"data\":{\"object\":{\"customer\":\""
+                        + customer
+                        + "\",\"status\":\"paid\"}}}";
+        for (int n = 0; n < 2; n++)
+            mvc.perform(
+                            post("/api/v1/webhooks/stripe")
+                                    .header("Stripe-Signature", billingSignature(body, NOW))
+                                    .contentType("application/json")
+                                    .content(body))
+                    .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.billing_events where"
+                                        + " event_id='evt_T32Signed'",
+                                Long.class))
+                .isEqualTo(1);
+        billing().reconcile(t.workspace());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("TRIALING");
+        for (String signature :
+                List.of("t=0,v1=" + "0".repeat(64), billingSignature(body, NOW.minusSeconds(301))))
+            mvc.perform(
+                            post("/api/v1/webhooks/stripe")
+                                    .header("Stripe-Signature", signature)
+                                    .contentType("application/json")
+                                    .content(body))
+                    .andExpect(status().isBadRequest());
+        String changed = body.replace("invoice.paid", "invoice.payment_failed");
+        mvc.perform(
+                        post("/api/v1/webhooks/stripe")
+                                .header("Stripe-Signature", billingSignature(changed, NOW))
+                                .contentType("application/json")
+                                .content(changed))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void billingReconciliationUsesCurrentProviderAndAuditsOnlyChangedState() throws Exception {
+        var t = tenant();
+        billingCheckout(t, "reconcile-fixture");
+        billingSnapshot(t, "active", true);
+        long audits = count(t, "audit_logs");
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var a = pool.submit(() -> billing().reconcile(t.workspace()));
+            var b = pool.submit(() -> billing().reconcile(t.workspace()));
+            a.get(10, TimeUnit.SECONDS);
+            b.get(10, TimeUnit.SECONDS);
+        }
+        assertThat(count(t, "audit_logs")).isEqualTo(audits + 1);
+        assertThat(
+                        as(
+                                        t.actor(),
+                                        () ->
+                                                context.getBean(WorkspaceService.class)
+                                                        .read(t.workspace())
+                                                        .entitlements())
+                                .planKey())
+                .isEqualTo(PlanKey.AGENCY);
+        billingSnapshot(t, "active", true);
+        billing().reconcile(t.workspace());
+        assertThat(count(t, "audit_logs")).isEqualTo(audits + 1);
+        // An old failure event cannot regress the provider's currently paid subscription.
+        String body =
+                "{\"id\":\"evt_T32Old\",\"type\":\"invoice.payment_failed\",\"data\":{\"object\":{\"customer\":\""
+                        + context.getBean(BillingFake.class).customer(t.workspace())
+                        + "\"}}}";
+        mvc.perform(
+                        post("/api/v1/webhooks/stripe")
+                                .header("Stripe-Signature", billingSignature(body, NOW))
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isOk());
+        billing().reconcile(t.workspace());
+        assertThat(count(t, "audit_logs")).isEqualTo(audits + 1);
+        assertThat(as(t.actor(), () -> billing().read(t.workspace())).toString())
+                .contains("ACTIVE");
+    }
+
+    @Test
+    void billingGraceIsClockBoundAndDuplicateFailuresCannotExtendIt() {
+        var t = tenant();
+        billingCheckout(t, "grace-fixture");
+        billingSnapshot(t, "active", true);
+        billing().reconcile(t.workspace());
+        context.getBean(TestClock.class).time = NOW.plus(Duration.ofDays(30));
+        billingSnapshot(t, "past_due", false);
+        billing().reconcile(t.workspace());
+        var original =
+                jdbc.queryForObject(
+                        "select grace_ends_at from collector.subscriptions where workspace_id=?",
+                        java.sql.Timestamp.class,
+                        t.workspace());
+        context.getBean(TestClock.class).time = NOW.plus(Duration.ofDays(36));
+        billingSnapshot(t, "past_due", false);
+        billing().reconcile(t.workspace());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select grace_ends_at from collector.subscriptions where"
+                                        + " workspace_id=?",
+                                java.sql.Timestamp.class,
+                                t.workspace()))
+                .isEqualTo(original);
+        context.getBean(TestClock.class).time = NOW.plus(Duration.ofDays(37));
+        Boolean writable =
+                tx().execute(
+                                status ->
+                                        context.getBean(
+                                                        com.ayaantrix.collector.workspace.repository
+                                                                .WorkspaceSubscriptionRepository
+                                                                .class)
+                                                .findByWorkspaceId(t.workspace())
+                                                .orElseThrow()
+                                                .writable(
+                                                        context.getBean(TestClock.class)
+                                                                .instant()));
+        assertThat(writable).isFalse();
+        billingSnapshot(t, "past_due", false);
+        billing().reconcile(t.workspace());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("READ_ONLY");
+    }
+
+    @Test
+    void billingInvalidProviderBindingRollsBackAndRetriesWithoutGrantingPlan() {
+        var t = tenant();
+        billingCheckout(t, "binding-fixture");
+        billingSnapshot(t, "active", true);
+        String customer = context.getBean(BillingFake.class).customer(t.workspace());
+        var valid = context.getBean(BillingFake.class).snapshots.get(customer);
+        context.getBean(BillingFake.class)
+                .snapshots
+                .put(
+                        customer,
+                        new com.ayaantrix.collector.billing.service.BillingProvider.Snapshot(
+                                valid.id(),
+                                UUID.randomUUID(),
+                                valid.checkout(),
+                                valid.plan(),
+                                valid.state(),
+                                valid.start(),
+                                valid.end(),
+                                false,
+                                true));
+        long audits = count(t, "audit_logs");
+        assertThatThrownBy(() -> billing().reconcile(t.workspace()))
+                .isInstanceOf(ApiException.class);
+        assertThat(count(t, "audit_logs")).isEqualTo(audits);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("TRIALING");
+        billing().tick();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select failure_code from collector.billing_accounts where"
+                                        + " workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("BILLING_RECONCILIATION_FAILED");
+        context.getBean(BillingFake.class).snapshots.put(customer, valid);
+        context.getBean(TestClock.class).time = NOW.plusSeconds(301);
+        billing().tick();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void billingPortalRecoveryAndExpiredCapabilitiesDoNotChangeEntitlements() {
+        var t = tenant();
+        String key = "expiry-fixture";
+        billingCheckout(t, key);
+        jdbc.update(
+                "update collector.subscriptions set state='READ_ONLY' where workspace_id=?",
+                t.workspace());
+        assertThat(as(t.actor(), () -> billing().hosted(t.workspace(), null, "portal-fixture")))
+                .startsWith("https://billing.stripe.com/");
+        context.getBean(TestClock.class).time = NOW.plusSeconds(181);
+        assertThatThrownBy(
+                        () ->
+                                as(
+                                        t.actor(),
+                                        () ->
+                                                billing()
+                                                        .hosted(
+                                                                t.workspace(),
+                                                                null,
+                                                                "portal-fixture")))
+                .isInstanceOf(ApiException.class);
+        billing().tick();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.billing_operations where"
+                                    + " workspace_id=? and kind='PORTAL' and encrypted_url is not"
+                                    + " null",
+                                Integer.class,
+                                t.workspace()))
+                .isZero();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("READ_ONLY");
+    }
+
+    @Test
+    void billingRestartPreservesQueuedEventsCustomerAndEncryptedSession() throws Exception {
+        var t = tenant();
+        String key = "restart-fixture";
+        String hosted = billingCheckout(t, key);
+        String customer = context.getBean(BillingFake.class).customer(t.workspace());
+        String body =
+                "{\"id\":\"evt_T32Restart\",\"livemode\":false,\"type\":\"checkout.session.completed\",\"data\":{\"object\":{\"customer\":\""
+                        + customer
+                        + "\"}}}";
+        mvc.perform(
+                        post("/api/v1/webhooks/stripe")
+                                .header("Stripe-Signature", billingSignature(body, NOW))
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isOk());
+        context.close();
+        open();
+        assertThat(billingCheckout(t, key)).isEqualTo(hosted);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select processed_at is null from collector.billing_events where"
+                                        + " event_id='evt_T32Restart'",
+                                Boolean.class))
+                .isTrue();
+        billingSnapshot(t, "active", true);
+        billing().tick();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select processed_at is not null from collector.billing_events"
+                                        + " where event_id='evt_T32Restart'",
+                                Boolean.class))
+                .isTrue();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void billingRevokedOwnerCannotReceiveHostedCapabilityAfterProviderCall() {
+        var t = tenant();
+        context.getBean(BillingFake.class).beforeReturn =
+                () ->
+                        jdbc.update(
+                                "update collector.workspace_members set state='DISABLED' where"
+                                        + " workspace_id=? and user_id=?",
+                                t.workspace(),
+                                t.actor().id());
+        assertThatThrownBy(() -> billingCheckout(t, "revoked-fixture"))
+                .isInstanceOf(ApiException.class);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select encrypted_url is null from collector.billing_operations"
+                                        + " where workspace_id=?",
+                                Boolean.class,
+                                t.workspace()))
+                .isTrue();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("TRIALING");
+    }
+
+    @Test
+    void billingExpiredWorkerLeaseCannotOverwriteNewerReconciliation() {
+        var t = tenant();
+        billingCheckout(t, "lease-fixture");
+        billingSnapshot(t, "active", true);
+        var fake = context.getBean(BillingFake.class);
+        long audits = count(t, "audit_logs");
+        fake.beforeRead =
+                () -> {
+                    fake.beforeRead = () -> {};
+                    context.getBean(TestClock.class).time = NOW.plusSeconds(61);
+                    billingSnapshot(t, "canceled", false);
+                    billing().reconcile(t.workspace());
+                };
+        billing().reconcile(t.workspace());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.subscriptions where workspace_id=?",
+                                String.class,
+                                t.workspace()))
+                .isEqualTo("READ_ONLY");
+        assertThat(count(t, "audit_logs")).isEqualTo(audits + 1);
+    }
+
+    @Test
+    void billingWebhookDuringProviderReadRemainsQueuedForNextRead() throws Exception {
+        var t = tenant();
+        billingCheckout(t, "watermark-fixture");
+        billingSnapshot(t, "active", true);
+        String customer = context.getBean(BillingFake.class).customer(t.workspace());
+        String body =
+                "{\"id\":\"evt_T32Watermark\",\"livemode\":false,\"type\":\"invoice.payment_failed\",\"data\":{\"object\":{\"customer\":\""
+                        + customer
+                        + "\"}}}";
+        String signature = billingSignature(body, NOW);
+        var fake = context.getBean(BillingFake.class);
+        fake.beforeRead =
+                () -> {
+                    fake.beforeRead = () -> {};
+                    context.getBean(com.ayaantrix.collector.billing.security.StripeWebhook.class)
+                            .receive(
+                                    body.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                                    signature);
+                };
+        billing().reconcile(t.workspace());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select processed_at is null from collector.billing_events where"
+                                    + " event_id='evt_T32Watermark'",
+                                Boolean.class))
+                .isTrue();
+        billing().reconcile(t.workspace());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select processed_at is not null from collector.billing_events"
+                                    + " where event_id='evt_T32Watermark'",
+                                Boolean.class))
+                .isTrue();
     }
 }

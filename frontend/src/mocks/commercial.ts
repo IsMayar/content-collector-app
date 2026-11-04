@@ -478,7 +478,14 @@ registerProductResolver((request, path, _search, body) => {
       logo: w.logo,
       digestEnabled: w.digestEnabled,
     })
-  if (resource === 'subscription') return response(w.subscription)
+  if (resource === 'subscription')
+    return response({
+      subscription: w.subscription,
+      entitlements: {
+        planKey: w.subscription.planKey,
+        seats: w.usage.seatsLimit,
+      },
+    })
   if (resource === 'usage') return response(w.usage)
   if (resource === 'billing' && ['checkout', 'portal'].includes(pid)) {
     requireRule(
