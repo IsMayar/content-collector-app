@@ -18,12 +18,12 @@ export function SettingsNav({ active }: { active: string }) {
       {[
         ...(owner ? [['workspace', `${base}/settings`, 'Workspace']] : []),
         ['account', `${base}/settings?view=account`, 'My account'],
+        ['digest', `${base}/settings?view=digest`, 'Daily digest'],
         ...(owner
           ? [
               ['billing', `${base}/billing`, 'Billing'],
               ['usage', `${base}/billing?view=usage`, 'Usage'],
               ['privacy', `${base}/settings?view=privacy`, 'Data & privacy'],
-              ['digest', `${base}/settings?view=digest`, 'Daily digest'],
             ]
           : []),
       ].map(([key, to, label]) => (

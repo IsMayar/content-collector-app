@@ -532,9 +532,9 @@ describe('review, exports and AI', () => {
       },
     )
     const { readToken } = await json<{ readToken: string }>(
-      `status-shares/${share.shareId}/exchange`,
+      `status-shares/exchange`,
       'POST',
-      { token: share.fragmentToken },
+      { shareId: share.shareId, token: share.fragmentToken },
       false,
     )
     const response = await fetch(
@@ -760,4 +760,21 @@ describe('structure error recovery contract', () => {
       errorMessage({ status: 409, data: { code: 'REOPEN_REQUIRED' } }),
     ).toContain('review workflow')
   })
+})
+
+it('includes digest optional submissions in pending review counts', async () => {
+  login()
+  const r = productDb.projects[demoProjectId]
+  r.project.state = 'ACTIVE'
+  const items = r.structure.flatMap((s) => s.items)
+  for (const item of items) item.state = 'NOT_STARTED'
+  items[0].required = false
+  items[0].state = 'SUBMITTED'
+  const preview = await json<{
+    projects: { url: string; awaitingReview: number }[]
+  }>(`workspaces/${agencyId}/digest-preview`)
+  expect(
+    preview.projects.find((project) => project.url.endsWith(demoProjectId))
+      ?.awaitingReview,
+  ).toBe(1)
 })

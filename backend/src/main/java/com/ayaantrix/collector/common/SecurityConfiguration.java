@@ -90,6 +90,12 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects/*/exports","/api/v1/workspaces/*/projects/*/exports/*/download").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/client/projects/*/items/*/ai-drafts","/api/v1/client/projects/*/ai-drafts/*/accept").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/client/projects/*/ai-drafts/*").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/projects/*/status-shares").authenticated()
+                        .requestMatchers(HttpMethod.DELETE,"/api/v1/workspaces/*/projects/*/status-shares/*").authenticated()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/digest-preferences","/api/v1/workspaces/*/digest-preview").authenticated()
+                        .requestMatchers(HttpMethod.PUT,"/api/v1/workspaces/*/digest-preferences").authenticated()
+                        .requestMatchers(HttpMethod.POST,"/api/v1/status-shares/exchange").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/status-shares/*/counts","/api/v1/status-shares/*/embed").permitAll()
                         .anyRequest().denyAll()
                 )
 
@@ -106,8 +112,8 @@ public class SecurityConfiguration {
                         )
                 )
 
-                .headers(headers -> headers.referrerPolicy(policy -> policy.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(request -> "POST".equals(request.getMethod()) && java.util.Set.of(request.getContextPath()+"/api/v1/webhooks/email",request.getContextPath()+"/api/v1/webhooks/twilio/inbound",request.getContextPath()+"/api/v1/webhooks/twilio/status").contains(request.getRequestURI())))
+                .headers(headers -> headers.frameOptions(f -> f.disable()).addHeaderWriter(new com.ayaantrix.collector.visibility.security.ShareFrameHeaders()).referrerPolicy(policy -> policy.policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)))
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository).ignoringRequestMatchers(request -> "POST".equals(request.getMethod()) && java.util.Set.of(request.getContextPath()+"/api/v1/status-shares/exchange",request.getContextPath()+"/api/v1/webhooks/email",request.getContextPath()+"/api/v1/webhooks/twilio/inbound",request.getContextPath()+"/api/v1/webhooks/twilio/status").contains(request.getRequestURI())))
 
                 // CSRF remains enabled for future
                 // cookie-authenticated write requests.

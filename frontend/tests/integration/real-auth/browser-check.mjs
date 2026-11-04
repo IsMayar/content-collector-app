@@ -1389,6 +1389,207 @@ async function command(input) {
       ).toBeVisible()
       break
     }
+    case 'visibility-create': {
+      await page.goto(
+        origin + '/app/w/' + settings.workspace + '/settings?view=digest',
+      )
+      await page
+        .getByRole('switch', { name: 'Receive my daily digest', exact: true })
+        .check()
+      const saved = page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname.endsWith('/digest-preferences') &&
+          res.request().method() === 'PUT',
+      )
+      await page
+        .getByRole('button', { name: 'Save digest settings', exact: true })
+        .click()
+      assert.equal((await saved).status(), 200)
+      await expect(
+        page.getByText('Daily digest preference saved.', { exact: true }),
+      ).toBeVisible()
+      await page.goto(
+        origin +
+          '/app/w/' +
+          settings.workspace +
+          '/projects/' +
+          settings.previewProject +
+          '?tab=analytics',
+      )
+      await page
+        .getByRole('button', { name: 'Counts-only status share', exact: true })
+        .click()
+      await page
+        .getByLabel('Public alias', { exact: true })
+        .fill('Project Evergreen')
+      await page
+        .getByLabel('Allowed embed origins (one HTTPS origin per line)')
+        .fill(origin)
+      const issued = page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname.endsWith('/status-shares') &&
+          res.request().method() === 'POST',
+      )
+      await page
+        .getByRole('button', { name: 'Create counts-only share', exact: true })
+        .click()
+      const result = await issued
+      assert.equal(result.status(), 201)
+      settings.statusShare = await result.json()
+      assert.ok(settings.statusShare.url.includes('#token='))
+      await expect(
+        page.getByRole('link', {
+          name: 'Open counts-only status link',
+          exact: true,
+        }),
+      ).toBeVisible()
+      break
+    }
+    case 'visibility-public': {
+      const share = settings.statusShare
+      const publicContext = await browser.newContext({
+        ignoreHTTPSErrors: true,
+      })
+      const publicPage = await publicContext.newPage()
+      observe(publicPage)
+      let attached = false
+      publicPage.on('request', (request) => {
+        if (
+          new URL(request.url()).pathname.startsWith(
+            '/api/v1/status-shares/',
+          ) &&
+          request.headers().authorization
+        )
+          attached = true
+      })
+      try {
+        phase = 'visibility-public:open'
+        await publicPage.goto(new URL(share.url, origin).href)
+        await expect.poll(() => new URL(publicPage.url()).hash).toBe('')
+        phase = 'visibility-public:counts'
+        const countsResponse = publicPage.waitForResponse((res) =>
+          new URL(res.url()).pathname.endsWith('/counts'),
+        )
+        await publicPage
+          .getByRole('button', { name: 'View shared status', exact: true })
+          .click()
+        const counts = await countsResponse
+        assert.equal(counts.status(), 200)
+        const result = await counts.json()
+        assert.deepEqual(
+          Object.keys(result).sort(),
+          [
+            'alias',
+            'approved',
+            'submitted',
+            'requiredTotal',
+            'updatedAt',
+          ].sort(),
+        )
+        await expect(
+          publicPage.getByRole('heading', {
+            name: 'Project Evergreen',
+            exact: true,
+          }),
+        ).toBeVisible()
+        assert.ok(!attached)
+        assert.equal(
+          await publicPage.evaluate(
+            (token) =>
+              JSON.stringify([
+                Object.entries(localStorage),
+                Object.entries(sessionStorage),
+              ]).includes(token),
+            share.fragmentToken,
+          ),
+          false,
+        )
+        phase = 'visibility-public:approved-embed'
+        const embed =
+          origin +
+          '/api/v1/status-shares/' +
+          share.shareId +
+          '/embed#token=' +
+          share.fragmentToken
+        const headers = await publicPage.request.get(embed.split('#')[0])
+        assert.ok(
+          (headers.headers()['content-security-policy'] || '').includes(
+            'frame-ancestors ' + origin,
+          ),
+        )
+        assert.equal(headers.headers()['x-frame-options'], undefined)
+        await publicPage.evaluate((src) => {
+          const frame = document.createElement('iframe')
+          frame.id = 'approved-status'
+          frame.src = src
+          document.body.append(frame)
+        }, embed)
+        const frame = publicPage.frameLocator('#approved-status')
+        await frame
+          .getByRole('button', { name: 'View shared status', exact: true })
+          .click()
+        await expect(frame.getByRole('status')).toContainText(
+          'Project Evergreen',
+        )
+        phase = 'visibility-public:denied-embed'
+        const other = new URL(origin)
+        other.hostname =
+          other.hostname === 'localhost' ? '127.0.0.1' : 'localhost'
+        const deniedPage = await publicContext.newPage()
+        await deniedPage.goto(other.href)
+        const denied = deniedPage.waitForEvent('console', {
+          predicate: (message) => message.text().includes('frame-ancestors'),
+        })
+        await deniedPage.evaluate((src) => {
+          const f = document.createElement('iframe')
+          f.id = 'denied-status'
+          f.src = src
+          document.body.append(f)
+        }, embed)
+        await denied
+        await expect(
+          deniedPage
+            .frameLocator('#denied-status')
+            .getByRole('button', { name: 'View shared status', exact: true }),
+        ).toHaveCount(0)
+        await deniedPage.close()
+        const privateHeaders = await publicPage.request.get(
+          origin +
+            '/app/w/' +
+            settings.workspace +
+            '/projects/' +
+            settings.previewProject,
+        )
+        assert.equal(privateHeaders.headers()['x-frame-options'], 'DENY')
+        phase = 'visibility-public:revoke'
+        assert.equal((await run('me')).status, 200)
+        const revoked = page.waitForResponse(
+          (res) =>
+            new URL(res.url()).pathname.endsWith(
+              '/status-shares/' + share.shareId,
+            ) && res.request().method() === 'DELETE',
+        )
+        await page
+          .getByRole('button', { name: 'Revoke share', exact: true })
+          .click()
+        assert.equal((await revoked).status(), 204)
+        await publicPage
+          .getByRole('button', { name: 'Refresh counts', exact: true })
+          .click()
+        await expect(publicPage.getByRole('alert')).toContainText(
+          'unavailable, revoked or expired',
+        )
+        await expect(
+          publicPage.getByRole('heading', {
+            name: 'Project Evergreen',
+            exact: true,
+          }),
+        ).toHaveCount(0)
+      } finally {
+        await publicContext.close()
+      }
+      break
+    }
     case 'client-draft-collection': {
       const root = 'client/projects/' + settings.previewProject
       phase = 'client-drafts:setup'

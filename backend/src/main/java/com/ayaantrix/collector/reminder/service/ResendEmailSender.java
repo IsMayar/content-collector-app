@@ -72,7 +72,9 @@ public class ResendEmailSender implements EmailSender {
                                                             List.of(
                                                                     Map.of(
                                                                             "name",
-                                                                            "collector_delivery_id",
+                                                                            m.digest()
+                                                                                    ? "collector_digest_id"
+                                                                                    : "collector_delivery_id",
                                                                             "value",
                                                                             m.deliveryId()
                                                                                     .toString()))))))

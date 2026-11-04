@@ -19,6 +19,7 @@ import java.util.*;
 
 @RestController
 public class EmailWebhookController {
+    private final com.ayaantrix.collector.visibility.service.DigestService digests;
     private final byte[] key;
     private final String canonical;
     private final ReminderRepository repo;
@@ -33,11 +34,13 @@ public class EmailWebhookController {
             @Value("${collector.reminders.webhook-secret:}") String secret,
             @Value("${collector.reminders.webhook-url:}") String canonical,
             ReminderRepository repo,
+            com.ayaantrix.collector.visibility.service.DigestService digests,
             JsonMapper json,
             Clock clock,
             com.ayaantrix.collector.reminder.service.DeliveryReconciliationService reconciliation,
             com.ayaantrix.collector.workspace.repository.WorkspaceRepository workspaces,
             com.ayaantrix.collector.project.repository.ProjectRepository projects) {
+        this.digests = digests;
         this.workspaces = workspaces;
         this.reconciliation = reconciliation;
         this.projects = projects;
@@ -108,27 +111,20 @@ public class EmailWebhookController {
             if (provider.isBlank() || provider.length() > 200 || type.length() > 80)
                 throw new IllegalArgumentException();
             var data = payload.path("data");
-            String tagged = null;
-            var tags = data.path("tags");
-            if (tags.isObject()) tagged = tags.path("collector_delivery_id").asString(null);
-            else if (tags.isArray())
-                for (var tag : tags)
-                    if (tag.path("name").asString().equals("collector_delivery_id")) {
-                        if (tagged != null) throw new IllegalArgumentException();
-                        tagged = tag.path("value").asString();
-                    }
+            String tagged = tag(data.path("tags"), "collector_delivery_id");
+            String digest = tag(data.path("tags"), "collector_digest_id");
+            if (tagged != null && digest != null) throw new IllegalArgumentException();
             UUID attempt = tagged == null ? null : UUID.fromString(tagged);
             String recipient =
                     data.path("to").isArray() && data.path("to").size() == 1
                             ? data.path("to").get(0).asString()
                             : null;
-            reconciliation.evidence(
-                    attempt,
-                    "EMAIL",
-                    provider,
-                    recipient,
+            String state =
                     com.ayaantrix.collector.reminder.service.DeliveryReconciliationService
-                            .normalized("EMAIL", type));
+                            .normalized("EMAIL", type);
+            if (digest != null)
+                digests.receipt(UUID.fromString(digest), provider, recipient, state);
+            else reconciliation.evidence(attempt, "EMAIL", provider, recipient, state);
             repo.provider(provider)
                     .ifPresent(
                             d -> {
@@ -142,10 +138,23 @@ public class EmailWebhookController {
                     type,
                     occurred,
                     clock.instant());
+            if (digest != null) digests.reconcile(UUID.fromString(digest));
             return Map.of("accepted", true);
         } catch (IllegalArgumentException e) {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Invalid webhook event.");
         }
+    }
+
+    private static String tag(tools.jackson.databind.JsonNode tags, String name) {
+        String result = null;
+        if (tags.isObject()) return tags.path(name).asString(null);
+        if (tags.isArray())
+            for (var tag : tags)
+                if (tag.path("name").asString().equals(name)) {
+                    if (result != null) throw new IllegalArgumentException();
+                    result = tag.path("value").asString();
+                }
+        return result;
     }
 }

@@ -15,7 +15,33 @@ export default defineConfig(({ mode, command }) => {
           : 'false',
       ),
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'private-page-security',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (!req.url?.startsWith('/api/')) {
+              res.setHeader('X-Frame-Options', 'DENY')
+              res.setHeader('Content-Security-Policy', "frame-ancestors 'none'")
+              res.setHeader('Referrer-Policy', 'no-referrer')
+            }
+            next()
+          })
+        },
+        configurePreviewServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (!req.url?.startsWith('/api/')) {
+              res.setHeader('X-Frame-Options', 'DENY')
+              res.setHeader('Content-Security-Policy', "frame-ancestors 'none'")
+              res.setHeader('Referrer-Policy', 'no-referrer')
+            }
+            next()
+          })
+        },
+      },
+    ],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },

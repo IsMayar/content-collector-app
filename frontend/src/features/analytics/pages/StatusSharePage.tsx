@@ -1,89 +1,95 @@
-import { apiBaseUrl } from '@/services/api/baseQuery'
 import {
-  Badge,
-  ErrorNotice,
-  Heading,
-  Panel,
-} from '@/shared/components/ProductUI'
-import { useCommand } from '@/shared/hooks/useCommand'
-import { useState } from 'react'
-import { useParams } from 'react-router'
-
+  useExchangeStatusMutation,
+  useLazyStatusCountsQuery,
+  statusApi,
+} from '../api/statusApi'
+import { useAppDispatch } from '@/shared/hooks/useAppStore'
+import { Heading, Panel } from '@/shared/components/ProductUI'
+import { useEffect, useState } from 'react'
+import { useLocation, useParams } from 'react-router'
+export function captureStatusFragment(sourceHash = window.location.hash) {
+  const token = new URLSearchParams(sourceHash.slice(1)).get('token') || ''
+  if (window.location.hash)
+    history.replaceState(
+      null,
+      '',
+      window.location.pathname + window.location.search,
+    )
+  return token
+}
 export function StatusSharePage() {
-  const { shareId } = useParams()
-  const [token] = useState(
-    () => new URLSearchParams(window.location.hash.slice(1)).get('token') || '',
-  )
+  const { shareId = '' } = useParams()
+  const location = useLocation()
+  const [capability] = useState(() => captureStatusFragment(location.hash))
   const [readToken, setReadToken] = useState('')
-  const [error, setError] = useState('')
-  const [data, setData] = useState<{
-    alias: string
-    state: string
-    progress: import('@/features/projects/types/project.types').Progress
-  }>()
-  const command = useCommand(true)
+  const [data, setData] =
+    useState<
+      import('zod').infer<typeof import('../api/statusApi').statusCounts>
+    >()
+  const [message, setMessage] = useState('')
+  const [exchange, exchangeState] = useExchangeStatusMutation()
+  const [counts, countsState] = useLazyStatusCountsQuery()
+  const dispatch = useAppDispatch()
+  useEffect(
+    () => () => {
+      dispatch(statusApi.util.resetApiState())
+    },
+    [dispatch],
+  )
+  async function open() {
+    setData(undefined)
+    setMessage('')
+    try {
+      let token = readToken
+      if (!token) {
+        const result = await exchange({ shareId, token: capability }).unwrap()
+        token = result.readToken
+        setReadToken(token)
+        exchangeState.reset()
+      }
+      setData(await counts({ shareId, readToken: token }, false).unwrap())
+    } catch {
+      setReadToken('')
+      setMessage(
+        'This status link is unavailable, revoked or expired. Request a new link from its owner.',
+      )
+    }
+  }
   return (
     <div className="narrow-product">
       <Heading
         eyebrow="COUNTS-ONLY PROJECT STATUS"
-        title={data?.alias || 'A shared view of progress'}
-        description="A small window into how the project is moving."
+        title={data?.alias || 'Shared project progress'}
+        description="Read-only aggregate counts. No private project content."
       />
-      {!readToken ? (
-        <button
-          className="primary-button"
-          onClick={async () => {
-            const result = await command.run<{ readToken: string }>(
-              `status-shares/${shareId}/exchange`,
-              { token },
-            )
-            if (result) {
-              history.replaceState(null, '', window.location.pathname)
-              setReadToken(result.readToken)
-              try {
-                const base = new URL(
-                  apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`,
-                  window.location.origin,
-                )
-                const response = await fetch(
-                  new URL(`status-shares/${shareId}/counts`, base),
-                  {
-                    headers: { 'X-Status-Token': result.readToken },
-                    cache: 'no-store',
-                  },
-                )
-                if (!response.ok) throw Error('This share is unavailable.')
-                setData(await response.json())
-              } catch (e) {
-                setError(String(e))
-              }
-            }
-          }}
-        >
-          View shared status
-        </button>
-      ) : null}
-      <ErrorNotice error={command.error || error} />
+      <button
+        className="primary-button"
+        disabled={exchangeState.isLoading || countsState.isFetching || !shareId}
+        onClick={() => void open()}
+      >
+        {readToken ? 'Refresh counts' : 'View shared status'}
+      </button>
+      {message && <p role="alert">{message}</p>}
       {data && (
         <Panel>
-          <Badge>{data.state}</Badge>
-          <div className="dual-progress">
+          <div className="report-metrics">
             {[
-              ['Submitted', data.progress.submittedRequired],
-              ['Approved', data.progress.approvedRequired],
-            ].map(([label, count]) => (
-              <div key={label}>
-                <strong>
-                  {label}: {count}/{data.progress.requiredTotal}
-                </strong>
-                <progress
-                  value={Number(count)}
-                  max={data.progress.requiredTotal || 1}
-                  aria-label={String(label)}
-                />
-              </div>
+              ['Required', data.requiredTotal],
+              ['Submitted', data.submitted],
+              ['Approved', data.approved],
+            ].map(([label, value]) => (
+              <article key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </article>
             ))}
           </div>
+          <p>
+            Updated{' '}
+            <time dateTime={data.updatedAt}>
+              {new Date(data.updatedAt).toLocaleString()}
+            </time>
+          </p>
         </Panel>
       )}
     </div>

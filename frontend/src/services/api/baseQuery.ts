@@ -94,6 +94,7 @@ export function refreshSession(api: BaseQueryApi): Promise<boolean> {
 export const createBaseQuery =
   (
     agency = false,
+    publicStatus = false,
   ): BaseQueryFn<
     string | FetchArgs,
     unknown,
@@ -105,10 +106,21 @@ export const createBaseQuery =
     const request: FetchArgs =
       typeof args === 'string' ? { url: args } : { ...args }
     request.method = (request.method || 'GET').toUpperCase()
+    if (publicStatus) {
+      if (!request.url.startsWith('status-shares/'))
+        return {
+          error: {
+            status: 'CUSTOM_ERROR',
+            error: 'Invalid public status route.',
+          },
+        }
+      request.credentials = 'omit'
+    }
     const headers = new Headers(request.headers as HeadersInit | undefined)
     if (agency && auth(api).accessToken)
       headers.set('Authorization', `Bearer ${auth(api).accessToken}`)
     if (
+      !publicStatus &&
       request.method &&
       !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
     ) {

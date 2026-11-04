@@ -1,3 +1,4 @@
+import { statusApi } from '@/features/analytics/api/statusApi'
 import clientAccessReducer, {
   clientAccessUnavailable,
 } from '@/features/client/store/clientAccessSlice'
@@ -74,11 +75,16 @@ export const createAppStore = () => {
       clientAccess: clientAccessReducer,
       [agencyApi.reducerPath]: agencyApi.reducer,
       [clientApi.reducerPath]: clientApi.reducer,
+      [statusApi.reducerPath]: statusApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware()
         .prepend(sessionListener.middleware)
-        .concat(agencyApi.middleware, clientApi.middleware),
+        .concat(
+          agencyApi.middleware,
+          clientApi.middleware,
+          statusApi.middleware,
+        ),
   })
 }
 export const store = createAppStore()

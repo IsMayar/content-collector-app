@@ -68,7 +68,9 @@ class RealAuthenticationBrowserCheck {
     private void run(boolean onboarding) throws Exception {run(onboarding,false);}
     @Test void realHttpsFrictionWithoutMocks() throws Exception {run(true,true,true);}
     private void run(boolean onboarding,boolean analyticsOnly) throws Exception {run(onboarding,analyticsOnly,false);}
-    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly) throws Exception {
+    @Test void realHttpsVisibilityWithoutMocks() throws Exception {run(true,true,false,true);}
+    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly) throws Exception {run(onboarding,analyticsOnly,frictionOnly,false);}
+    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly) throws Exception {
         String password="Synthetic browser-only password",next="Synthetic replacement browser password",email=onboarding?"browser-onboarding@example.test":"browser-only@example.test";
         String certificatePassword=UUID.randomUUID().toString();Path certificate=directory.resolve("browser.p12");
         String keytool=Path.of(System.getProperty("java.home"),"bin","keytool.exe").toString();
@@ -152,6 +154,14 @@ class RealAuthenticationBrowserCheck {
                               select ?,workspace_id,id,source_template_version_id,?,?,'item_started',?,?,? from collector.projects where id=?
                               """,UUID.randomUUID(),com.ayaantrix.collector.common.repository.IdempotencyRepository.hash(UUID.randomUUID().toString()),UUID.randomUUID(),observed,key,java.sql.Timestamp.from(clock.instant().minusSeconds(n<9?8*86400:60)),clientProject);
                             io.step(Map.of("action","friction-analytics","itemKey",key));
+                        }
+                        if(visibilityOnly){
+                            io.step(Map.of("action","visibility-create"));
+                            String digestZone=jdbc.queryForObject("select timezone from collector.workspaces where id=?",String.class,workspace);
+                            var digestLocal=clock.instant().atZone(java.time.ZoneId.of(digestZone));
+                            if(digestLocal.toLocalTime().isBefore(java.time.LocalTime.of(9,30)))clock.now.set(digestLocal.withHour(9).withMinute(30).withSecond(0).withNano(0).toInstant());
+                            var worker=app.getBean(com.ayaantrix.collector.visibility.worker.DigestWorker.class);assertThat(worker.dispatchOne()).isTrue();assertThat(worker.dispatchOne()).isFalse();assertThat(app.getBean(ReminderMailbox.class).messages).hasSize(1);assertThat(app.getBean(ReminderMailbox.class).messages.getFirst().body()).contains("Awaiting review:","/app/w/").doesNotContain("#token=","value_snapshot");
+                            io.step(Map.of("action","visibility-public"));
                         }
                         io.step(Map.of("action","stop"));return;
                     }

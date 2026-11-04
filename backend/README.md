@@ -659,3 +659,12 @@ Focused command from backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#analytics*' t
 No new runtime, provider flag or database migration. Existing agency JWT/session authorization protects project analytics; template comparisons are owner-only. Reports use the retained90-day server-timed cohort, seven-day observation windows and explicit small-sample safeguards. No history beyond retained observations is promised. Existing local startup commands remain unchanged.
 
 Focused command from backend/: `.\mvnw.cmd '-Dtest=FrictionCalculatorTests,SubmissionTests#friction*' test`. Focused HTTPS: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsFrictionWithoutMocks,SecurityConfigurationTests' verify`. [Contracts, semantics and actual evidence](../docs/T30_IMPLEMENTATION.md).
+
+
+## T31 digest and status links
+
+V25 migrates through the existing startup flow; no new runtime/dependency is needed. DIGEST_WORKER_ENABLED defaults false and cannot enable the email adapter by itself. Configure existing approved email/webhook settings and APP_BASE_URL before enabling a sandbox. Opted-in members receive at most one digest per workspace-local date after09:00, scoped again at dispatch. UNKNOWN sends are held for signed evidence/operator investigation, never blindly replayed. Existing client reminders and account/security emails are unaffected.
+
+Owners create at-most30-day counts links and retain the once-shown fragment capability. Public reads exchange it for a separate five-minute status-only JWT; private routes keep their authentication. The backend embed endpoint enforces approved exact HTTPS ancestors. Production frontend hosting must deny framing for ordinary/private pages and preserve the backend embed exception; host-specific compatibility remains unverified. [Exact APIs, configuration, tests and gates](../docs/T31_IMPLEMENTATION.md).
+
+Focused command from backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#status*+digest*' test`. HTTPS: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsVisibilityWithoutMocks' verify`. Existing PowerShell startup/database commands are unchanged.

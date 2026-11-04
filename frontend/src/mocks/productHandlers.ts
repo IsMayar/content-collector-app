@@ -475,7 +475,13 @@ export const productHandlers = [
         .slice(new URL(apiRoot).pathname.length)
         .split('/')
         .filter(Boolean)
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method))
+      if (
+        !['GET', 'HEAD', 'OPTIONS'].includes(request.method) &&
+        !(
+          request.method === 'POST' &&
+          path.join('/') === 'status-shares/exchange'
+        )
+      )
         requireRule(
           request.headers.get('X-XSRF-TOKEN') === mockState.csrf,
           403,

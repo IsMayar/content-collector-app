@@ -1,108 +1,101 @@
-import type { Workspace } from '@/features/workspace/types/workspace.types'
 import { useData } from '@/services/api/resourceApi'
 import { Notice } from '@/shared/components/Feedback'
-import {
-  ErrorNotice,
-  Field,
-  Panel,
-  QueryState,
-} from '@/shared/components/ProductUI'
+import { ErrorNotice, Panel, QueryState } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useState } from 'react'
-
-export function DigestPreview({ workspaceId }: { workspaceId: string }) {
-  const q = useData<{
-    workspaceName: string
-    activeProjects: number
-    required: number
-    submitted: number
-    approved: number
+type Preference = {
+  enabled: boolean
+  version: number
+  timezone: string
+  sendTime: string
+}
+type Preview = {
+  timezone: string
+  sendTime: string
+  projects: {
+    alias: string
+    awaitingReview: number
     clientAction: number
-  }>(`workspaces/${workspaceId}/digest-preview`)
-  const settings = useData<{ workspace: Workspace; digestEnabled: boolean }>(
-      `workspaces/${workspaceId}/settings`,
-    ),
-    command = useCommand(),
-    [message, setMessage] = useState('')
+    url: string
+  }[]
+}
+export function DigestPreview({ workspaceId }: { workspaceId: string }) {
+  const root = `workspaces/${workspaceId}`
+  const settings = useData<Preference>(`${root}/digest-preferences`)
+  const q = useData<Preview>(`${root}/digest-preview`)
+  const command = useCommand()
+  const [message, setMessage] = useState('')
   return (
     <Panel title="Daily digest">
       <p>
-        Receive one daily summary of client actions and items awaiting review in
-        your workspace timezone.
+        One opt-in daily summary in your workspace timezone. Members receive
+        only projects currently assigned to them. Client reminders are separate.
       </p>
       <div className="digest-layout">
-        <form
-          className="stack-form"
-          key={settings.data?.workspace.version}
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const f = new FormData(e.currentTarget)
-            if (
-              settings.data &&
-              (await command.run(
-                `workspaces/${workspaceId}`,
-                {
-                  name: settings.data.workspace.name,
-                  timezone: f.get('timezone'),
-                  digestEnabled: f.has('enabled'),
-                  expectedVersion: settings.data.workspace.version,
-                },
-                'PATCH',
-              ))
-            )
-              setMessage('Daily digest preference saved.')
-          }}
-        >
-          <h3>Digest settings</h3>
-          <label className="permission-choice">
-            <input
-              type="checkbox"
-              role="switch"
-              name="enabled"
-              defaultChecked={settings.data?.digestEnabled}
-            />
-            <span>
-              <strong>Receive daily digest</strong>
-              <small>
-                Private summaries are restricted to authorised projects.
-              </small>
-            </span>
-          </label>
-          <Field label="Digest timezone">
-            <input
-              name="timezone"
-              required
-              defaultValue={settings.data?.workspace.timezone}
-            />
-          </Field>
-          <p className="subtle">
-            Uses your workspace timezone and your configured delivery service.
-          </p>
-          <button
-            className="primary-button"
-            disabled={!settings.data || command.pending}
-          >
-            Save digest settings
-          </button>
-        </form>
+        <QueryState query={settings}>
+          {settings.data && (
+            <form
+              className="stack-form"
+              key={settings.data.version}
+              onSubmit={async (e) => {
+                e.preventDefault()
+                const form = new FormData(e.currentTarget)
+                if (
+                  await command.run(
+                    `${root}/digest-preferences`,
+                    {
+                      enabled: form.has('enabled'),
+                      expectedVersion: settings.data!.version,
+                    },
+                    'PUT',
+                  )
+                )
+                  setMessage('Daily digest preference saved.')
+              }}
+            >
+              <h3>Digest settings</h3>
+              <label className="permission-choice">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  name="enabled"
+                  defaultChecked={settings.data.enabled}
+                />
+                <span>Receive my daily digest</span>
+              </label>
+              <p>
+                {settings.data.sendTime} · {settings.data.timezone}
+              </p>
+              <p className="subtle">
+                Uses the workspace timezone. Digest mode replaces any duplicate
+                agency item-level notifications. Delivery requires the
+                configured email service; saving this preference does not enable
+                a provider.
+              </p>
+              <button className="primary-button" disabled={command.pending}>
+                Save digest settings
+              </button>
+            </form>
+          )}
+        </QueryState>
         <section className="digest-preview">
           <h3>Next digest preview</h3>
           <QueryState query={q}>
             {q.data && (
               <>
-                <strong className="email-brand">▣ Content Collector</strong>
-                <p>Daily digest · {q.data.workspaceName}</p>
-                <div className="digest-count">
-                  <strong>{q.data.clientAction}</strong>
-                  <span>Awaiting client action</span>
-                </div>
-                <div className="digest-count">
-                  <strong>
-                    {Math.max(0, q.data.submitted - q.data.approved)}
-                  </strong>
-                  <span>Awaiting your review</span>
-                </div>
-                <p>{q.data.activeProjects} active projects</p>
+                {q.data.projects.map((project, index) => (
+                  <article key={index}>
+                    <strong>{project.alias}</strong>
+                    <p>
+                      {project.awaitingReview} awaiting review ·{' '}
+                      {project.clientAction} awaiting client action
+                    </p>
+                    <a href={project.url}>Open private project</a>
+                  </article>
+                ))}
+                {q.data.projects.length === 0 && (
+                  <p>No eligible assigned projects.</p>
+                )}
                 <small>Preview only. No email is sent.</small>
               </>
             )}

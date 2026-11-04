@@ -1,3 +1,4 @@
+import { apiBaseUrl } from '@/services/api/baseQuery'
 import { useProjectAnalyticsQuery } from '../api/analyticsApi'
 import { FrictionTable } from './FrictionTable'
 import { Notice } from '@/shared/components/Feedback'
@@ -19,7 +20,26 @@ export function AnalyticsPanel({ root }: { root: string }) {
   const [copied, setCopied] = useState('')
   const { owner } = useWorkspace()
   const command = useCommand()
-  const [share, setShare] = useState<{ shareId: string; url: string }>()
+  const [share, setShare] = useState<{
+    shareId: string
+    url: string
+    fragmentToken?: string | null
+  }>()
+  const embedUrl = share?.fragmentToken
+    ? new URL(
+        `status-shares/${share.shareId}/embed`,
+        new URL(
+          apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`,
+          window.location.origin,
+        ),
+      ).href +
+      '#token=' +
+      encodeURIComponent(share.fragmentToken)
+    : ''
+  const embedCode =
+    embedUrl && share
+      ? `<iframe title="Project status" src="${embedUrl}" loading="lazy"></iframe>\n<a href="${new URL(share.url, window.location.origin).href}" target="_blank" rel="noopener noreferrer">Open status link</a>`
+      : ''
   return (
     <QueryState query={q}>
       <div className="analytics-page">
@@ -165,6 +185,7 @@ export function AnalyticsPanel({ root }: { root: string }) {
                     const result = await command.run<{
                       shareId: string
                       url: string
+                      fragmentToken: string | null
                     }>(`${root}/status-shares`, {
                       alias: v.get('alias'),
                       expiresAt: new Date(
@@ -200,8 +221,14 @@ export function AnalyticsPanel({ root }: { root: string }) {
                     <textarea
                       name="origins"
                       placeholder="https://example.com"
+                      aria-describedby="embed-origin-help"
                     />
                   </Field>
+                  <p id="embed-origin-help" className="subtle">
+                    Exact HTTPS origins only. Leave blank for an ordinary status
+                    link without iframe embedding. The capability is shown once;
+                    store the link securely.
+                  </p>
                   <button
                     className="secondary-button"
                     disabled={command.pending}
@@ -211,14 +238,22 @@ export function AnalyticsPanel({ root }: { root: string }) {
                 </form>
                 {share && (
                   <div className="inset">
-                    <Link to={share.url}>Open counts-only status link</Link>
+                    {share.fragmentToken ? (
+                      <Link to={share.url}>Open counts-only status link</Link>
+                    ) : (
+                      <Notice>
+                        This link was already issued. Its capability cannot be
+                        shown again; revoke it and create another if needed.
+                      </Notice>
+                    )}
                     <div className="actions">
                       <button
                         className="primary-button"
+                        disabled={!share.fragmentToken}
                         onClick={async () => {
                           try {
                             await navigator.clipboard.writeText(
-                              `${window.location.origin}${share.url}`,
+                              `${new URL(share.url, window.location.origin).href}`,
                             )
                             setCopied('Link copied.')
                           } catch {
@@ -230,11 +265,10 @@ export function AnalyticsPanel({ root }: { root: string }) {
                       </button>
                       <button
                         className="secondary-button"
+                        disabled={!embedUrl}
                         onClick={async () => {
                           try {
-                            await navigator.clipboard.writeText(
-                              `<iframe title="Project status" src="${window.location.origin}${share.url}" loading="lazy"></iframe>`,
-                            )
+                            await navigator.clipboard.writeText(embedCode)
                             setCopied('Embed code copied.')
                           } catch {
                             setCopied(
@@ -246,7 +280,7 @@ export function AnalyticsPanel({ root }: { root: string }) {
                         Copy embed code
                       </button>
                     </div>
-                    <pre className="code-wrap">{`<iframe title="Project status" src="${window.location.origin}${share.url}" loading="lazy"></iframe>`}</pre>
+                    <pre className="code-wrap">{embedCode}</pre>
                     <button
                       className="danger-link"
                       onClick={async () => {

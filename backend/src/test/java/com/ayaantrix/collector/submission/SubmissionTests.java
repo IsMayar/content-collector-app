@@ -313,6 +313,12 @@ class SubmissionTests {
     @AfterEach
     void clear() {
         SecurityContextHolder.clearContext();
+        jdbc.update("update collector.digest_preferences set enabled=false");
+        jdbc.update(
+                "update collector.digest_jobs set"
+                        + " state='CANCELLED',lease_owner=null,lease_until=null where state in"
+                        + " ('QUEUED','SENDING')");
+        jdbc.update("delete from collector.account_request_limits where operation like 'STATUS_%'");
         jdbc.update(
                 "update collector.reminder_deliveries set reconciliation_count=8 where"
                         + " state='UNKNOWN'");
@@ -748,6 +754,615 @@ class SubmissionTests {
                 f.project().id());
     }
 
+    com.ayaantrix.collector.visibility.service.ShareService shares() {
+        return context.getBean(com.ayaantrix.collector.visibility.service.ShareService.class);
+    }
+
+    com.ayaantrix.collector.visibility.service.DigestService digests() {
+        return context.getBean(com.ayaantrix.collector.visibility.service.DigestService.class);
+    }
+
+    com.ayaantrix.collector.visibility.worker.DigestWorker digestWorker() {
+        return context.getBean(com.ayaantrix.collector.visibility.worker.DigestWorker.class);
+    }
+
+    com.ayaantrix.collector.visibility.dto.VisibilityDtos.CreateShare shareInput() {
+        return new com.ayaantrix.collector.visibility.dto.VisibilityDtos.CreateShare(
+                "Project Evergreen",
+                NOW.plus(Duration.ofDays(10)),
+                List.of("https://portal.example.test"));
+    }
+
+    com.ayaantrix.collector.visibility.dto.VisibilityDtos.CreatedShare share(
+            Fixture f, String key) {
+        return as(
+                f.tenant().actor(),
+                () -> shares().create(f.tenant().workspace(), f.project().id(), shareInput(), key));
+    }
+
+    String statusRead(com.ayaantrix.collector.visibility.dto.VisibilityDtos.CreatedShare s) {
+        return shares().exchange(
+                        new com.ayaantrix.collector.visibility.dto.VisibilityDtos.Exchange(
+                                s.shareId(), s.fragmentToken()))
+                .readToken();
+    }
+
+    @Test
+    void statusCapabilityStoresOnlyHashAndIdempotentReplayCannotRevealIt() {
+        var f = fixture();
+        var result = share(f, "once");
+        assertThat(result.url()).contains("#token=" + result.fragmentToken());
+        var hash =
+                jdbc.queryForObject(
+                        "select token_hash from collector.status_shares where id=?",
+                        String.class,
+                        result.shareId());
+        assertThat(hash.trim())
+                .isEqualTo(
+                        context.getBean(SecureAccountTokens.class).digest(result.fragmentToken()));
+        assertThat(
+                        jdbc.queryForList(
+                                        "select response_json::text from"
+                                            + " collector.idempotency_records where workspace_id=?",
+                                        String.class,
+                                        f.tenant().workspace())
+                                .toString())
+                .doesNotContain(result.fragmentToken());
+        var again = share(f, "once");
+        assertThat(again.shareId()).isEqualTo(result.shareId());
+        assertThat(again.fragmentToken()).isNull();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select count(*) from collector.status_shares where project_id=?",
+                                Long.class,
+                                f.project().id()))
+                .isEqualTo(1);
+        var counts = shares().counts(result.shareId(), statusRead(result));
+        assertThat(json.valueToTree(counts).properties()).hasSize(5);
+        assertThat(counts.alias()).isEqualTo("Project Evergreen");
+        assertThat(json.writeValueAsString(counts))
+                .doesNotContain(
+                        f.project().title(),
+                        result.fragmentToken(),
+                        "clientActionRequired",
+                        "projectType",
+                        "workspaceId");
+    }
+
+    @Test
+    void statusReadIsBoundToShareExpiresAndChecksLiveRevocation() {
+        var f = fixture();
+        var first = share(f, "first");
+        var second = share(f, "second");
+        var token = statusRead(first);
+        code(() -> shares().counts(second.shareId(), token), "STATUS_SHARE_UNAVAILABLE");
+        context.getBean(TestClock.class).time = NOW.plusSeconds(300);
+        code(() -> shares().counts(first.shareId(), token), "STATUS_SHARE_UNAVAILABLE");
+        context.getBean(TestClock.class).time = NOW;
+        var read2 = statusRead(first);
+        as(
+                f.tenant().actor(),
+                () -> {
+                    shares().revoke(f.tenant().workspace(), f.project().id(), first.shareId());
+                    return null;
+                });
+        code(() -> shares().counts(first.shareId(), read2), "STATUS_SHARE_UNAVAILABLE");
+        code(() -> statusRead(first), "STATUS_SHARE_UNAVAILABLE");
+        context.getBean(TestClock.class).time = NOW.plus(Duration.ofDays(11));
+        code(() -> statusRead(second), "STATUS_SHARE_UNAVAILABLE");
+    }
+
+    @Test
+    void statusTokensCannotAuthorizeAgencyClientOrPrivateFiles() throws Exception {
+        var f = fixture();
+        var result = share(f, "isolation");
+        var read = statusRead(result);
+        assertThatThrownBy(() -> context.getBean(AccessTokens.class).decode(read))
+                .isInstanceOf(org.springframework.security.oauth2.jwt.JwtException.class);
+        mvc.perform(get("/api/v1/me").secure(true).header("Authorization", "Bearer " + read))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(checklist(f, read).secure(true)).andExpect(status().isUnauthorized());
+        mvc.perform(
+                        post(f.tenant().root()
+                                        + "/projects/"
+                                        + f.project().id()
+                                        + "/assets/"
+                                        + UUID.randomUUID()
+                                        + "/download")
+                                .secure(true)
+                                .with(csrf())
+                                .header("Authorization", "Bearer " + read))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(
+                        get("/api/v1/status-shares/" + result.shareId() + "/counts")
+                                .secure(true)
+                                .header("X-Status-Token", f.tenant().actor().access()))
+                .andExpect(status().isNotFound());
+        mvc.perform(
+                        get("/api/v1/status-shares/" + result.shareId() + "/counts")
+                                .secure(true)
+                                .header("X-Status-Token", read))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().exists("X-Request-ID"));
+    }
+
+    @Test
+    void statusOriginsExpiryAndTenantAuthorizationAreEnforced() {
+        var f = fixture();
+        var other = fixture();
+        code(
+                () ->
+                        as(
+                                other.tenant().actor(),
+                                () ->
+                                        shares().create(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        shareInput(),
+                                                        "foreign")),
+                "NOT_FOUND");
+        var actor = actor();
+        context.getBean(WorkspaceMemberRepository.class)
+                .saveAndFlush(
+                        new WorkspaceMember(
+                                f.tenant().workspace(), actor.id(), WorkspaceRole.MEMBER, NOW));
+        code(
+                () ->
+                        as(
+                                actor,
+                                () ->
+                                        shares().create(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        shareInput(),
+                                                        "member")),
+                "ACCESS_DENIED");
+        for (String origin :
+                List.of(
+                        "http://portal.example",
+                        "https://*.example.com",
+                        "https://user:password@example.com",
+                        "https://example.com/path",
+                        "https://example.com?token=secret"))
+            code(
+                    () ->
+                            as(
+                                    f.tenant().actor(),
+                                    () ->
+                                            shares().create(
+                                                            f.tenant().workspace(),
+                                                            f.project().id(),
+                                                            new com.ayaantrix.collector.visibility
+                                                                    .dto.VisibilityDtos.CreateShare(
+                                                                    "Neutral",
+                                                                    NOW.plusSeconds(86400),
+                                                                    List.of(origin)),
+                                                            "invalid")),
+                    "INVALID_EMBED_ORIGIN");
+        code(
+                () ->
+                        as(
+                                f.tenant().actor(),
+                                () ->
+                                        shares().create(
+                                                        f.tenant().workspace(),
+                                                        f.project().id(),
+                                                        new com.ayaantrix.collector.visibility.dto
+                                                                .VisibilityDtos.CreateShare(
+                                                                "Neutral",
+                                                                NOW.plus(Duration.ofDays(31)),
+                                                                List.of()),
+                                                        "expired")),
+                "INVALID_STATUS_SHARE");
+    }
+
+    @Test
+    void statusCreationIsCsrfProtectedAndCapabilityExchangeIsRateLimited() throws Exception {
+        var f = fixture();
+        String root = f.tenant().root() + "/projects/" + f.project().id() + "/status-shares";
+        mvc.perform(
+                        post(root)
+                                .secure(true)
+                                .header("Authorization", bearer(f.tenant()))
+                                .contentType("application/json")
+                                .content(json.writeValueAsString(shareInput())))
+                .andExpect(status().isForbidden());
+        var result = share(f, "limited");
+        String body =
+                json.writeValueAsString(
+                        new com.ayaantrix.collector.visibility.dto.VisibilityDtos.Exchange(
+                                result.shareId(), result.fragmentToken()));
+        for (int n = 0; n < 30; n++)
+            mvc.perform(
+                            post("/api/v1/status-shares/exchange")
+                                    .secure(true)
+                                    .with(
+                                            r -> {
+                                                r.setRemoteAddr("192.0.2.31");
+                                                return r;
+                                            })
+                                    .contentType("application/json")
+                                    .content(body))
+                    .andExpect(status().isOk());
+        mvc.perform(
+                        post("/api/v1/status-shares/exchange")
+                                .secure(true)
+                                .with(
+                                        r -> {
+                                            r.setRemoteAddr("192.0.2.31");
+                                            return r;
+                                        })
+                                .contentType("application/json")
+                                .content(body))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void statusEmbedPolicyAllowsOnlyApprovedAncestorsAndPrivateRoutesStayDenied() throws Exception {
+        var f = fixture();
+        var s = share(f, "embed");
+        var response =
+                mvc.perform(get("/api/v1/status-shares/" + s.shareId() + "/embed").secure(true))
+                        .andExpect(status().isOk())
+                        .andExpect(header().doesNotExist("X-Frame-Options"))
+                        .andReturn()
+                        .getResponse();
+        assertThat(response.getHeader("Content-Security-Policy"))
+                .contains("frame-ancestors https://portal.example.test", "default-src 'none'");
+        String html = response.getContentAsString();
+        assertThat(html).doesNotContain(s.fragmentToken(), f.project().title());
+        var script = java.util.regex.Pattern.compile("<script>([\\s\\S]*?)</script>").matcher(html);
+        assertThat(script.find()).isTrue();
+        String hash =
+                Base64.getEncoder()
+                        .encodeToString(
+                                java.security.MessageDigest.getInstance("SHA-256")
+                                        .digest(
+                                                script.group(1)
+                                                        .getBytes(
+                                                                java.nio.charset.StandardCharsets
+                                                                        .UTF_8)));
+        assertThat(response.getHeader("Content-Security-Policy")).contains("'sha256-" + hash + "'");
+        mvc.perform(get("/api/v1/me").secure(true))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Content-Security-Policy", "frame-ancestors 'none'"));
+    }
+
+    @Test
+    void statusConcurrentCreationAndTransactionRollbackAreAtomic() throws Exception {
+        var f = fixture();
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var a = pool.submit(() -> share(f, "parallel"));
+            var b = pool.submit(() -> share(f, "parallel"));
+            var one = a.get(30, TimeUnit.SECONDS);
+            var two = b.get(30, TimeUnit.SECONDS);
+            assertThat(one.shareId()).isEqualTo(two.shareId());
+            assertThat(
+                            (one.fragmentToken() != null ? 1 : 0)
+                                    + (two.fragmentToken() != null ? 1 : 0))
+                    .isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        long before =
+                jdbc.queryForObject("select count(*) from collector.status_shares", Long.class);
+        assertThatThrownBy(
+                        () ->
+                                new TransactionTemplate(
+                                                context.getBean(PlatformTransactionManager.class))
+                                        .execute(
+                                                t -> {
+                                                    share(f, "rollback");
+                                                    throw new IllegalStateException("rollback");
+                                                }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(jdbc.queryForObject("select count(*) from collector.status_shares", Long.class))
+                .isEqualTo(before);
+    }
+
+    @Test
+    void digestIncludesOptionalSubmissionsAwaitingReview() {
+        var f = fixture();
+        var cookie = enter(f).credential();
+        var item = textItem(f);
+        jdbc.update(
+                "update collector.items set"
+                    + " required=false,schema_json=jsonb_set(schema_json,'{required}','false'::jsonb)"
+                    + " where id=?",
+                item);
+        save(f, cookie, item, text("Synthetic optional submission"), 0);
+        submit(f, cookie, item, 1, "digest-optional");
+        var preview = as(f.tenant().actor(), () -> digests().preview(f.tenant().workspace()));
+        assertThat(preview.projects()).hasSize(1);
+        assertThat(preview.projects().getFirst().awaitingReview()).isEqualTo(1);
+        assertThat(
+                        as(
+                                        f.tenant().actor(),
+                                        () ->
+                                                service()
+                                                        .read(
+                                                                f.tenant().workspace(),
+                                                                f.project().id()))
+                                .progress()
+                                .submittedRequired())
+                .isZero();
+    }
+
+    @Test
+    void digestPreferencesAreVersionedAndPreviewIsAssignmentScoped() {
+        var f = fixture();
+        var additional = create(f.tenant(), ProjectType.WEB_APP);
+        jdbc.update("update collector.projects set state='ACTIVE' where id=?", additional.id());
+        var actor = actor();
+        var member =
+                new WorkspaceMember(f.tenant().workspace(), actor.id(), WorkspaceRole.MEMBER, NOW);
+        context.getBean(WorkspaceMemberRepository.class).saveAndFlush(member);
+        jdbc.update(
+                "insert into"
+                    + " collector.project_members(workspace_id,project_id,workspace_member_id,created_at,updated_at)"
+                    + " values(?,?,?,?,?)",
+                f.tenant().workspace(),
+                f.project().id(),
+                member.id(),
+                java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        var preview = as(actor, () -> digests().preview(f.tenant().workspace()));
+        assertThat(preview.projects()).hasSize(1);
+        assertThat(preview.projects().getFirst().url())
+                .contains(f.project().id().toString())
+                .doesNotContain(additional.id().toString());
+        assertThat(preview.projects().getFirst().alias()).startsWith("Project ");
+        assertThat(as(actor, () -> digests().preference(f.tenant().workspace())).enabled())
+                .isFalse();
+        as(
+                actor,
+                () ->
+                        digests()
+                                .save(
+                                        f.tenant().workspace(),
+                                        new com.ayaantrix.collector.visibility.dto.VisibilityDtos
+                                                .SavePreference(true, 0)));
+        code(
+                () ->
+                        as(
+                                actor,
+                                () ->
+                                        digests()
+                                                .save(
+                                                        f.tenant().workspace(),
+                                                        new com.ayaantrix.collector.visibility.dto
+                                                                .VisibilityDtos.SavePreference(
+                                                                false, 0))),
+                "DIGEST_VERSION_CONFLICT");
+        jdbc.update(
+                "delete from collector.project_members where workspace_member_id=?", member.id());
+        assertThat(as(actor, () -> digests().preview(f.tenant().workspace())).projects()).isEmpty();
+    }
+
+    Instant digestDay() {
+        return NOW.plus(Duration.ofDays(1))
+                .truncatedTo(java.time.temporal.ChronoUnit.DAYS)
+                .plusSeconds(9 * 3600 + 1800);
+    }
+
+    void enableDigest(Fixture f) {
+        as(
+                f.tenant().actor(),
+                () ->
+                        digests()
+                                .save(
+                                        f.tenant().workspace(),
+                                        new com.ayaantrix.collector.visibility.dto.VisibilityDtos
+                                                .SavePreference(true, 0)));
+        context.getBean(TestClock.class).time = digestDay();
+    }
+
+    @Test
+    void digestDurableJobsSendOncePerLocalDayAndContainOnlyCountsAndPrivateLinks() {
+        var f = fixture();
+        enableDigest(f);
+        assertThat(digestWorker().dispatchOne()).isTrue();
+        assertThat(digestWorker().dispatchOne()).isFalse();
+        var sent = context.getBean(ReminderMail.class).messages;
+        assertThat(sent).hasSize(1);
+        assertThat(sent.getFirst().body())
+                .contains(
+                        "Awaiting review:",
+                        "Awaiting client action:",
+                        "/app/w/" + f.tenant().workspace())
+                .doesNotContain(f.project().title(), "#token=", "value_snapshot");
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.digest_jobs where workspace_id=?",
+                                String.class,
+                                f.tenant().workspace()))
+                .isEqualTo("ACCEPTED");
+        context.getBean(TestClock.class).time = digestDay().plus(Duration.ofDays(1));
+        assertThat(digestWorker().dispatchOne()).isTrue();
+        assertThat(sent).hasSize(2);
+    }
+
+    @Test
+    void digestDisabledOrRevokedRecipientsCannotReceiveQueuedMessages() {
+        var f = fixture();
+        enableDigest(f);
+        new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
+                .executeWithoutResult(
+                        t ->
+                                context.getBean(
+                                                com.ayaantrix.collector.visibility.repository
+                                                        .DigestRepository.class)
+                                        .enqueueDue(digestDay()));
+        jdbc.update(
+                "update collector.workspace_members set state='DISABLED' where workspace_id=?",
+                f.tenant().workspace());
+        assertThat(digestWorker().dispatchOne()).isTrue();
+        assertThat(context.getBean(ReminderMail.class).messages).isEmpty();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.digest_jobs where workspace_id=?",
+                                String.class,
+                                f.tenant().workspace()))
+                .isEqualTo("CANCELLED");
+    }
+
+    @Test
+    void digestUnknownOutcomeNeverBlindlyRetriesAndAbandonedPreparationRecovers() {
+        var f = fixture();
+        enableDigest(f);
+        var repo =
+                context.getBean(
+                        com.ayaantrix.collector.visibility.repository.DigestRepository.class);
+        new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
+                .executeWithoutResult(t -> repo.enqueueDue(digestDay()));
+        jdbc.update(
+                "update collector.digest_jobs set state='SENDING',lease_owner=?,lease_until=? where"
+                        + " workspace_id=?",
+                UUID.randomUUID(),
+                java.sql.Timestamp.from(digestDay().minusSeconds(1)),
+                f.tenant().workspace());
+        context.getBean(ReminderMail.class).outcome = "UNKNOWN";
+        assertThat(digestWorker().dispatchOne()).isTrue();
+        assertThat(digestWorker().dispatchOne()).isFalse();
+        assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.digest_jobs where workspace_id=?",
+                                String.class,
+                                f.tenant().workspace()))
+                .isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void digestPreparedCrashIsHeldAndOptOutCancelsQueuedWork() {
+        var f = fixture();
+        enableDigest(f);
+        new TransactionTemplate(context.getBean(PlatformTransactionManager.class))
+                .executeWithoutResult(
+                        t ->
+                                context.getBean(
+                                                com.ayaantrix.collector.visibility.repository
+                                                        .DigestRepository.class)
+                                        .enqueueDue(digestDay()));
+        jdbc.update(
+                "update collector.digest_jobs set"
+                        + " state='SENDING',prepared_at=?,lease_owner=?,lease_until=? where"
+                        + " workspace_id=?",
+                java.sql.Timestamp.from(digestDay().minusSeconds(70)),
+                UUID.randomUUID(),
+                java.sql.Timestamp.from(digestDay().minusSeconds(1)),
+                f.tenant().workspace());
+        assertThat(digestWorker().dispatchOne()).isFalse();
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.digest_jobs where workspace_id=?",
+                                String.class,
+                                f.tenant().workspace()))
+                .isEqualTo("UNKNOWN");
+        assertThat(context.getBean(ReminderMail.class).messages).isEmpty();
+        jdbc.update(
+                "update collector.digest_preferences set enabled=false where workspace_id=?",
+                f.tenant().workspace());
+        context.getBean(TestClock.class).time = digestDay().plus(Duration.ofDays(1));
+        assertThat(digestWorker().dispatchOne()).isFalse();
+    }
+
+    @Test
+    void digestVerifiedProviderEvidenceResolvesUnknownAndSuppressesComplaints() throws Exception {
+        var f = fixture();
+        enableDigest(f);
+        context.getBean(ReminderMail.class).outcome = "UNKNOWN";
+        digestWorker().dispatchOne();
+        var sent = context.getBean(ReminderMail.class).messages.getFirst();
+        assertThat(sent.digest()).isTrue();
+        String provider = "digest-provider-" + UUID.randomUUID();
+        emailProof(
+                        sent.deliveryId(),
+                        provider,
+                        sent.recipient(),
+                        "email.delivered",
+                        "digest-event-" + UUID.randomUUID(),
+                        "v1,bad",
+                        "collector_digest_id")
+                .andExpect(status().isUnauthorized());
+        emailProof(
+                        sent.deliveryId(),
+                        provider,
+                        "wrong@example.test",
+                        "email.delivered",
+                        "digest-event-" + UUID.randomUUID(),
+                        null,
+                        "collector_digest_id")
+                .andExpect(status().isBadRequest());
+        emailProof(
+                        sent.deliveryId(),
+                        provider,
+                        sent.recipient(),
+                        "email.delivered",
+                        "digest-event-" + UUID.randomUUID(),
+                        null,
+                        "collector_digest_id")
+                .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select state from collector.digest_jobs where id=?",
+                                String.class,
+                                sent.deliveryId()))
+                .isEqualTo("ACCEPTED");
+        context.getBean(TestClock.class).time = digestDay().plusSeconds(1);
+        emailProof(
+                        sent.deliveryId(),
+                        provider,
+                        sent.recipient(),
+                        "email.complained",
+                        "digest-event-" + UUID.randomUUID(),
+                        null,
+                        "collector_digest_id")
+                .andExpect(status().isOk());
+        assertThat(
+                        jdbc.queryForObject(
+                                "select enabled from collector.digest_preferences where"
+                                        + " workspace_id=?",
+                                Boolean.class,
+                                f.tenant().workspace()))
+                .isFalse();
+        assertThat(digestWorker().dispatchOne()).isFalse();
+        assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
+    }
+
+    @Test
+    void digestConcurrentWorkersCannotDuplicateTheDailyMessage() throws Exception {
+        var f = fixture();
+        enableDigest(f);
+        var second =
+                new com.ayaantrix.collector.visibility.worker.DigestWorker(
+                        context.getBean(
+                                com.ayaantrix.collector.visibility.repository.DigestRepository
+                                        .class),
+                        digests(),
+                        context.getBean(
+                                com.ayaantrix.collector.workspace.repository.WorkspaceRepository
+                                        .class),
+                        context.getBean(ReminderMail.class),
+                        context.getBean(TestClock.class),
+                        context.getBean(PlatformTransactionManager.class),
+                        false);
+        var pool = Executors.newFixedThreadPool(2);
+        try {
+            var a = pool.submit(() -> digestWorker().dispatchOne());
+            var b = pool.submit(() -> second.dispatchOne());
+            assertThat(
+                            (a.get(30, TimeUnit.SECONDS) ? 1 : 0)
+                                    + (b.get(30, TimeUnit.SECONDS) ? 1 : 0))
+                    .isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(context.getBean(ReminderMail.class).messages).hasSize(1);
+    }
+
     com.ayaantrix.collector.analytics.service.AnalyticsService friction() {
         return context.getBean(com.ayaantrix.collector.analytics.service.AnalyticsService.class);
     }
@@ -778,7 +1393,7 @@ class SubmissionTests {
         var history =
                 jdbc.queryForList(
                         "select value_snapshot::text from collector.submission_revisions where"
-                            + " project_id=?",
+                                + " project_id=?",
                         String.class,
                         f.project().id());
         var result =
@@ -798,7 +1413,7 @@ class SubmissionTests {
         assertThat(
                         jdbc.queryForList(
                                 "select value_snapshot::text from collector.submission_revisions"
-                                    + " where project_id=?",
+                                        + " where project_id=?",
                                 String.class,
                                 f.project().id()))
                 .isEqualTo(history);
@@ -5496,6 +6111,25 @@ class SubmissionTests {
             String event,
             String signatureOverride)
             throws Exception {
+        return emailProof(
+                attempt,
+                provider,
+                recipient,
+                type,
+                event,
+                signatureOverride,
+                "collector_delivery_id");
+    }
+
+    ResultActions emailProof(
+            UUID attempt,
+            String provider,
+            String recipient,
+            String type,
+            String event,
+            String signatureOverride,
+            String tagName)
+            throws Exception {
         String body =
                 json.writeValueAsString(
                         Map.of(
@@ -5510,7 +6144,7 @@ class SubmissionTests {
                                         "to",
                                         List.of(recipient),
                                         "tags",
-                                        Map.of("collector_delivery_id", attempt.toString()))));
+                                        Map.of(tagName, attempt.toString()))));
         String time = Long.toString(context.getBean(TestClock.class).instant().getEpochSecond());
         var mac = javax.crypto.Mac.getInstance("HmacSHA256");
         mac.init(new javax.crypto.spec.SecretKeySpec(new byte[32], "HmacSHA256"));

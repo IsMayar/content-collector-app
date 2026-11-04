@@ -229,7 +229,7 @@ class AgencySessionWorkflowTests {
     }
     @Test void sessionAndSigningConfigurationSurviveRealApplicationRestart() throws Exception {
         account(EMAIL);var signed=signIn();context.close();open();me(signed,200);mvc.perform(refresh(signed.refresh())).andExpect(status().isOk());
-        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(24);
+        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(25);
     }
     @Test void bearerOnlyLogoutIsIdempotentAndRevokesTheCurrentSession() throws Exception {
         account(EMAIL);var signed=signIn();

@@ -18,6 +18,10 @@ const jobs = new Map<
   string,
   AiDraftJob & { projectId: string; polls: number }
 >()
+const digestPreferences = new Map<
+  string,
+  { enabled: boolean; version: number }
+>()
 const shares = new Map<
   string,
   {
@@ -180,21 +184,21 @@ registerProductResolver((request, path, _search, body) => {
     return response({ revoked: true })
   }
   if (domain === 'status-shares') {
-    const share = shares.get(wid)
+    const share = shares.get(wid === 'exchange' ? String(body.shareId) : wid)
     requireRule(
       share && !share.revoked && share.expiresAt > Date.now(),
       410,
       'SHARE_UNAVAILABLE',
       'This status share has expired or was revoked.',
     )
-    if (resource === 'exchange') {
+    if (wid === 'exchange' && method === 'POST') {
       requireRule(
         body.token === share.token,
         403,
         'INVALID_TOKEN',
         'Invalid share token.',
       )
-      return response({ readToken: share.readToken, alias: share.alias })
+      return response({ readToken: share.readToken })
     }
     requireRule(
       request.headers.get('X-Status-Token') === share.readToken,
@@ -202,22 +206,17 @@ registerProductResolver((request, path, _search, body) => {
       'INVALID_TOKEN',
       'Status access required.',
     )
-    const origin = request.headers.get('Origin')
-    requireRule(
-      !origin || share.origins.length === 0 || share.origins.includes(origin),
-      403,
-      'ORIGIN_DENIED',
-      'This embed origin is not allowed.',
-    )
     const r = productDb.projects[share.projectId]
+    const counts = progressFor(r.structure, r.answers)
     return response({
       alias: share.alias,
-      projectType: r.project.projectType,
-      state: r.project.state,
-      progress: progressFor(r.structure, r.answers),
+      approved: counts.approvedRequired,
+      submitted: counts.submittedRequired,
+      requiredTotal: counts.requiredTotal,
       updatedAt: r.project.updatedAt,
     })
   }
+
   if (domain === 'client' && wid === 'projects') {
     if (resource && area === 'ai-drafts') {
       return null
@@ -365,7 +364,9 @@ registerProductResolver((request, path, _search, body) => {
       })
     if (!id && method === 'POST') {
       requireRule(
-        body.alias && Date.parse(String(body.expiresAt)) > Date.now(),
+        body.alias &&
+          Date.parse(String(body.expiresAt)) > Date.now() &&
+          Date.parse(String(body.expiresAt)) <= Date.now() + 30 * 864e5,
         422,
         'VALIDATION',
         'Enter a public alias and future expiry.',
@@ -404,22 +405,54 @@ registerProductResolver((request, path, _search, body) => {
       return response({ revoked: true })
     }
   }
-  const actor = agencyActor(request, wid, true, method !== 'GET')
-  const w = actor.workspace
-  if (resource === 'digest-preview') {
-    const list = Object.values(productDb.projects).filter(
-      (r) => r.project.workspaceId === wid && r.project.state === 'ACTIVE',
+  if (
+    domain === 'workspaces' &&
+    ['digest-preferences', 'digest-preview'].includes(resource)
+  ) {
+    const actor = agencyActor(request, wid)
+    const key = `${wid}/${actor.membership.memberId}`
+    const preference = digestPreferences.get(key) || {
+      enabled: false,
+      version: 0,
+    }
+    if (resource === 'digest-preferences') {
+      if (method === 'PUT') {
+        checkVersion(preference.version, body.expectedVersion)
+        preference.enabled = body.enabled === true
+        preference.version++
+        digestPreferences.set(key, preference)
+      }
+      return response({
+        ...preference,
+        timezone: actor.workspace.workspace.timezone,
+        sendTime: '09:00',
+      })
+    }
+    const rows = Object.values(productDb.projects).filter(
+      (r) =>
+        r.project.workspaceId === wid &&
+        ['ACTIVE', 'PAUSED'].includes(r.project.state) &&
+        (actor.membership.role === 'OWNER' ||
+          r.assignments.some((a) => a.memberId === actor.membership.memberId)),
     )
-    const counts = list.map((r) => progressFor(r.structure, r.answers))
     return response({
-      workspaceName: w.workspace.name,
-      activeProjects: list.length,
-      required: counts.reduce((n, p) => n + p.requiredTotal, 0),
-      submitted: counts.reduce((n, p) => n + p.submittedRequired, 0),
-      approved: counts.reduce((n, p) => n + p.approvedRequired, 0),
-      clientAction: counts.reduce((n, p) => n + p.clientActionRequired, 0),
+      timezone: actor.workspace.workspace.timezone,
+      sendTime: '09:00',
+      projects: rows.map((r) => {
+        const counts = progressFor(r.structure, r.answers)
+        return {
+          alias: `Project ${r.project.id.slice(0, 8)}`,
+          awaitingReview: r.structure
+            .flatMap((s) => s.items)
+            .filter((item) => item.state === 'SUBMITTED').length,
+          clientAction: counts.clientActionRequired,
+          url: `/app/w/${wid}/projects/${r.project.id}`,
+        }
+      }),
     })
   }
+  const actor = agencyActor(request, wid, true, method !== 'GET')
+  const w = actor.workspace
   if (path.length === 2 && method === 'PATCH') {
     checkVersion(w.workspace.version, body.expectedVersion)
     requireRule(

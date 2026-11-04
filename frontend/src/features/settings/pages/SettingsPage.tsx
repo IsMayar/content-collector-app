@@ -33,7 +33,7 @@ export function SettingsPage() {
     : 'workspace'
   const q = useData<WorkspaceDetail & { logo: string; digestEnabled: boolean }>(
     `workspaces/${id}/settings`,
-    { skip: !owner },
+    { skip: !owner || tab === 'digest' },
   )
   const sessions = useData<{ data: SessionSummary[] }>('me/sessions')
   const command = useCommand()
@@ -42,7 +42,7 @@ export function SettingsPage() {
   const [deletion, setDeletion] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  if (!owner && tab !== 'account')
+  if (!owner && tab !== 'account' && tab !== 'digest')
     return (
       <Empty
         title="Owner access required"
@@ -115,7 +115,6 @@ export function SettingsPage() {
                               {
                                 name: v.get('name'),
                                 timezone: v.get('timezone'),
-                                digestEnabled: v.has('digest'),
                                 logo: logo ?? q.data!.logo,
                                 expectedVersion: q.data!.workspace.version,
                               },
@@ -182,14 +181,7 @@ export function SettingsPage() {
                         >
                           Remove logo
                         </button>
-                        <label className="check-row">
-                          <input
-                            type="checkbox"
-                            name="digest"
-                            defaultChecked={q.data.digestEnabled}
-                          />
-                          Receive the owner’s daily progress digest
-                        </label>
+
                         <button
                           className="primary-button"
                           disabled={command.pending}

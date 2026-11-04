@@ -104,7 +104,7 @@ class TemplateCatalogTests {
 
     @Test void cleanMigrationHibernateAndAllStoredDefinitionsMatchOriginals() {
         assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(24);
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(25);
         assertThat(context.getBean(Flyway.class).info().pending()).isEmpty();
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(count("templates")).isEqualTo(10);assertThat(count("template_versions")).isEqualTo(10);
@@ -286,7 +286,7 @@ class TemplateCatalogTests {
         data.update("insert into collector.workspaces(id,name,timezone) values (?,'Preserved workspace','UTC')",workspace);
         data.update("insert into collector.workspace_members(workspace_id,user_id,role) values (?,?,'OWNER')",workspace,user);
         try(var upgraded=start(url)){
-            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(24);
+            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(25);
             assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(data.queryForObject("select name from collector.workspaces where id=?",String.class,workspace)).isEqualTo("Preserved workspace");
             assertThat(data.queryForObject("select count(*) from collector.workspace_members where workspace_id=? and user_id=?",Integer.class,workspace,user)).isEqualTo(1);
