@@ -6,7 +6,9 @@ import { createRoot } from 'react-dom/client'
 
 async function start() {
   if (env.production && 'serviceWorker' in navigator)
-    void navigator.serviceWorker.register('/sw.js').catch(() => {})
+    void navigator.serviceWorker
+      .register('/sw.js', { updateViaCache: 'none' })
+      .catch(() => {})
   if (env.mocksEnabled) {
     const { worker } = await import('@/mocks/browser')
     await worker.start({

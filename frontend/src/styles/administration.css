@@ -408,6 +408,16 @@
   margin: 5px 0 0;
   font-size: 13px;
 }
+.connection-notice button,
+.install-prompt button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.connection-notice > div,
+.install-prompt > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .install-prompt {
   position: fixed;
   bottom: 30px;

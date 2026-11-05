@@ -2,7 +2,7 @@
 
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 5 November 2026.
 
-All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4 is In progress; M5 and M6 are In progress; M7 remains Not started.
+All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4 is In progress; M5, M6 and M7 are In progress.
 
 T01 evidence: frontend/, backend/ and docs/ exist; root README documents purpose and required runtimes; all 10 docs/spec files match the supplied ZIP by SHA-256. No dependencies installed or application features implemented.
 
@@ -529,11 +529,11 @@ Milestone status: In progress
 
 ### Milestone M7 Public MVP release
 
-Milestone status: Not started
+Milestone status: In progress
 
 | Task | Deliverable                                              | Acceptance                                                     | Status      |
 | ---- | -------------------------------------------------------- | -------------------------------------------------------------- | ----------- |
-| T34  | PWA manifest, public-only cache and mobile polish        | No cached private content after logout                         | Not started |
+| T34  | PWA manifest, public-only cache and mobile polish        | No cached private content after logout                         | Complete |
 | T35  | Rate limits, accessibility and full isolation regression | A01-A31 pass in staging                                        | Not started |
 | T36  | Backups, restoration and operational runbook             | A32 demonstrated                                               | Not started |
 | T37  | Real-device, performance and provider launch checks      | Documented targets measured and failure handling verified      | Not started |

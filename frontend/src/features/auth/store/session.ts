@@ -14,7 +14,7 @@ import type { ThunkAction, UnknownAction } from '@reduxjs/toolkit'
 type AsyncAction = ThunkAction<Promise<void>, RootState, unknown, UnknownAction>
 export function clearPrivateCaches(): ThunkAction<
   void,
-  RootState,
+  unknown,
   unknown,
   UnknownAction
 > {

@@ -11,11 +11,15 @@
       background: #f5faff;
       color: #0a1a2f;
       max-width: 540px;
-      margin: 15vh auto;
+      margin: clamp(24px, 12vh, 100px) auto;
       padding: 24px;
     }
     a {
       color: #2563eb;
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      margin-inline-end: 16px;
     }
     a:focus-visible {
       outline: 3px solid #2563eb;
@@ -29,6 +33,7 @@
       You’re offline. Private project pages, answers and files are never cached.
       Reconnect to open your workspace and check the latest saved draft.
     </p>
-    <a href="/">Retry connection</a>
+    <a href="" referrerpolicy="no-referrer">Retry this page</a>
+    <a href="/" referrerpolicy="no-referrer">Public home</a>
   </main>
 </html>

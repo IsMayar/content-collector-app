@@ -7,20 +7,24 @@ type InstallEvent = Event & {
 }
 export function ConnectionStatus() {
   const [online, setOnline] = useState(navigator.onLine),
-    [install, setInstall] = useState<InstallEvent | null>(null)
+    [install, setInstall] = useState<InstallEvent | null>(null),
+    [installFailed, setInstallFailed] = useState(false)
   useEffect(() => {
     const update = () => setOnline(navigator.onLine),
       available = (e: Event) => {
         e.preventDefault()
         setInstall(e as InstallEvent)
       }
+    const installed = () => setInstall(null)
     window.addEventListener('online', update)
     window.addEventListener('offline', update)
     window.addEventListener('beforeinstallprompt', available)
+    window.addEventListener('appinstalled', installed)
     return () => {
       window.removeEventListener('online', update)
       window.removeEventListener('offline', update)
       window.removeEventListener('beforeinstallprompt', available)
+      window.removeEventListener('appinstalled', installed)
     }
   }, [])
   return (
@@ -57,9 +61,13 @@ export function ConnectionStatus() {
             className="primary-button"
             onClick={() =>
               void (async () => {
-                await install.prompt()
-                await install.userChoice
                 setInstall(null)
+                try {
+                  await install.prompt()
+                  await install.userChoice
+                } catch {
+                  setInstallFailed(true)
+                }
               })()
             }
           >
@@ -73,6 +81,11 @@ export function ConnectionStatus() {
             <X size={16} />
           </button>
         </aside>
+      )}
+      {installFailed && (
+        <p role="status">
+          The install prompt could not open. Try your browser’s install menu.
+        </p>
       )}
     </>
   )

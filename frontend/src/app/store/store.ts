@@ -2,7 +2,10 @@ import { statusApi } from '@/features/analytics/api/statusApi'
 import clientAccessReducer, {
   clientAccessUnavailable,
 } from '@/features/client/store/clientAccessSlice'
-import { refreshIdentity } from '@/features/auth/store/session'
+import {
+  clearPrivateCaches,
+  refreshIdentity,
+} from '@/features/auth/store/session'
 import authReducer, {
   identityReceived,
   accessRejected,
@@ -20,8 +23,7 @@ export const createAppStore = () => {
   sessionListener.startListening({
     actionCreator: signedOut,
     effect: (_action, api) => {
-      api.dispatch(agencyApi.util.resetApiState())
-      api.dispatch(clientApi.util.resetApiState())
+      api.dispatch(clearPrivateCaches())
     },
   })
   sessionListener.startListening({
