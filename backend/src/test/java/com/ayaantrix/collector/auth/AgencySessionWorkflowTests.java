@@ -130,6 +130,26 @@ class AgencySessionWorkflowTests {
         for(int i=0;i<10;i++)mvc.perform(mutation("/api/v1/auth/login",Map.of("email",EMAIL,"password","wrong")).header("X-Forwarded-For","10.0.0."+i)).andExpect(status().isUnauthorized());
         mvc.perform(mutation("/api/v1/auth/login",Map.of("email",EMAIL,"password","wrong"))).andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After","60"));
     }
+    @Test void loginTargetLimitFollowsNormalizedEmailAcrossAddresses() throws Exception {
+        for (int attempt = 0; attempt < 10; attempt++) {
+            String address = "192.0.2." + (attempt + 1);
+            String email = attempt % 2 == 0 ? EMAIL : EMAIL.toUpperCase(java.util.Locale.ROOT);
+            mvc.perform(mutation("/api/v1/auth/login", Map.of("email", email, "password", "wrong"))
+                    .with(request -> { request.setRemoteAddr(address); return request; }))
+                .andExpect(status().isUnauthorized());
+        }
+        mvc.perform(mutation("/api/v1/auth/login", Map.of("email", EMAIL, "password", "wrong"))
+                .with(request -> { request.setRemoteAddr("192.0.2.11"); return request; }))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.code").value("RATE_LIMITED"))
+            .andExpect(header().string("Retry-After", "60"));
+        mvc.perform(mutation("/api/v1/auth/login", Map.of("email", "different@example.test", "password", "wrong")))
+            .andExpect(status().isUnauthorized());
+        clock.advance(60);
+        mvc.perform(mutation("/api/v1/auth/login", Map.of("email", EMAIL, "password", "wrong")))
+            .andExpect(status().isUnauthorized());
+        assertThat(count("auth_sessions")).isZero();
+    }
     @Test void bootstrapReturnsSafeIdentityAndHonestEmptyMemberships() throws Exception {
         account(EMAIL);var signed=signIn();mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+signed.access()))
             .andExpect(status().isOk()).andExpect(jsonPath("$.user.email").value(EMAIL)).andExpect(jsonPath("$.memberships").isEmpty()).andExpect(jsonPath("$.user.passwordHash").doesNotExist());

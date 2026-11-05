@@ -1,5 +1,6 @@
 package com.ayaantrix.collector.auth.controller;
 import com.ayaantrix.collector.auth.dto.*;
+import com.ayaantrix.collector.auth.security.EmailAddresses;
 import com.ayaantrix.collector.auth.security.RefreshCookies;
 import com.ayaantrix.collector.auth.service.*;
 import com.ayaantrix.collector.common.error.ApiException;
@@ -25,6 +26,7 @@ public class AgencySessionController {
     @PostMapping(value="/auth/login",consumes=MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<SessionResponses.Login> login(@Valid @RequestBody LoginRequest body,HttpServletRequest request,HttpServletResponse response){
         limits.check("LOGIN",request.getRemoteAddr(),loginLimit);
+        limits.check("LOGIN_TARGET", EmailAddresses.normalize(body.email()), loginLimit);
         var issued=sessions.login(body);cookies.set(response,issued.refreshToken(),issued.expiresAt());resetCsrf(request,response);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new SessionResponses.Login(issued.accessToken(),300,issued.user()));
     }

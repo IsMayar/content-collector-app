@@ -27,7 +27,17 @@ test('keyboard sign-in, responsive workspace and confirmed logout', async ({
   await expect(page.getByLabel('Email address')).toBeFocused()
   await page.getByLabel('Email address').fill('owner@studio.example')
   await page.getByLabel('Password', { exact: true }).fill(password)
-  await page.getByRole('button', { name: 'Show password', exact: true }).click()
+  const showPassword = page.getByRole('button', {
+    name: 'Show password',
+    exact: true,
+  })
+  const passwordId = await page
+    .getByLabel('Password', { exact: true })
+    .getAttribute('id')
+  expect(passwordId).toBeTruthy()
+  await expect(showPassword).toHaveAttribute('aria-controls', passwordId!)
+  await showPassword.focus()
+  await page.keyboard.press('Enter')
   await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute(
     'type',
     'text',

@@ -1,5 +1,5 @@
 import { Eye, EyeOff, Mail } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { UseFormRegisterReturn } from 'react-hook-form'
 
 export interface FieldDefinition {
@@ -19,22 +19,23 @@ export function FormField({
   error?: string
 }) {
   const [visible, setVisible] = useState(false)
-  const { name, label, type = 'text', hint } = field
+  const id = useId()
+  const { label, type = 'text', hint } = field
   return (
     <div className="form-field">
-      <label htmlFor={name}>{label}</label>
+      <label htmlFor={id}>{label}</label>
       <div className={`input-wrap ${type === 'email' ? 'has-input-icon' : ''}`}>
         {type === 'email' && (
           <Mail className="input-icon" size={17} aria-hidden="true" />
         )}
         <input
           {...registration}
-          id={name}
+          id={id}
           type={type === 'password' && visible ? 'text' : type}
           autoComplete={field.autoComplete}
           aria-invalid={!!error}
           aria-describedby={
-            [hint && `${name}-hint`, error && `${name}-error`]
+            [hint && `${id}-hint`, error && `${id}-error`]
               .filter(Boolean)
               .join(' ') || undefined
           }
@@ -44,7 +45,7 @@ export function FormField({
             type="button"
             className="password-toggle"
             aria-label={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
-            aria-pressed={visible}
+            aria-controls={id}
             onClick={() => setVisible(!visible)}
           >
             {visible ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -52,12 +53,12 @@ export function FormField({
         )}
       </div>
       {hint && (
-        <p id={`${name}-hint`} className="field-hint">
+        <p id={`${id}-hint`} className="field-hint">
           {hint}
         </p>
       )}
       {error && (
-        <p id={`${name}-error`} className="form-field-error">
+        <p id={`${id}-error`} className="form-field-error">
           {error}
         </p>
       )}

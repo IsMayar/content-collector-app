@@ -837,6 +837,12 @@ class AttachmentStorageTests {
                 });
         assertThatThrownBy(() -> files().read(t.cookie(), f.project().id(), r.assetId()))
                 .isInstanceOf(ApiException.class);
+        assertThatThrownBy(
+                        () -> files().clientDownload(
+                                t.cookie(), f.project().id(), r.assetId(), "ORIGINAL"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        error -> assertThat(error.getCode()).isEqualTo("CLIENT_ACCESS_UNAVAILABLE"));
         worker().dispatchOne();
         assertThat(
                         jdbc.queryForObject(

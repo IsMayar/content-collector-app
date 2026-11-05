@@ -2358,7 +2358,10 @@ class SubmissionTests {
         String c = enter(f).credential();
         save(f, c, control, json.createObjectNode().put("optionKey", "yes"), 0);
         save(f, c, dependent, text("retain"), 0);
+        long visibleWork = reminders().missing(f.tenant().workspace(), f.project().id());
         save(f, c, control, json.createObjectNode().put("optionKey", ""), 1);
+        assertThat(reminders().missing(f.tenant().workspace(), f.project().id()))
+                .isEqualTo(visibleWork - 1);
         code(() -> submit(f, c, dependent, 1, "hidden"), "NOT_FOUND");
         assertThat(
                         jdbc.queryForObject(
@@ -3607,6 +3610,9 @@ class SubmissionTests {
                                 "acknowledgePartial",
                                 true));
         mvc.perform(get(root)).andExpect(status().isUnauthorized());
+        mvc.perform(get(root).cookie(new jakarta.servlet.http.Cookie(cookieName(), r.cookie())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.data").doesNotExist());
         mvc.perform(
                         post(root)
                                 .header("Authorization", "Bearer " + f.tenant().actor().access())
@@ -3881,6 +3887,16 @@ class SubmissionTests {
         if (kind.equals("revokedSession"))
             context.getBean(AgencySessions.class).logoutAll(actor.jwt());
         var chosen = kind.equals("foreign") ? actor() : actor;
+        if (kind.equals("exporter")) {
+            as(chosen, () -> reviews().addAgencyComment(
+                    f.tenant().workspace(), f.project().id(), r.item(),
+                    new com.ayaantrix.collector.review.dto.ReviewDtos.AgencyComment(
+                            "Assigned member comment",
+                            com.ayaantrix.collector.review.dto.ReviewDtos.Visibility.INTERNAL)));
+            assertThat(as(chosen, () -> reviews().agencyComments(
+                    f.tenant().workspace(), f.project().id(), r.item())).toString())
+                    .contains("Assigned member comment");
+        }
         if (kind.equals("reviewer")) {
             as(
                     chosen,
@@ -5359,6 +5375,10 @@ class SubmissionTests {
                                         f.project().id(),
                                         new com.ayaantrix.collector.reminder.dto.ReminderDtos
                                                 .Update(rules, "UTC", false, p.version(), true)));
+        jdbc.update("update collector.projects set state='PAUSED' where id=?", f.project().id());
+        reminderWorker().schedule();
+        assertThat(count(f.tenant(), "reminder_deliveries")).isZero();
+        jdbc.update("update collector.projects set state='ACTIVE' where id=?", f.project().id());
         for (int i = 0; i < 3; i++) reminderWorker().schedule();
         assertThat(
                         jdbc.queryForObject(
