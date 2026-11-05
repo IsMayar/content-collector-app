@@ -486,7 +486,16 @@ registerProductResolver((request, path, _search, body) => {
         seats: w.usage.seatsLimit,
       },
     })
-  if (resource === 'usage') return response(w.usage)
+  if (resource === 'usage')
+    return response({
+      usage: {
+        ...w.usage,
+        aiDraftsReserved: 0,
+        smsSegmentsReserved: 0,
+        aiPeriodStart: w.usage.periodStart,
+        aiPeriodEnd: w.usage.periodEnd,
+      },
+    })
   if (resource === 'billing' && ['checkout', 'portal'].includes(pid)) {
     requireRule(
       pid !== 'checkout' || ['SOLO', 'AGENCY'].includes(String(body.planKey)),

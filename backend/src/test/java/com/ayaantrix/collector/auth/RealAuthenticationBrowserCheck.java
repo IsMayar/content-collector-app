@@ -80,7 +80,9 @@ class RealAuthenticationBrowserCheck {
     private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly) throws Exception {run(onboarding,analyticsOnly,frictionOnly,false);}
     @Test void realHttpsBillingWithoutMocks() throws Exception {run(true,false,false,false,true);}
     private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly) throws Exception {run(onboarding,analyticsOnly,frictionOnly,visibilityOnly,false);}
-    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly,boolean billingOnly) throws Exception {
+    @Test void realHttpsUsageWithoutMocks() throws Exception {run(true,false,false,false,true,true);}
+    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly,boolean billingOnly) throws Exception {run(onboarding,analyticsOnly,frictionOnly,visibilityOnly,billingOnly,false);}
+    private void run(boolean onboarding,boolean analyticsOnly,boolean frictionOnly,boolean visibilityOnly,boolean billingOnly,boolean usageOnly) throws Exception {
         String password="Synthetic browser-only password",next="Synthetic replacement browser password",email=onboarding?"browser-onboarding@example.test":"browser-only@example.test";
         String certificatePassword=UUID.randomUUID().toString();Path certificate=directory.resolve("browser.p12");
         String keytool=Path.of(System.getProperty("java.home"),"bin","keytool.exe").toString();
@@ -132,6 +134,15 @@ class RealAuthenticationBrowserCheck {
                         assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("ACTIVE");
                         io.step(Map.of("action","billing-confirm"));
                         assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("ACTIVE");
+                        if(usageOnly){
+                            jdbc.update("update collector.workspaces set storage_used_bytes=50000000000 where id=?",workspace);
+                            io.step(Map.of("action","usage-open"));
+                            var end=clock.instant().minusSeconds(86400);var grace=clock.instant().plusSeconds(1);
+                            jdbc.update("update collector.subscriptions set state='PAST_DUE',current_period_start=?,current_period_end=?,grace_ends_at=?,read_only_ends_at=null where workspace_id=?",java.sql.Timestamp.from(end.minusSeconds(30*86400)),java.sql.Timestamp.from(end),java.sql.Timestamp.from(grace),workspace);
+                            io.step(Map.of("action","usage-grace"));
+                            clock.advance(2);io.step(Map.of("action","usage-readonly"));
+                            assertThat(jdbc.queryForObject("select count(*) from collector.clients where workspace_id=?",Integer.class,workspace)).isZero();
+                        }
                         io.step(Map.of("action","stop"));return;
                     }
                     io.step(Map.of("action","workspace-projects"));

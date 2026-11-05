@@ -1462,6 +1462,57 @@ async function command(input) {
       assert.equal(serviceWorkerResponse, false)
       break
     }
+    case 'usage-open': {
+      await page.goto(
+        origin + '/app/w/' + settings.workspace + '/billing?view=usage',
+      )
+      await expect(
+        page.getByRole('heading', { name: 'Usage', exact: true, level: 1 }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('progressbar', { name: 'Storage usage' }),
+      ).toHaveAttribute('max', '50000000000')
+      await expect(
+        page.getByRole('progressbar', { name: 'Storage usage' }),
+      ).toHaveAttribute('value', '50000000000')
+      await expect(
+        page.getByText(/Limit reached. New reservations/),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('progressbar', { name: 'Seats usage' }),
+      ).toHaveAttribute('value', '1')
+      break
+    }
+    case 'usage-grace': {
+      await page.reload()
+      await expect(
+        page.getByText(
+          /Payment needs attention. Editing remains available until/,
+        ),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('progressbar', { name: 'Storage usage' }),
+      ).toBeVisible()
+      break
+    }
+    case 'usage-readonly': {
+      await page.reload()
+      await expect(
+        page.getByText(/Editing, AI, reminders and new invitations are paused/),
+      ).toBeVisible()
+      const result = await run({
+        url: 'workspaces/' + settings.workspace + '/clients',
+        method: 'POST',
+        body: { businessName: 'Rejected synthetic client' },
+      })
+      assert.equal(result.status, 403)
+      assert.equal(result.code, 'WORKSPACE_READ_ONLY')
+      await expect(
+        page.getByRole('progressbar', { name: 'Storage usage' }),
+      ).toBeVisible()
+      assert.equal(serviceWorkerResponse, false)
+      break
+    }
     case 'visibility-create': {
       await page.goto(
         origin + '/app/w/' + settings.workspace + '/settings?view=digest',
@@ -3751,12 +3802,12 @@ for await (const line of lines) {
         })
         .catch(() => {})
     }
-    if (phase.startsWith('billing-')) {
+    if (phase.startsWith('billing-') || phase.startsWith('usage-')) {
       await page
         .screenshot({
           path: fileURLToPath(
             new URL(
-              '../../../.artifacts/real-auth/t32-billing-failure.png',
+              '../../../.artifacts/real-auth/billing-usage-failure.png',
               import.meta.url,
             ),
           ),

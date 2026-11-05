@@ -16,10 +16,51 @@ export const subscriptionResponse = z.object({
     .passthrough(),
 })
 
+const counter = z.number().int().nonnegative()
+export const usageResponse = z.object({
+  usage: z.object({
+    periodStart: z.iso.datetime(),
+    periodEnd: z.iso.datetime(),
+    storageUsedBytes: counter,
+    storageReservedBytes: counter,
+    storageLimitBytes: counter,
+    aiDraftsUsed: counter,
+    aiDraftAllowance: counter,
+    smsSegmentsUsed: counter,
+    smsSegmentAllowance: counter,
+    seatsUsed: counter,
+    seatsReserved: counter,
+    seatsLimit: counter,
+    aiDraftsReserved: counter.default(0),
+    smsSegmentsReserved: counter.default(0),
+    aiPeriodStart: z.iso.datetime().optional(),
+    aiPeriodEnd: z.iso.datetime().optional(),
+  }),
+})
+
 export const billingApi = agencyApi
   .enhanceEndpoints({ addTagTypes: ['Product'] })
   .injectEndpoints({
     endpoints: (build) => ({
+      billingUsage: build.query<z.infer<typeof usageResponse>['usage'], string>(
+        {
+          async queryFn(workspace, _api, _extra, baseQuery) {
+            const result = await baseQuery(`workspaces/${workspace}/usage`)
+            if (result.error) return { error: result.error }
+            const parsed = usageResponse.safeParse(result.data)
+            return parsed.success
+              ? { data: parsed.data.usage }
+              : {
+                  error: {
+                    status: 'CUSTOM_ERROR',
+                    error:
+                      'The usage response is incompatible. Please try again.',
+                  },
+                }
+          },
+          providesTags: ['Product'],
+        },
+      ),
       billingSubscription: build.query<
         z.infer<typeof subscriptionResponse>['subscription'],
         string
@@ -43,7 +84,7 @@ export const billingApi = agencyApi
     }),
   })
 
-export const { useBillingSubscriptionQuery } = billingApi
+export const { useBillingSubscriptionQuery, useBillingUsageQuery } = billingApi
 
 /** Production hosted sessions must stay on the provider's exact HTTPS hosts. */
 export function billingDestination(

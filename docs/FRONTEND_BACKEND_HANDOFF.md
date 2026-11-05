@@ -371,3 +371,8 @@ Guide17.1 has behavior but no concrete catalog digest routes, so minimal additiv
 ## T32 hosted billing
 
 GET workspace/subscription now follows the supplied `{ subscription, entitlements }` envelope, validated and unwrapped by feature-owned billingApi over the existing agency transport. Checkout `{ planKey }` and portal `{}` POSTs require CSRF/live owner scope and Idempotency-Key, returning 201 `{ url }`. The UI keeps checkout retry keys in memory, accepts exact Stripe HTTPS redirect hosts and only permits same-origin demo links with explicitly enabled MSW. Return query parameters do not mutate subscription state; status refresh/polling reads server reconciliation results. Usage remains T33 work. Mock subscription envelopes match the real contract. No secret enters VITE_ configuration. [T32 details](T32_IMPLEMENTATION.md).
+
+
+## T33 real usage and read-only state
+
+Owner GET workspace/usage returns the original `{ usage: UsageSummary }` envelope plus AI/SMS reservation counts and the AI UTC calendar period. Existing subscription period fields describe SMS billing. Billing and Usage use the same validated RTK transport in real and mock mode. Effective state and read-only deadlines come from the server; the browser does not grant write access from dates or redirects. Manual answer saves, private content, and approved download capabilities honor live subscription time. Client checklists expose only existing write/read-only capabilities; owner-only financial totals never enter client responses. Consent withdrawal and billing recovery remain available after content expiry. [T33 implementation](T33_IMPLEMENTATION.md).

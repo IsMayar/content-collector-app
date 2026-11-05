@@ -49,9 +49,7 @@ public class ClientPortalService {
         var drafts = answers.drafts(p.workspaceId(), project);
         var source = structures.structure(p.workspaceId(), project);
         var safe = new ArrayList<tools.jackson.databind.JsonNode>();
-        boolean writable =
-                p.state().name().equals("ACTIVE")
-                        && access.workspace().state().name().equals("ACTIVE");
+        boolean writable = auth.canWrite(access);
         boolean canUpload =
                 writable
                         && storage.enabled()

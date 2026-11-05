@@ -96,7 +96,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.PUT,"/api/v1/workspaces/*/digest-preferences").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/status-shares/exchange").permitAll()
                         .requestMatchers(HttpMethod.GET,"/api/v1/status-shares/*/counts","/api/v1/status-shares/*/embed").permitAll()
-                        .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/subscription").authenticated()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/workspaces/*/subscription","/api/v1/workspaces/*/usage").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/workspaces/*/billing/checkout","/api/v1/workspaces/*/billing/portal").authenticated()
                         .requestMatchers(HttpMethod.POST,"/api/v1/webhooks/stripe").permitAll()
                         .anyRequest().denyAll()

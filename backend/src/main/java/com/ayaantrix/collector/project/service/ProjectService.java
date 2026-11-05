@@ -56,7 +56,7 @@ public class ProjectService {
         return new Detail(result,progress,structure.structure(workspace,id));
     }
     public Paged<Summary> list(UUID workspace,String search,ProjectType type,ProjectState state,String sort,int page,int size){
-        var access=authorization.access(workspace,false);pagination(page,size);
+        var access=authorization.access(workspace,false);authorization.readableUntil(access);pagination(page,size);
         if(search==null)search="";if(search.length()>200 || !Set.of("updatedAt","title","dueDate").contains(sort))throw invalid();
         var order=Sort.by(sort.equals("updatedAt")?Sort.Direction.DESC:Sort.Direction.ASC,sort).and(Sort.by("id"));
         String pattern="%"+search.toLowerCase(Locale.ROOT).replace("!","!!").replace("%","!%").replace("_","!_")+"%";
@@ -72,7 +72,7 @@ public class ProjectService {
         var customer=customers.saveAndFlush(new ProjectCustomer(workspace,input.businessName().strip(),input.contactName()==null || input.contactName().isBlank()?null:input.contactName().strip(),email,clock.instant()));return customer(customer);
     }
     public Paged<Customer> customers(UUID workspace,int page,int size){
-        var access=authorization.access(workspace,false);pagination(page,size);
+        var access=authorization.access(workspace,false);authorization.readableUntil(access);pagination(page,size);
         var result=customers.visibleCustomers(workspace,authorization.owner(access)?null:access.member().id(),PageRequest.of(page,size,Sort.by("businessName","id")));
         return new Paged<>(result.stream().map(ProjectService::customer).toList(),new Page(page,size,result.getTotalElements()));
     }

@@ -202,12 +202,16 @@ class ProjectFoundationTests {
         assertThatThrownBy(()->as(t.actor(),()->service().create(t.workspace(),input(t,ProjectType.WEBSITE),"denied"))).isInstanceOf(ApiException.class);
     }
     @Test void serviceCannotBeInvokedWithoutTrustedIdentity(){var t=tenant();assertThatThrownBy(()->service().create(t.workspace(),input(t,ProjectType.WEBSITE),"no-actor")).isInstanceOf(ApiException.class);}
-    @ParameterizedTest @ValueSource(strings={"READ_ONLY","SUSPENDED","DELETION_PENDING","EXPIRED","MISSING_PLAN"}) void existingPlanPolicyDeniesNewWritesAndRetainsReadAccess(String state) throws Exception {
+    @ParameterizedTest @ValueSource(strings={"READ_ONLY","SUSPENDED","DELETION_PENDING","EXPIRED","MISSING_PLAN"}) void existingPlanPolicyDeniesNewWritesAndPreservesEligibleReadAccess(String state) throws Exception {
         var t=tenant();var p=create(t,ProjectType.WEBSITE);
         if(state.equals("EXPIRED"))jdbc.update("update collector.subscriptions set current_period_start=?,current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.minusSeconds(86400)),java.sql.Timestamp.from(NOW),t.workspace());
         else if(state.equals("MISSING_PLAN"))jdbc.update("delete from collector.subscriptions where workspace_id=?",t.workspace());else jdbc.update("update collector.workspaces set state=? where id=?",state,t.workspace());
         mvc.perform(postProject(t,input(t,ProjectType.WEBSITE),"readonly")).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("WORKSPACE_READ_ONLY"));
-        mvc.perform(get(t.root()+"/projects/"+p.id()).header("Authorization",bearer(t))).andExpect(status().isOk()).andExpect(jsonPath("$.project.permissions.canEditStructure").value(false));assertThat(count(t,"projects")).isEqualTo(1);
+        var read=mvc.perform(get(t.root()+"/projects/"+p.id()).header("Authorization",bearer(t)));
+        // A missing subscription cannot establish a bounded T33 read window.
+        if(state.equals("MISSING_PLAN"))read.andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        else read.andExpect(status().isOk()).andExpect(jsonPath("$.project.permissions.canEditStructure").value(false));
+        assertThat(count(t,"projects")).isEqualTo(1);
     }
     @Test void noArbitraryProjectCapOrProviderUsageIsCharged() {
         var t=tenant();String before=jdbc.queryForObject("select row_to_json(w)::text from collector.workspaces w where id=?",String.class,t.workspace());

@@ -675,3 +675,10 @@ Focused command from backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#status*+diges
 V26 applies through the existing Flyway startup flow. No new runtime/dependency is required. BILLING_ENABLED and BILLING_WORKER_ENABLED default false. Put an approved sk_test_ key, whsec_ endpoint secret, server-owned Solo/Agency price IDs and STRIPE_PORTAL_CONFIGURATION_ID in backend/.env; keep APP_BASE_URL fixed to the HTTPS frontend origin. The portal configuration must disable subscription updates and cancel only at period end. Configure the raw signed POST /api/v1/webhooks/stripe endpoint before enabling a sandbox worker. Live keys are rejected; production checkout remains an explicit launch gate. Local verification uses deterministic provider fixtures without paid calls.
 
 From backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#billing*,StripeBillingProviderTests' test`. Focused HTTPS: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsBillingWithoutMocks' test`. Existing setup/start commands are unchanged. [Contracts, operations and evidence](../docs/T32_IMPLEMENTATION.md).
+
+
+## T33 usage and read-only access
+
+Open Settings → Usage as the workspace owner for live storage, seat, AI and SMS counters and their limits. Billing shows the trial, grace, cancellation and read-only deadlines. Entitlement checks use server time even without a running billing worker. The read-only window keeps permitted content/export access for 30 days; billing recovery and consent withdrawal remain available afterward. Expiration does not automatically delete content. No new setup variables, dependencies or migration.
+
+Focused PowerShell check from backend/: `.\mvnw.cmd '-Dtest=SubmissionTests#usage*' test`. HTTPS: `.\mvnw.cmd '-Dtest=RealAuthenticationBrowserCheck#realHttpsUsageWithoutMocks' test`. [Contracts, scope and verification](../docs/T33_IMPLEMENTATION.md).

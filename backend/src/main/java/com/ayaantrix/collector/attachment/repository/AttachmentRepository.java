@@ -133,17 +133,19 @@ public class AttachmentRepository {
                 jdbc.update(
                         "update collector.workspaces set"
                             + " storage_reserved_bytes=storage_reserved_bytes+? where id=? and"
-                            + " storage_used_bytes+storage_reserved_bytes+?<=storage_limit_bytes",
+                            + " storage_used_bytes+storage_reserved_bytes+?<=least(storage_limit_bytes,?)",
                         reservation,
                         w,
-                        reservation);
+                        reservation,
+                        com.ayaantrix.collector.workspace.entity.PlanKey.STORAGE_BYTES);
         if (ok != 1) {
             // The caller holds the workspace lock: these figures describe the same quota decision.
             var quota =
                     jdbc.queryForMap(
                             "select storage_used_bytes, greatest(0,"
-                                + " storage_limit_bytes-storage_used_bytes-storage_reserved_bytes)"
+                                + " least(storage_limit_bytes,?)-storage_used_bytes-storage_reserved_bytes)"
                                 + " available_bytes from collector.workspaces where id=?",
+                            com.ayaantrix.collector.workspace.entity.PlanKey.STORAGE_BYTES,
                             w);
             throw new com.ayaantrix.collector.common.error.StorageQuotaException(
                     ((Number) quota.get("storage_used_bytes")).longValue(),

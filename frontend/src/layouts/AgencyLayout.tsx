@@ -1,4 +1,5 @@
 import { logoutSession, selectWorkspace } from '@/features/auth/store/session'
+import { WorkspaceBillingNotice } from '@/features/billing/components/WorkspaceBillingNotice'
 import type { WorkspaceDetail } from '@/features/workspace/types/workspace.types'
 import { useData } from '@/services/api/resourceApi'
 import { Brand } from '@/shared/components/Brand'
@@ -201,12 +202,23 @@ export function AgencyLayout() {
         </details>
         <main id="main-content" tabIndex={-1} className="agency-content">
           {error && <Notice error>{error}</Notice>}
-          {workspace.data && !workspace.data.entitlements.canWrite && (
-            <Notice>
-              This workspace is read-only. Reading and permitted exports remain
-              available. Contact the owner to restore editing.
-            </Notice>
-          )}
+          {membership &&
+            pathname !== `/app/w/${membership.workspaceId}/billing` && (
+              <WorkspaceBillingNotice
+                workspace={membership.workspaceId}
+                owner={membership.role === 'OWNER'}
+                canWrite={workspace.data?.entitlements.canWrite}
+              />
+            )}
+          {membership?.role !== 'OWNER' &&
+            workspace.data &&
+            !workspace.data.entitlements.canWrite && (
+              <Notice>
+                Editing is unavailable. Access to saved content and exports
+                depends on your permissions and the workspace access period.
+                Contact your workspace owner.
+              </Notice>
+            )}
           <Outlet />
         </main>
         <footer className="agency-footer">

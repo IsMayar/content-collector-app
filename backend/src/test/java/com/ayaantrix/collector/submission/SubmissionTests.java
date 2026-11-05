@@ -6876,15 +6876,374 @@ class SubmissionTests {
         assertThat(
                         jdbc.queryForObject(
                                 "select processed_at is null from collector.billing_events where"
-                                    + " event_id='evt_T32Watermark'",
+                                        + " event_id='evt_T32Watermark'",
                                 Boolean.class))
                 .isTrue();
         billing().reconcile(t.workspace());
         assertThat(
                         jdbc.queryForObject(
                                 "select processed_at is not null from collector.billing_events"
-                                    + " where event_id='evt_T32Watermark'",
+                                        + " where event_id='evt_T32Watermark'",
                                 Boolean.class))
                 .isTrue();
+    }
+
+    @Test
+    void usageReportsActualScopedLedgersAndReservedSeats() throws Exception {
+        var t = tenant();
+        var month =
+                NOW.atZone(ZoneOffset.UTC)
+                        .withDayOfMonth(1)
+                        .toLocalDate()
+                        .atStartOfDay(ZoneOffset.UTC);
+        jdbc.update(
+                "update collector.workspaces set storage_used_bytes=1100,storage_reserved_bytes=900"
+                        + " where id=?",
+                t.workspace());
+        jdbc.update(
+                "insert into"
+                    + " collector.usage_periods(workspace_id,period_start,period_end,ai_drafts_used,ai_drafts_reserved,created_at,updated_at)"
+                    + " values(?,?,?,?,?,?,?)",
+                t.workspace(),
+                java.sql.Timestamp.from(month.toInstant()),
+                java.sql.Timestamp.from(month.plusMonths(1).toInstant()),
+                3,
+                2,
+                java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        jdbc.update(
+                "insert into"
+                    + " collector.sms_usage(workspace_id,period,used_segments,reserved_segments)"
+                    + " select workspace_id,(current_period_start at time zone 'UTC')::date,4,1"
+                    + " from collector.subscriptions where workspace_id=?",
+                t.workspace());
+        var u = as(t.actor(), () -> billing().usage(t.workspace()));
+        assertThat(u.storageUsedBytes()).isEqualTo(1100);
+        assertThat(u.storageReservedBytes()).isEqualTo(900);
+        assertThat(u.aiDraftsUsed()).isEqualTo(3);
+        assertThat(u.aiDraftsReserved()).isEqualTo(2);
+        assertThat(u.aiDraftAllowance()).isEqualTo(20);
+        assertThat(u.smsSegmentsUsed()).isEqualTo(4);
+        assertThat(u.smsSegmentsReserved()).isEqualTo(1);
+        assertThat(u.smsSegmentAllowance()).isEqualTo(25);
+        assertThat(u.seatsUsed()).isEqualTo(1);
+        assertThat(u.seatsReserved()).isZero();
+        assertThat(u.aiPeriodStart()).isEqualTo(month.toInstant());
+        mvc.perform(get(t.root() + "/usage").header("Authorization", bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.usage.aiDraftsReserved").value(2))
+                .andExpect(jsonPath("$.usage.storageLimitBytes").value(50000000000L));
+        var other = tenant();
+        assertThat(as(other.actor(), () -> billing().usage(other.workspace())).aiDraftsUsed())
+                .isZero();
+    }
+
+    @Test
+    void usageIsOwnerOnlyAndCrossTenantRequestsCannotReachCounters() throws Exception {
+        var t = tenant();
+        var member = actor();
+        var outsider = actor();
+        jdbc.update(
+                "insert into collector.workspace_members(workspace_id,user_id,role)"
+                        + " values(?,?,'MEMBER')",
+                t.workspace(),
+                member.id());
+        for (var actor : List.of(member, outsider))
+            mvc.perform(
+                            get(t.root() + "/usage")
+                                    .header("Authorization", "Bearer " + actor.access()))
+                    .andExpect(status().is4xxClientError());
+        mvc.perform(get(t.root() + "/usage")).andExpect(status().isForbidden());
+    }
+
+    void usagePeriod(Tenant t, String state, Instant end, Instant grace) {
+        jdbc.update(
+                "update collector.subscriptions set"
+                    + " state=?,current_period_start=?,current_period_end=?,grace_ends_at=?,read_only_ends_at=null"
+                    + " where workspace_id=?",
+                state,
+                java.sql.Timestamp.from(end.minus(Duration.ofDays(30))),
+                java.sql.Timestamp.from(end),
+                grace == null ? null : java.sql.Timestamp.from(grace),
+                t.workspace());
+    }
+
+    @Test
+    void usageExpiredTrialBlocksManualDraftSaveAndKeepsExistingContentWithoutCleanup() {
+        var f = fixture();
+        var t = f.tenant();
+        String cookie = enter(f).credential();
+        UUID item = textItem(f);
+        save(f, cookie, item, text("Preserved draft"), 0);
+        long version = detail(t, f.project()).project().structureVersion();
+        usagePeriod(t, "TRIALING", NOW.minusSeconds(1), null);
+        assertThat(
+                        as(t.actor(), () -> billing().read(t.workspace()))
+                                .get("subscription")
+                                .toString())
+                .contains("READ_ONLY");
+        assertThat(
+                        as(
+                                        t.actor(),
+                                        () ->
+                                                context.getBean(WorkspaceService.class)
+                                                        .read(t.workspace())
+                                                        .entitlements())
+                                .canWrite())
+                .isFalse();
+        var collection = portal().checklist(cookie, f.project().id());
+        assertThat(collection.get("capabilities").toString())
+                .contains("canRespond=false", "canSubmit=false");
+        assertThat(
+                        ((JsonNode) drafts().read(cookie, f.project().id(), item).get("item"))
+                                .path("canEdit")
+                                .asBoolean())
+                .isFalse();
+        assertThat(drafts().read(cookie, f.project().id(), item).toString())
+                .contains("Preserved draft");
+        code(
+                () ->
+                        drafts().save(
+                                        cookie,
+                                        f.project().id(),
+                                        item,
+                                        saveCommand(text("Forbidden overwrite"), 1, version)),
+                "WORKSPACE_READ_ONLY");
+        assertThat(drafts().read(cookie, f.project().id(), item).toString())
+                .contains("Preserved draft")
+                .doesNotContain("Forbidden overwrite");
+        assertThat(as(t.actor(), () -> detail(t, f.project())).project().permissions().canExport())
+                .isTrue();
+    }
+
+    @Test
+    void usageGraceAndScheduledCancellationRespectExactServerClockBoundaries() {
+        var t = tenant();
+        usagePeriod(t, "PAST_DUE", NOW.minusSeconds(1), NOW.plusSeconds(1));
+        assertThat(
+                        as(
+                                        t.actor(),
+                                        () ->
+                                                context.getBean(WorkspaceService.class)
+                                                        .read(t.workspace())
+                                                        .entitlements())
+                                .canWrite())
+                .isTrue();
+        context.getBean(TestClock.class).time = NOW.plusSeconds(1);
+        assertThat(
+                        as(
+                                        t.actor(),
+                                        () ->
+                                                context.getBean(WorkspaceService.class)
+                                                        .read(t.workspace())
+                                                        .entitlements())
+                                .canWrite())
+                .isFalse();
+        assertThat(
+                        as(t.actor(), () -> billing().read(t.workspace()))
+                                .get("subscription")
+                                .toString())
+                .contains("READ_ONLY");
+        context.getBean(TestClock.class).time = NOW;
+        usagePeriod(t, "ACTIVE", NOW.plusSeconds(1), null);
+        jdbc.update(
+                "update collector.subscriptions set cancel_at_period_end=true where workspace_id=?",
+                t.workspace());
+        assertThat(
+                        as(
+                                        t.actor(),
+                                        () ->
+                                                context.getBean(WorkspaceService.class)
+                                                        .read(t.workspace())
+                                                        .entitlements())
+                                .canWrite())
+                .isTrue();
+        context.getBean(TestClock.class).time = NOW.plusSeconds(1);
+        assertThat(
+                        as(
+                                        t.actor(),
+                                        () ->
+                                                context.getBean(WorkspaceService.class)
+                                                        .read(t.workspace())
+                                                        .entitlements())
+                                .canWrite())
+                .isFalse();
+    }
+
+    @Test
+    void usageReadonlyWindowEndsButBillingRecoveryAndConsentWithdrawalRemainAvailable() {
+        var review = reviewFixture();
+        var f = review.f();
+        decide(review, "APPROVE", "readonly-window-approval");
+        var t = f.tenant();
+        String cookie = review.cookie();
+        usagePeriod(t, "READ_ONLY", NOW.minus(Duration.ofDays(30)).plusSeconds(1), null);
+        assertThat(
+                        as(
+                                t.actor(),
+                                () ->
+                                        context.getBean(
+                                                        com.ayaantrix.collector.export.service
+                                                                .ExportService.class)
+                                                .list(t.workspace(), f.project().id())))
+                .containsKey("data");
+        assertThat(portal().checklist(cookie, f.project().id())).containsKey("sections");
+        UUID id = export(review, "APPROVED_JSON", true, "read-only-export");
+        assertThat(
+                        context.getBean(com.ayaantrix.collector.export.worker.ExportWorker.class)
+                                .dispatchOne())
+                .isTrue();
+        var url =
+                as(t.actor(), () -> exports().download(t.workspace(), f.project().id(), id))
+                        .get("url");
+        assertThat(java.net.URI.create(url).getRawQuery()).contains("X-Amz-Expires=1");
+
+        context.getBean(TestClock.class).time = NOW.plusSeconds(1);
+        code(
+                () ->
+                        as(
+                                t.actor(),
+                                () ->
+                                        context.getBean(
+                                                        com.ayaantrix.collector.export.service
+                                                                .ExportService.class)
+                                                .list(t.workspace(), f.project().id())),
+                "WORKSPACE_ACCESS_EXPIRED");
+        code(() -> portal().checklist(cookie, f.project().id()), "CLIENT_ACCESS_UNAVAILABLE");
+        code(
+                () ->
+                        as(
+                                t.actor(),
+                                () ->
+                                        service()
+                                                .list(
+                                                        t.workspace(),
+                                                        null,
+                                                        null,
+                                                        null,
+                                                        "updatedAt",
+                                                        0,
+                                                        10)),
+                "WORKSPACE_ACCESS_EXPIRED");
+        assertThat(as(t.actor(), () -> billing().read(t.workspace()))).containsKey("subscription");
+        assertThat(as(t.actor(), () -> billing().usage(t.workspace()))).isNotNull();
+        context.getBean(com.ayaantrix.collector.sms.service.SmsService.class)
+                .withdraw(cookie, f.project().id());
+        assertThat(
+                        context.getBean(
+                                        com.ayaantrix.collector.reminder.service.ReminderService
+                                                .class)
+                                .preferences(cookie, f.project().id()))
+                .isNotNull();
+        assertThat(count(t, "submission_revisions")).isEqualTo(1);
+    }
+
+    @Test
+    void usageStorageOrAiQuotaExhaustionDoesNotBlockManualTextCollection() {
+        var f = fixture();
+        String cookie = enter(f).credential();
+        UUID item = textItem(f);
+        jdbc.update(
+                "update collector.workspaces set"
+                    + " storage_limit_bytes=60000000000,storage_used_bytes=50000000000 where id=?",
+                f.tenant().workspace());
+        var month =
+                NOW.atZone(ZoneOffset.UTC)
+                        .withDayOfMonth(1)
+                        .toLocalDate()
+                        .atStartOfDay(ZoneOffset.UTC);
+        jdbc.update(
+                "insert into"
+                    + " collector.usage_periods(workspace_id,period_start,period_end,ai_drafts_used,created_at,updated_at)"
+                    + " values(?,?,?,?,?,?)",
+                f.tenant().workspace(),
+                java.sql.Timestamp.from(month.toInstant()),
+                java.sql.Timestamp.from(month.plusMonths(1).toInstant()),
+                20,
+                java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        assertThat(
+                        save(f, cookie, item, text("Manual collection remains available"), 0)
+                                .answer()
+                                .version())
+                .isEqualTo(1);
+        var structure = detail(f.tenant(), f.project()).structure();
+        var file = field("plan_limit_file", "FILE");
+        ((ObjectNode) file.path("validation")).putArray("allowedExtensions").add("pdf");
+        var attachment = id(add(f.tenant(), f.project(), id(structure.getFirst()), file));
+        code(
+                () ->
+                        context.getBean(
+                                        com.ayaantrix.collector.attachment.service.AttachmentService
+                                                .class)
+                                .reserve(
+                                        cookie,
+                                        f.project().id(),
+                                        new com.ayaantrix.collector.attachment.dto.AttachmentDtos
+                                                .Reserve(
+                                                attachment,
+                                                "quota.pdf",
+                                                "application/pdf",
+                                                16L,
+                                                true),
+                                        "plan-storage-cap"),
+                "STORAGE_QUOTA_EXCEEDED");
+        var usage = as(f.tenant().actor(), () -> billing().usage(f.tenant().workspace()));
+        assertThat(usage.storageUsedBytes()).isEqualTo(usage.storageLimitBytes());
+        assertThat(usage.aiDraftsUsed()).isEqualTo(usage.aiDraftAllowance());
+    }
+
+    @Test
+    void usagePlanTransitionSerializesAgainstConcurrentManualSave() throws Exception {
+        var f = fixture();
+        var t = f.tenant();
+        String cookie = enter(f).credential();
+        UUID item = textItem(f);
+        long structure = detail(t, f.project()).project().structureVersion();
+        var started = new CountDownLatch(1);
+        try (var pool = Executors.newSingleThreadExecutor()) {
+            java.util.concurrent.atomic.AtomicReference<Future<?>> save =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            tx().executeWithoutResult(
+                            status -> {
+                                context.getBean(
+                                                com.ayaantrix.collector.workspace.repository
+                                                        .WorkspaceRepository.class)
+                                        .lockInvitationWorkspace(t.workspace())
+                                        .orElseThrow();
+                                jdbc.update(
+                                        "update collector.subscriptions set state='READ_ONLY' where"
+                                                + " workspace_id=?",
+                                        t.workspace());
+                                save.set(
+                                        pool.submit(
+                                                () -> {
+                                                    started.countDown();
+                                                    code(
+                                                            () ->
+                                                                    drafts().save(
+                                                                                    cookie,
+                                                                                    f.project()
+                                                                                            .id(),
+                                                                                    item,
+                                                                                    saveCommand(
+                                                                                            text(
+                                                                                                    "Forbidden"
+                                                                                                        + " concurrent"
+                                                                                                        + " save"),
+                                                                                            0,
+                                                                                            structure)),
+                                                            "WORKSPACE_READ_ONLY");
+                                                }));
+                                try {
+                                    assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+                                } catch (InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            });
+            save.get().get(10, TimeUnit.SECONDS);
+        }
+        assertThat(count(t, "answers")).isZero();
     }
 }

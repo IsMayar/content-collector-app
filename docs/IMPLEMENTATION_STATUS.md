@@ -1,6 +1,6 @@
 # Implementation status
 
-Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 4 November 2026.
+Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 5 November 2026.
 
 All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4 is In progress; M5 and M6 are In progress; M7 remains Not started.
 
@@ -525,7 +525,7 @@ Milestone status: In progress
 | T30  | Friction views and sample safeguards           | Incomplete observation windows are not called abandonment | Complete (local acceptance) |
 | T31  | Owner digest and scoped status share/embed     | Token cannot reach content or file endpoints              | Complete (local acceptance) |
 | T32  | Hosted checkout, webhook processing and portal | Sandbox subscription is source of entitlements            | Complete |
-| T33  | Usage UI, trial, grace and read-only states    | Limits are disclosed and enforced server-side             | Not started |
+| T33  | Usage UI, trial, grace and read-only states    | Limits are disclosed and enforced server-side             | Complete |
 
 ### Milestone M7 Public MVP release
 
@@ -884,3 +884,9 @@ T31 is Complete for original-roadmap local acceptance: **Token cannot reach cont
 T32 is Complete for explicitly authorized **local provider-fixture acceptance**: the reconciled provider subscription, never browser return parameters or webhook bodies, supplies paid entitlements. V26 adds durable account/operation/event records and narrow SYSTEM subscription auditing. Owner-only hosted sessions reuse live security, CSRF, independent account bindings, encrypted capabilities and stable provider idempotency. Signed raw-byte events deduplicate durably; fenced worker leases and sequence watermarks preserve concurrent/newer state without holding database locks across provider calls. Fifteen-minute reconciliation repairs missed events; failed jobs back off and grace remains clock-bound. Production billing remains disabled.
 
 **16 focused backend cases and 1 real HTTPS/MSW-disabled fixture journey passed**. The single full clean verify passed **1,080 tests, 0 failures/errors/skips**, including 26 migrations/50 tables, migration/restart/Hibernate checks and executable JAR packaging. **6 frontend checks**, strict TypeScript/production build, changed-file lint and formatting passed. Compilation assertions, a duplicate heading selector and PostgreSQL CASE typing were corrected during focused verification; no failing tests were skipped. Real Stripe sandbox payment, public-host/provider, unrelated responsive/PWA and physical-device suites were intentionally not run. These remain operational/release gates; M6 stays In progress. Both protected collection files remain byte-for-byte unchanged and excluded. [Contracts, exact files and evidence](T32_IMPLEMENTATION.md).
+
+## M6 / T33 usage and subscription states — 5 November 2026
+
+T33 is Complete for original-roadmap local acceptance: **limits are disclosed and enforced server-side**. Owner-only usage reads actual storage, seats, AI and SMS ledgers, including reservations, and the existing plan/trial caps. Server-clock trial, grace and cancellation deadlines block writes even with no cleanup worker. Manual client drafts now honor the write policy. The 30-day read-only window preserves authorized content/export access and bounds new private download URLs; after it ends, content fails closed while billing recovery and live consent withdrawal remain available. No automatic data deletion, provider activation, migration or T34+ work. V26 and supplied specifications are unchanged.
+
+**7 new focused PostgreSQL cases** passed across corrected runs, including exact deadlines, live authorization, quota enforcement, manual collection, concurrent saves and approved-export access. **1 real HTTPS/MSW-disabled fixture journey passed** storage-limit disclosure, grace and read-only transitions, and rejected writes while usage stayed readable. **22 distinct affected frontend checks**, strict TypeScript/production build and changed-file lint/format passed. One full clean run executed **1,087 backend tests: 1,086 passed, one legacy missing-plan read assertion failed, zero errors/skips**. The assertion now requires a known read window and preserves all eligible-read/write-denial checks. The corrected five-case focused verify passed **5/5** and packaged the executable JAR; no second clean full run is claimed. M6 and all actual-provider/public-host/physical-device/release gates remain open. Both original collection edits retain their original SHA-256 hashes and are unstaged. [Exact contracts, files and verification](T33_IMPLEMENTATION.md).

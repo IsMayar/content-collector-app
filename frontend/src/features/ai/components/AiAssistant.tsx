@@ -128,7 +128,10 @@ export function AiAssistant({
       </p>
       <p className="subtle">
         Generating, copying or discarding a suggestion never saves or submits
-        your answer. Regeneration uses your remaining allowance.
+        your answer. Every generation and regeneration uses the workspace's
+        monthly AI allowance; queued jobs reserve capacity. Separate provider
+        spending limits apply. You can always continue writing manually if AI is
+        unavailable.
       </p>
       <form
         hidden={preview}

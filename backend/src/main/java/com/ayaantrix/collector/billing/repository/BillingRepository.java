@@ -53,6 +53,22 @@ public class BillingRepository {
                 key);
     }
 
+    /** Same ledger rows used by AI/SMS reservations; usage is never reconstructed from jobs. */
+    public Map<String, Object> usage(UUID w, Instant aiMonth) {
+        return jdbc.queryForMap(
+                """
+                select w.storage_used_bytes,w.storage_reserved_bytes,
+                  coalesce(a.ai_drafts_used,0) ai_used,coalesce(a.ai_drafts_reserved,0) ai_reserved,
+                  coalesce(s.used_segments,0) sms_used,coalesce(s.reserved_segments,0) sms_reserved
+                from collector.workspaces w join collector.subscriptions p on p.workspace_id=w.id
+                left join collector.usage_periods a on a.workspace_id=w.id and a.period_start=?
+                left join collector.sms_usage s on s.workspace_id=w.id and s.period=(p.current_period_start at time zone 'UTC')::date
+                where w.id=?
+                """,
+                time(aiMonth),
+                w);
+    }
+
     public void operation(
             UUID id,
             UUID w,

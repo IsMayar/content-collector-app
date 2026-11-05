@@ -233,7 +233,7 @@ public class ReminderService {
     }
 
     public Preferences preferences(String cookie, UUID p) {
-        var a = clients.require(cookie, p);
+        var a = clients.notificationSession(cookie, p);
         return prefs(
                 a.grant().workspace(),
                 p,
@@ -243,7 +243,7 @@ public class ReminderService {
     }
 
     public Preferences preferences(String cookie, UUID p, ChangePreferences input) {
-        var a = clients.require(cookie, p);
+        var a = clients.notificationSession(cookie, p);
         if (input.timezone() != null) zone(input.timezone());
         repo.preferences(a.grant().workspace(), p, a.grant().contact(), input, clock.instant());
         sms.timezoneChanged(a.grant().workspace(), p, a.grant().contact(), input.timezone());

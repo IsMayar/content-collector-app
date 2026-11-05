@@ -60,6 +60,21 @@ public class AttachmentAuthorization {
                 .isPresent();
     }
 
+    public long downloadSeconds(UUID workspace) {
+        var now = clock.instant();
+        return plans.lockedForWorkspace(workspace)
+                .filter(p -> p.readable(now))
+                .map(p -> java.time.Duration.between(now, p.readOnlyDeadline()).toSeconds())
+                .filter(seconds -> seconds >= 1)
+                .map(seconds -> Math.min(60, seconds))
+                .orElseThrow(
+                        () ->
+                                new ApiException(
+                                        HttpStatus.FORBIDDEN,
+                                        "WORKSPACE_ACCESS_EXPIRED",
+                                        "The workspace read-only access period has ended."));
+    }
+
     public void agency(UUID workspace, UUID project) {
         var a = agency.access(workspace, false);
         agency.readableProject(a, project);

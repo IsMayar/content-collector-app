@@ -234,7 +234,7 @@ public class ExportService {
                     HttpStatus.CONFLICT,
                     "PARTIAL_EXPORT_ACK_REQUIRED",
                     "Required content is not fully approved. Explicitly acknowledge a partial"
-                        + " export.");
+                            + " export.");
         if (sections.isEmpty())
             throw error(
                     HttpStatus.CONFLICT,
@@ -304,7 +304,7 @@ public class ExportService {
     }
 
     public Map<String, String> download(UUID w, UUID p, UUID id) {
-        access(w, p);
+        var access = access(w, p);
         var j = jobs.find(w, p, id).orElseThrow(ProjectAuthorization::missing);
         long seconds = Duration.between(clock.instant(), j.expires()).toSeconds();
         if (seconds < 1)
@@ -317,13 +317,20 @@ public class ExportService {
                     HttpStatus.CONFLICT,
                     "EXPORT_NOT_READY",
                     "The export is not ready for download.");
+        long readableSeconds =
+                Duration.between(clock.instant(), auth.readableUntil(access)).toSeconds();
+        if (readableSeconds < 1)
+            throw error(
+                    HttpStatus.FORBIDDEN,
+                    "WORKSPACE_ACCESS_EXPIRED",
+                    "The workspace read-only access period has ended.");
         return Map.of(
                 "url",
                 storage.download(
                         j.key(),
                         "approved-" + j.id() + extension(j.format()),
                         "application/octet-stream",
-                        Duration.ofSeconds(Math.min(60, seconds))));
+                        Duration.ofSeconds(Math.min(60, Math.min(seconds, readableSeconds)))));
     }
 
     private Map<String, Object> summary(ExportRepository.Job j, long current) {

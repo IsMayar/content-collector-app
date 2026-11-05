@@ -2,9 +2,9 @@ import { SettingsNav } from '@/features/auth/components/AccountPanel'
 import {
   billingDestination,
   useBillingSubscriptionQuery,
+  useBillingUsageQuery,
 } from '@/features/billing/api/billingApi'
-import type { UsageSummary } from '@/features/billing/types/billing.types'
-import { useData } from '@/services/api/resourceApi'
+import { SubscriptionNotice } from '@/features/billing/components/SubscriptionNotice'
 import { Notice } from '@/shared/components/Feedback'
 import {
   Badge,
@@ -51,7 +51,7 @@ export function BillingPage() {
     skip: !owner,
     pollingInterval: view === 'status' ? 10000 : undefined,
   })
-  const usage = useData<UsageSummary>(`workspaces/${id}/usage`, {
+  const usage = useBillingUsageQuery(id, {
     skip: !owner || view !== 'usage',
   })
   const command = useCommand()
@@ -75,19 +75,20 @@ export function BillingPage() {
         description="Clear limits. A plan that fits how you work."
       />
       <SettingsNav active={view} />
+      <SubscriptionNotice subscription={q.data} />
+      {q.isLoading && <p role="status">Loading subscription details…</p>}
       <Link className="subscription-status-link" to="?view=status">
         View subscription status
       </Link>
       {view === 'status' && (
-        <Panel title="Subscription status">
+        <Panel title="Latest status">
           <div className="subscription-state">
-            <Badge>{q.data?.state || 'LOADING'}</Badge>
+            <Badge>
+              {q.data?.state || (q.isError ? 'UNAVAILABLE' : 'LOADING')}
+            </Badge>
             <p>
-              {q.data?.state === 'PAST_DUE'
-                ? 'Payment needs attention. Update your payment method to keep the workspace active.'
-                : q.data?.state === 'READ_ONLY'
-                  ? 'Your plan is read-only. You can still view and export permitted content.'
-                  : 'Your latest subscription state is shown below. Hosted payment confirmation may take a moment.'}
+              This status comes from the server. Hosted payment confirmation may
+              take a moment.
             </p>
             <button
               className="secondary-button"
@@ -107,9 +108,15 @@ export function BillingPage() {
       {view !== 'usage' && (
         <div className="billing-summary">
           <Panel title="Current plan">
-            <h2>{q.data?.planKey === 'SOLO' ? 'Solo' : 'Agency'}</h2>
+            <h2>
+              {q.data
+                ? q.data.planKey === 'SOLO'
+                  ? 'Solo'
+                  : 'Agency'
+                : 'Loading plan…'}
+            </h2>
             <p className="price">
-              ${q.data?.planKey === 'SOLO' ? '19' : '49'}
+              {q.data ? `$${q.data.planKey === 'SOLO' ? '19' : '49'}` : '—'}
               <small>/ month</small>
             </p>
             <Badge>Proposed pilot pricing</Badge>
@@ -166,7 +173,8 @@ export function BillingPage() {
       {view === 'usage' && (
         <>
           <Panel title="Storage and resource usage">
-            {' '}
+            {usage.isLoading && <p role="status">Loading current usage…</p>}
+            <ErrorNotice error={usage.error ? errorMessage(usage.error) : ''} />
             {usage.data && (
               <div className="usage-grid">
                 {[
@@ -179,15 +187,15 @@ export function BillingPage() {
                   ],
                   [
                     'AI drafts',
-                    usage.data.aiDraftsUsed,
+                    usage.data.aiDraftsUsed + usage.data.aiDraftsReserved,
                     usage.data.aiDraftAllowance,
-                    `${usage.data.aiDraftsUsed} used`,
+                    `${usage.data.aiDraftsUsed} used + ${usage.data.aiDraftsReserved} reserved`,
                   ],
                   [
                     'SMS segments',
-                    usage.data.smsSegmentsUsed,
+                    usage.data.smsSegmentsUsed + usage.data.smsSegmentsReserved,
                     usage.data.smsSegmentAllowance,
-                    `${usage.data.smsSegmentsUsed} used`,
+                    `${usage.data.smsSegmentsUsed} used + ${usage.data.smsSegmentsReserved} reserved`,
                   ],
                   [
                     'Seats',
@@ -198,22 +206,49 @@ export function BillingPage() {
                 ].map(([label, count, total, description]) => (
                   <div key={label}>
                     <strong>{label}</strong>
-                    <progress
-                      value={Number(count)}
-                      max={Number(total)}
-                      aria-label={`${label} usage`}
-                    />
+                    {Number(total) > 0 && (
+                      <progress
+                        value={Math.min(Number(count), Number(total))}
+                        max={Number(total)}
+                        aria-label={`${label} usage`}
+                      />
+                    )}
                     <p>
-                      {description} · {percent(Number(count), Number(total))}%
+                      {description} · Limit{' '}
+                      {label === 'Storage' ? formatBytes(Number(total)) : total}
+                    </p>
+                    <p>
+                      {Number(total) === 0
+                        ? 'No allowance is included in the current trial or plan.'
+                        : Number(count) >= Number(total)
+                          ? 'Limit reached. New reservations are paused until capacity is available.'
+                          : `${percent(Number(count), Number(total))}% of allowance reserved or used`}
                     </p>
                   </div>
                 ))}
               </div>
             )}
             <Notice>
-              Limits apply to the current billing period. Existing content
-              remains available when allowances are reached.
+              Storage includes active reservations. Team invitations reserve
+              seats; clients do not use seats. AI resets on the UTC calendar
+              month; SMS uses the subscription period. Provider availability and
+              separate spending caps still apply. Reaching one quota does not
+              block manual text collection or permitted reads and exports.
             </Notice>
+            {usage.data && (
+              <p className="subtle">
+                Subscription/SMS period:{' '}
+                {new Date(usage.data.periodStart).toLocaleDateString()}–
+                {new Date(usage.data.periodEnd).toLocaleDateString()}.{' '}
+                {usage.data.aiPeriodStart && usage.data.aiPeriodEnd && (
+                  <>
+                    AI period:{' '}
+                    {new Date(usage.data.aiPeriodStart).toLocaleDateString()}–
+                    {new Date(usage.data.aiPeriodEnd).toLocaleDateString()}.
+                  </>
+                )}
+              </p>
+            )}
           </Panel>
           <div className="actions">
             <Link className="secondary-button" to="?view=billing">

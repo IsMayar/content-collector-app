@@ -290,11 +290,12 @@ public class AttachmentService {
                     "This file is not available for download.");
         String path = asset.variants().path(variant).asText();
         if (path.isBlank()) throw ProjectAuthorization.missing();
+        long seconds = auth.downloadSeconds(workspace);
         try {
             return Map.of(
                     "url",
                     storage.download(
-                            path, asset.name(), asset.detectedType(), Duration.ofSeconds(60)));
+                            path, asset.name(), asset.detectedType(), Duration.ofSeconds(seconds)));
         } catch (RuntimeException e) {
             throw unavailable();
         }

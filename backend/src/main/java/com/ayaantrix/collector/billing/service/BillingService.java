@@ -30,6 +30,7 @@ public class BillingService {
     private final TokenDeliveryCipher cipher;
     private final Clock clock;
     private final TransactionTemplate tx;
+    private final WorkspaceSubscriptionRepository plans;
 
     public BillingService(
             BillingRepository repo,
@@ -41,7 +42,8 @@ public class BillingService {
             BillingProvider provider,
             TokenDeliveryCipher cipher,
             Clock clock,
-            PlatformTransactionManager manager) {
+            PlatformTransactionManager manager,
+            WorkspaceSubscriptionRepository plans) {
         this.repo = repo;
         this.auth = auth;
         this.workspaces = workspaces;
@@ -51,6 +53,7 @@ public class BillingService {
         this.provider = provider;
         this.cipher = cipher;
         this.clock = clock;
+        this.plans = plans;
         tx = new TransactionTemplate(manager);
     }
 
@@ -58,18 +61,61 @@ public class BillingService {
         return tx.execute(
                 s -> {
                     auth.access(w, true);
+                    var plan = plans.findByWorkspaceId(w).orElseThrow();
                     var row = repo.subscription(w);
                     var dto = new LinkedHashMap<String, Object>();
                     dto.put("planKey", row.get("plan_key"));
-                    dto.put("state", effectiveState(row, clock.instant()));
+                    dto.put("state", plan.effectiveState(clock.instant()));
                     dto.put("currentPeriodStart", instant(row, "current_period_start"));
                     dto.put("currentPeriodEnd", instant(row, "current_period_end"));
                     dto.put("cancelAtPeriodEnd", row.get("cancel_at_period_end"));
                     dto.put("graceEndsAt", instant(row, "grace_ends_at"));
-                    dto.put("readOnlyEndsAt", instant(row, "read_only_ends_at"));
+                    dto.put(
+                            "readOnlyEndsAt",
+                            plan.effectiveState(clock.instant())
+                                            == WorkspaceSubscription.State.READ_ONLY
+                                    ? plan.readOnlyDeadline()
+                                    : instant(row, "read_only_ends_at"));
                     return Map.of(
                             "subscription", dto, "entitlements", workspaces.read(w).entitlements());
                 });
+    }
+
+    public com.ayaantrix.collector.billing.dto.BillingDtos.Usage usage(UUID w) {
+        return tx.execute(
+                s -> {
+                    auth.access(w, true);
+                    var now = clock.instant();
+                    var month =
+                            now.atZone(ZoneOffset.UTC)
+                                    .withDayOfMonth(1)
+                                    .toLocalDate()
+                                    .atStartOfDay(ZoneOffset.UTC);
+                    var counters = repo.usage(w, month.toInstant());
+                    var period = repo.subscription(w);
+                    var limits = workspaces.read(w).entitlements();
+                    return new com.ayaantrix.collector.billing.dto.BillingDtos.Usage(
+                            instant(period, "current_period_start"),
+                            instant(period, "current_period_end"),
+                            number(counters, "storage_used_bytes"),
+                            number(counters, "storage_reserved_bytes"),
+                            limits.storageLimitBytes(),
+                            number(counters, "ai_used"),
+                            limits.aiDraftAllowance(),
+                            number(counters, "sms_used"),
+                            limits.smsSegmentAllowance(),
+                            members.countByWorkspaceIdAndState(w, WorkspaceMember.State.ACTIVE),
+                            invitations.reserved(w, now),
+                            limits.seats(),
+                            number(counters, "ai_reserved"),
+                            number(counters, "sms_reserved"),
+                            month.toInstant(),
+                            month.plusMonths(1).toInstant());
+                });
+    }
+
+    private static long number(Map<String, Object> row, String key) {
+        return ((Number) row.get(key)).longValue();
     }
 
     private record Intent(UUID id, UUID actor, String customer, String url) {}
@@ -302,16 +348,6 @@ public class BillingService {
                 // The fenced reconcile failure already scheduled its bounded retry.
             }
         tx.executeWithoutResult(s -> repo.cleanup(clock.instant()));
-    }
-
-    private static String effectiveState(Map<String, Object> row, Instant now) {
-        String state = (String) row.get("state");
-        Instant until =
-                instant(row, state.equals("PAST_DUE") ? "grace_ends_at" : "current_period_end");
-        return Set.of("TRIALING", "ACTIVE", "PAST_DUE").contains(state)
-                        && (until == null || !now.isBefore(until))
-                ? "READ_ONLY"
-                : state;
     }
 
     public static Instant instant(Map<String, Object> row, String key) {

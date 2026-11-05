@@ -23,4 +23,8 @@ export interface UsageSummary {
   seatsUsed: number
   seatsReserved: number
   seatsLimit: number
+  aiDraftsReserved?: number
+  smsSegmentsReserved?: number
+  aiPeriodStart?: Instant
+  aiPeriodEnd?: Instant
 }

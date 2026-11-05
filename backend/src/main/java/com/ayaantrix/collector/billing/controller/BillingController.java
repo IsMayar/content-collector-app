@@ -39,6 +39,13 @@ public class BillingController {
         return hosted(billing.hosted(workspace, request.planKey(), key));
     }
 
+    @GetMapping("/workspaces/{workspace}/usage")
+    ResponseEntity<Map<String, Object>> usage(@PathVariable UUID workspace) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(Map.of("usage", billing.usage(workspace)));
+    }
+
     @PostMapping(
             value = "/workspaces/{workspace}/billing/portal",
             consumes = MediaType.APPLICATION_JSON_VALUE)

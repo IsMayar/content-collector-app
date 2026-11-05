@@ -244,7 +244,7 @@ public class SmsService {
     }
 
     public void withdraw(String cookie, UUID p) {
-        var a = clients.require(cookie, p);
+        var a = clients.notificationSession(cookie, p);
         repo.withdraw(a.grant().workspace(), p, a.grant().contact(), clock.instant());
         repo.event(
                 "withdraw:" + UUID.randomUUID(),
