@@ -66,9 +66,6 @@ textarea {
   font-size: 11px;
   color: #7182a3;
 }
-.agency-top {
-  min-height: 70px;
-}
 .agency-layout {
   grid-template-columns: 190px minmax(0, 1fr);
 }

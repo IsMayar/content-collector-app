@@ -31,6 +31,29 @@ async function noOverflow(page: Page) {
   ).toBe(true)
 }
 
+test('workspace header stays at the top while the dashboard scrolls', async ({
+  page,
+}) => {
+  await page.setViewportSize({ ...page.viewportSize()!, height: 480 })
+  await signIn(page)
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  )
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(0)
+  const header = page.getByRole('banner')
+  await expect
+    .poll(() =>
+      header.evaluate((element) => element.getBoundingClientRect().top),
+    )
+    .toBe(0)
+  await header.getByRole('button', { name: 'Sign out', exact: true }).click()
+  await expect(
+    page.getByRole('dialog', { name: 'Sign out of your account?' }),
+  ).toBeVisible()
+})
+
 for (const [path, title] of [
   ['sign-in', 'Welcome back'],
   ['sign-up', 'Create your account'],
