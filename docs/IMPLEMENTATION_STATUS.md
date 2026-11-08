@@ -908,3 +908,9 @@ Verification passed with 12 billing unit tests, three mock browser checks across
 Insights now separates authorized project-list totals from the selected-project snapshot. The overview labels assigned or partial project lists explicitly, counts only ACTIVE projects in its active card, and uses the supplied required-item progress counts. The snapshot shows a section chart and collapsible status table when section data is returned. The current live analytics DTO supplies project totals and a timestamp without sections, so the live view falls back to project totals. Template friction retains the existing grouping and sample safeguards.
 
 Verified with three Playwright viewport checks, five focused frontend tests, and eight focused backend tests, including three PostgreSQL reporting integration cases. TypeScript and changed-file lint passed. Native 200% browser zoom and assistive technology were not exercised.
+
+## Authentication layout redesign
+
+Sign-in, registration, verification and resend, password recovery and reset, and team invitation now share a full-height authentication layout. Desktop uses a 60/40 split, tablet uses a 45/55 split, and phones use a compact brand header above the form. Legal links sit at the bottom of the form panel, and short screens can scroll naturally. The sign-in security callout and duplicate registration action were removed. Mock mode retains a compact synthetic-data notice and exposes scenario controls on auth routes through the demoTools query parameter.
+
+Verification passed with 30 auth unit tests, 12 Playwright checks, TypeScript, changed-file lint and formatting, and the real HTTPS authentication lifecycle with mocks disabled. Playwright confirmed the full-height 60/40 split at 1024px and 1440px, keyboard sign-in, and registration at a 320px viewport. Native 200% browser zoom and screen-reader testing remain unverified.

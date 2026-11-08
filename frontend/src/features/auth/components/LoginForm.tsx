@@ -10,7 +10,6 @@ import { clearPrivateCaches } from '@/features/auth/store/session'
 import { useNotify } from '@/shared/components/Feedback'
 import { useAppDispatch } from '@/shared/hooks/useAppStore'
 import { safeReturnDestination } from '@/shared/utils/returnDestination'
-import { LockKeyhole } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router'
 export function LoginForm() {
   const dispatch = useAppDispatch()
@@ -23,15 +22,6 @@ export function LoginForm() {
     <AuthForm
       schema={loginSchema}
       fields={[email, password]}
-      beforeSubmit={
-        <div className="secure-signin">
-          <LockKeyhole size={25} />
-          <div>
-            <strong>Secure sign in</strong>
-            <small>Use a trusted device to access your account.</small>
-          </div>
-        </div>
-      }
       submitLabel="Sign in"
       onSubmit={async (values) => {
         dispatch(clearPrivateCaches())

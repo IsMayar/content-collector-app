@@ -4,7 +4,6 @@ import { FormField } from '@/shared/components/FormFields'
 import { apiProblem, errorMessage } from '@/shared/utils/apiError'
 import { Button } from '@heroui/react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import type { z } from 'zod'
@@ -14,14 +13,12 @@ export function AuthForm({
   fields,
   initialValues = {},
   submitLabel,
-  beforeSubmit,
   onSubmit,
 }: {
   schema: z.ZodType<Record<string, string>, Record<string, string>>
   fields: FieldDefinition[]
   initialValues?: Record<string, string>
   submitLabel: string
-  beforeSubmit?: ReactNode
   onSubmit: (values: Record<string, string>) => Promise<void>
 }) {
   const [problem, setProblem] = useState('')
@@ -80,7 +77,6 @@ export function AuthForm({
             error={errors[field.name]?.message}
           />
         ))}
-        {beforeSubmit}
         <Button
           className="submit-button"
           type="submit"

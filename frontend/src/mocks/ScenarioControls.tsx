@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router'
+import { useLocation, useMatches } from 'react-router'
 import { ErrorNotice, Field } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useState } from 'react'
@@ -7,8 +7,9 @@ export function ScenarioControls() {
   const command = useCommand()
   const [scenario, setScenario] = useState('normal')
   const location = useLocation()
+  const onAuthPage = useMatches().some(({ id }) => id === 'auth-layout')
   if (
-    /\/(settings|insights)\/?$/.test(location.pathname) &&
+    (onAuthPage || /\/(settings|insights)\/?$/.test(location.pathname)) &&
     new URLSearchParams(location.search).get('demoTools') !== '1'
   )
     return null

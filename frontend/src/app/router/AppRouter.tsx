@@ -168,6 +168,7 @@ export const routes = [
         element: <DemoLayout />,
         children: [
           {
+            id: 'auth-layout',
             element: <AuthLayout />,
             children: [
               { path: '/sign-in', element: <LoginPage /> },

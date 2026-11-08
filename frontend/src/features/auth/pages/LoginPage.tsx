@@ -7,7 +7,7 @@ export function LoginPage() {
       <AuthHeading
         eyebrow="Welcome back"
         title="Welcome back"
-        description="Sign in to Content Collector to continue."
+        description="Sign in to your Content Collector account."
       />
       <LoginForm />
       <div className="form-links">
@@ -15,7 +15,7 @@ export function LoginPage() {
         <Link to="/verify-email">Verify email or resend link</Link>
       </div>
       <p className="auth-switch">
-        New here? <Link to="/sign-up">Create an account</Link>
+        New to Content Collector? <Link to="/sign-up">Create an account</Link>
       </p>
     </AuthCard>
   )

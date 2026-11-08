@@ -13,6 +13,39 @@ test('keyboard sign-in, responsive workspace and confirmed logout', async ({
   await expect(page.getByLabel('Development environment')).toContainText(
     'Synthetic data',
   )
+  const legal = page.getByRole('navigation', { name: 'Legal navigation' })
+  await expect(
+    legal.getByRole('link', { name: 'Privacy Policy' }),
+  ).toHaveAttribute('href', '/privacy')
+  await expect(
+    legal.getByRole('link', { name: 'Terms of Service' }),
+  ).toHaveAttribute('href', '/terms')
+  await expect(
+    page.getByRole('link', { name: 'Create an account', exact: true }),
+  ).toHaveCount(1)
+  await expect(page.getByText('Demo scenarios', { exact: true })).toHaveCount(0)
+  const viewport = page.viewportSize()!
+  for (const width of info.project.name === 'desktop'
+    ? [1024, 1440]
+    : [viewport.width]) {
+    await page.setViewportSize({ ...viewport, width })
+    const story = await page.locator('.auth-story').boundingBox()
+    const form = await page.locator('.auth-content').boundingBox()
+    expect(story).toBeTruthy()
+    expect(form).toBeTruthy()
+    if (width >= 1024) {
+      expect(Math.abs(story!.width - width * 0.6)).toBeLessThan(1)
+      expect(Math.abs(form!.width - width * 0.4)).toBeLessThan(1)
+      expect(Math.abs(story!.x + story!.width - form!.x)).toBeLessThan(1)
+      expect(Math.abs(story!.height - form!.height)).toBeLessThan(1)
+      expect(Math.abs(form!.y + form!.height - viewport.height)).toBeLessThan(1)
+      await expect(legal).toBeInViewport()
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width)
+  }
+  await page.setViewportSize(viewport)
   await page.screenshot({
     path: info.outputPath('sign-in.png'),
     fullPage: true,
@@ -150,7 +183,16 @@ test('invitation survives sign-in and member navigation omits owner controls', a
 test('registration validation, verification resend and client layout', async ({
   page,
 }, info) => {
+  if (info.project.name === 'phone') {
+    await page.setViewportSize({ width: 320, height: 480 })
+  }
   await page.goto('/sign-up')
+  await expect(
+    page.getByRole('navigation', { name: 'Legal navigation' }),
+  ).toBeVisible()
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(page.viewportSize()!.width)
   await page
     .getByRole('button', { name: 'Create account', exact: true })
     .click()

@@ -1,31 +1,56 @@
 import { Brand } from '@/shared/components/Brand'
 import { Link, Outlet, useLocation } from 'react-router'
+
+const signInStory = {
+  title: 'Bring it together.',
+  description: 'Your projects, clients, and content in one place.',
+}
+
+const stories = new Map([
+  [
+    '/sign-up',
+    {
+      title: 'Start with clarity.',
+      description:
+        'Create your workspace and simplify client content collection.',
+    },
+  ],
+  [
+    '/forgot-password',
+    {
+      title: 'Get back to work.',
+      description:
+        'Recover your account securely and continue where you left off.',
+    },
+  ],
+  [
+    '/verify-email',
+    {
+      title: 'One more step.',
+      description: 'Verify your email to activate your account.',
+    },
+  ],
+  [
+    '/reset-password',
+    {
+      title: 'Set a new password.',
+      description: 'Secure your account and continue your work.',
+    },
+  ],
+  [
+    '/team-invite',
+    {
+      title: 'Work together.',
+      description:
+        'Join your team to collect and review client content in one place.',
+    },
+  ],
+])
+
 export function AuthLayout() {
   const { pathname } = useLocation()
-  const signup = pathname === '/sign-up'
-  const story = signup
-    ? {
-        title: 'Welcome back!',
-        description:
-          'Your clients, content and projects are waiting. Sign in and pick up where you left off.',
-        to: '/sign-in',
-        action: 'Sign in',
-      }
-    : pathname === '/sign-in'
-      ? {
-          title: 'Hello, friend!',
-          description:
-            'Bring your team and your clients together. Create a workspace and make room for your next great project.',
-          to: '/sign-up',
-          action: 'Create account',
-        }
-      : {
-          title: 'A fresh start.',
-          description:
-            'Keep your workspace secure and your projects moving. We’ll help you get back to your content.',
-          to: '/sign-in',
-          action: 'Back to sign in',
-        }
+  const story =
+    stories.get(pathname.toLowerCase().replace(/\/$/, '')) ?? signInStory
   return (
     <div className="auth-layout auth-refresh">
       <a className="skip-link" href="#main-content">
@@ -37,25 +62,20 @@ export function AuthLayout() {
           <div className="story-copy">
             <h2>{story.title}</h2>
             <p>{story.description}</p>
-            <Link className="auth-side-action" to={story.to}>
-              {story.action}
-            </Link>
           </div>
-          <span className="auth-decoration auth-circle" aria-hidden="true" />
-          <span className="auth-decoration auth-diamond" aria-hidden="true" />
         </aside>
         <main id="main-content" tabIndex={-1} className="auth-content">
           <div className="auth-form-region">
             <Outlet />
           </div>
-          <nav className="auth-help-nav" aria-label="Help and navigation">
-            <Link to="/about">Help</Link>
-            <Link to="/">Home</Link>
-          </nav>
           <footer className="auth-footer">
+            <nav aria-label="Help and navigation">
+              <Link to="/about">Help</Link>
+              <Link to="/">Home</Link>
+            </nav>
             <nav aria-label="Legal navigation">
-              <Link to="/privacy">Privacy</Link>
-              <Link to="/terms">Terms</Link>
+              <Link to="/privacy">Privacy Policy</Link>
+              <Link to="/terms">Terms of Service</Link>
             </nav>
           </footer>
         </main>
