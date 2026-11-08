@@ -146,16 +146,23 @@ test('team assignment search and Insights are readable and functional', async ({
   await page.keyboard.press('Escape')
   await expect(modal).toHaveCount(0)
   await nav(page, 'Insights')
-  await expect(
-    page.getByRole('heading', { name: 'Explore a project', exact: true }),
-  ).toBeVisible()
-  await expect(
-    page.getByRole('heading', { name: 'Items by section', exact: true }),
-  ).toBeVisible()
+  const details = page.getByText('Section status details', { exact: true })
+  await expect(page.getByRole('table').first()).toBeVisible()
+  await details.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.insights-table')).toBeHidden()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.insights-table')).toBeVisible()
+  const overview = page.getByRole('region', { name: 'Workspace overview' })
+  const before = await overview.locator('article strong').allTextContents()
   const picker = page.getByRole('combobox', { name: 'Project', exact: true })
   await picker.selectOption({ index: 1 })
   const name = await picker.locator('option:checked').innerText()
-  await expect(page.locator('.insights-project-caption h2')).toHaveText(name)
+  await expect(
+    page.getByRole('region', { name: 'Insights for ' + name }),
+  ).toContainText(name)
+  await expect(overview.locator('article strong')).toHaveText(before)
+  await expect(page.getByText('Demo scenarios', { exact: true })).toHaveCount(0)
   expect(await page.locator('body').innerText()).not.toMatch(/[→←↗↑↓]/)
   await noOverflow(page)
   await page.screenshot({

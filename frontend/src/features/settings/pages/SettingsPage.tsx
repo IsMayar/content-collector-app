@@ -1,3 +1,6 @@
+import { env } from '@/config/env'
+import { BillingPage } from '@/features/billing/pages/BillingPage'
+import { TeamPage } from '@/features/workspace/pages/TeamPage'
 import { DigestPreview } from '@/features/analytics/components/DigestPreview'
 import {
   AccountPanel,
@@ -10,7 +13,6 @@ import { useData } from '@/services/api/resourceApi'
 import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
 import {
   Badge,
-  Empty,
   ErrorNotice,
   Field,
   Heading,
@@ -24,83 +26,86 @@ import { Link, useSearchParams } from 'react-router'
 
 export function SettingsPage() {
   const { id, owner, base, user } = useWorkspace()
-  const [search, setSearch] = useSearchParams()
-  const requestedView = search.get('view') || 'workspace'
-  const tab = ['workspace', 'account', 'privacy', 'team', 'digest'].includes(
-    requestedView,
-  )
-    ? requestedView
-    : 'workspace'
+  const [search] = useSearchParams()
+  const requestedView = search.get('view') || 'account'
+  const aliases = new Map([
+    ['team', 'workspace'],
+    ['digest', 'account'],
+    ['security', 'account'],
+    ['usage', 'billing'],
+    ['status', 'billing'],
+  ])
+  const tab =
+    aliases.get(requestedView) ||
+    (['workspace', 'account', 'privacy', 'billing'].includes(requestedView)
+      ? requestedView
+      : 'account')
   const q = useData<WorkspaceDetail & { logo: string; digestEnabled: boolean }>(
-    `workspaces/${id}/settings`,
-    { skip: !owner || tab === 'digest' },
+    `workspaces/${id}${env.mocksEnabled ? '/settings' : ''}`,
+    { skip: !owner || tab !== 'workspace' },
   )
-  const sessions = useData<{ data: SessionSummary[] }>('me/sessions')
+  const sessions = useData<{ data: SessionSummary[] }>('me/sessions', {
+    skip: tab !== 'account',
+  })
   const command = useCommand()
   const [message, setMessage] = useState('')
   const [logo, setLogo] = useState<string | null>(null)
   const [deletion, setDeletion] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
-  if (!owner && tab !== 'account' && tab !== 'digest')
-    return (
-      <Empty
-        title="Owner access required"
-        description="Your owner manages workspace settings."
-      />
-    )
   return (
     <>
       <Heading
-        title={
-          tab === 'digest'
-            ? 'Daily digest'
-            : tab === 'account'
-              ? 'My account'
-              : tab === 'privacy'
-                ? 'Data & privacy'
-                : tab === 'team'
-                  ? 'Workspace ownership'
-                  : 'Workspace settings'
-        }
-        description="The details that make this space yours."
+        title="Settings"
+        description="Manage your account, workspace, billing, and data."
       />
-      <SettingsNav active={tab} />
-      <div className="settings-layout">
-        <nav
-          hidden={!owner}
-          className="settings-subnav"
-          aria-label="Workspace settings sections"
-        >
-          {[
-            ['workspace', 'General'],
-            ['team', 'Team settings'],
-            ['privacy', 'Danger zone'],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              className={tab === key ? 'active' : ''}
-              onClick={() => setSearch({ view: key })}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+      <div className="settings-layout settings-redesign">
+        <SettingsNav active={tab} />
         <div className="settings-body">
-          {tab === 'account' && <AccountPanel />}
-          {tab === 'digest' && <DigestPreview workspaceId={id} />}
-          {tab === 'team' && (
-            <>
-              <OwnershipPanel />
-              <Link className="secondary-button" to={`${base}/team`}>
-                Manage team settings
-              </Link>
-            </>
+          {!owner && tab === 'workspace' && (
+            <Notice>
+              Your workspace owner manages workspace details and team access.
+            </Notice>
           )}
-          {tab === 'workspace' && (
+          <h2 className="settings-section-title">
+            {
+              {
+                account: 'Account & Notifications',
+                workspace: 'Workspace & Team',
+                billing: 'Billing & Usage',
+                privacy: 'Privacy & Data',
+              }[tab]
+            }
+          </h2>
+          {tab === 'privacy' && (
+            <Panel title="Privacy information">
+              <p>
+                Review the draft policies for information about data handling
+                and retention. Final retention periods and legal obligations
+                require approval before publication.
+              </p>
+              <div className="actions">
+                <Link to="/privacy" className="secondary-button">
+                  Privacy Policy
+                </Link>
+                <Link to="/terms" className="secondary-button">
+                  Terms of Service
+                </Link>
+              </div>
+              <p>
+                The documented recovery period for workspace deletion is 30
+                days.
+              </p>
+            </Panel>
+          )}
+
+          {tab === 'account' && <AccountPanel />}
+          {tab === 'account' && <DigestPreview workspaceId={id} />}
+          {tab === 'billing' && <BillingPage embedded />}
+          {tab === 'workspace' && owner && (
             <>
               <div className="workspace-identity">
-                <Panel title="General">
+                <Panel title="Workspace details">
                   <QueryState query={q}>
                     {q.data && (
                       <form
@@ -115,7 +120,9 @@ export function SettingsPage() {
                               {
                                 name: v.get('name'),
                                 timezone: v.get('timezone'),
-                                logo: logo ?? q.data!.logo,
+                                ...(env.mocksEnabled
+                                  ? { logo: logo ?? q.data!.logo }
+                                  : {}),
                                 expectedVersion: q.data!.workspace.version,
                               },
                               'PATCH',
@@ -140,47 +147,51 @@ export function SettingsPage() {
                             />
                           </Field>
                         </div>
-                        <Field label="Workspace logo (PNG/JPEG/WebP, 1 MB)">
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (!file) return
-                              if (
-                                file.size > 1e6 ||
-                                ![
-                                  'image/png',
-                                  'image/jpeg',
-                                  'image/webp',
-                                ].includes(file.type)
-                              ) {
-                                setMessage(
-                                  'Choose a PNG, JPEG or WebP under 1 MB.',
-                                )
-                                return
-                              }
-                              const reader = new FileReader()
-                              reader.onload = () =>
-                                setLogo(String(reader.result))
-                              reader.readAsDataURL(file)
-                            }}
-                          />
-                        </Field>
-                        {(logo ?? q.data.logo) && (
-                          <img
-                            className="workspace-logo"
-                            src={logo ?? q.data.logo}
-                            alt="Workspace logo preview"
-                          />
+                        {env.mocksEnabled && (
+                          <>
+                            <Field label="Workspace logo (PNG/JPEG/WebP, 1 MB)">
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  if (
+                                    file.size > 1e6 ||
+                                    ![
+                                      'image/png',
+                                      'image/jpeg',
+                                      'image/webp',
+                                    ].includes(file.type)
+                                  ) {
+                                    setMessage(
+                                      'Choose a PNG, JPEG or WebP under 1 MB.',
+                                    )
+                                    return
+                                  }
+                                  const reader = new FileReader()
+                                  reader.onload = () =>
+                                    setLogo(String(reader.result))
+                                  reader.readAsDataURL(file)
+                                }}
+                              />
+                            </Field>
+                            {(logo ?? q.data.logo) && (
+                              <img
+                                className="workspace-logo"
+                                src={logo ?? q.data.logo}
+                                alt="Workspace logo preview"
+                              />
+                            )}
+                            <button
+                              type="button"
+                              className="danger-link"
+                              onClick={() => setLogo('')}
+                            >
+                              Remove logo
+                            </button>
+                          </>
                         )}
-                        <button
-                          type="button"
-                          className="danger-link"
-                          onClick={() => setLogo('')}
-                        >
-                          Remove logo
-                        </button>
 
                         <button
                           className="primary-button"
@@ -209,42 +220,79 @@ export function SettingsPage() {
               </div>
             </>
           )}
+          {tab === 'workspace' && owner && (
+            <>
+              <TeamPage />
+              <OwnershipPanel />
+              <Link className="secondary-button" to={`${base}/team`}>
+                Manage team settings
+              </Link>
+            </>
+          )}
           {tab === 'account' && (
             <Panel title="Active sessions">
-              <p className="subtle">
-                Revoke other sessions when a device is no longer yours.
-              </p>
-              {sessions.data?.data.map((s) => (
-                <div className="access-row" key={s.id}>
-                  <div className="grow">
-                    <strong>{s.label}</strong>
-                    <p>Last active {new Date(s.lastSeenAt).toLocaleString()}</p>
-                  </div>
-                  {s.current ? (
-                    <Badge>CURRENT</Badge>
-                  ) : (
-                    <button
-                      className="secondary-button"
-                      onClick={async () => {
-                        if (
-                          await command.run(
-                            `me/sessions/${s.id}`,
-                            undefined,
-                            'DELETE',
+              <QueryState query={sessions}>
+                <p className="subtle">
+                  Revoke other sessions when a device is no longer yours.
+                </p>
+                {sessions.data?.data.map((s) => (
+                  <div className="access-row" key={s.id}>
+                    <div className="grow">
+                      <strong>{s.label}</strong>
+                      <p>
+                        Last active {new Date(s.lastSeenAt).toLocaleString()}
+                      </p>
+                    </div>
+                    {s.current ? (
+                      <Badge>CURRENT</Badge>
+                    ) : (
+                      <button
+                        className="secondary-button"
+                        onClick={async () => {
+                          if (
+                            await command.run(
+                              `me/sessions/${s.id}`,
+                              undefined,
+                              'DELETE',
+                            )
                           )
-                        )
-                          setMessage('Other session revoked.')
-                      }}
-                    >
-                      Revoke session
-                    </button>
-                  )}
-                </div>
-              ))}
+                            setMessage('Other session revoked.')
+                        }}
+                      >
+                        Revoke session
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  className="secondary-button"
+                  disabled={
+                    command.pending ||
+                    !sessions.data?.data.some((s) => !s.current)
+                  }
+                  onClick={async () => {
+                    for (const session of sessions.data?.data.filter(
+                      (s) => !s.current,
+                    ) || []) {
+                      if (
+                        !(await command.run(
+                          `me/sessions/${session.id}`,
+                          undefined,
+                          'DELETE',
+                        ))
+                      )
+                        return
+                    }
+                    setMessage('Other sessions revoked.')
+                  }}
+                >
+                  Sign out other sessions
+                </button>
+              </QueryState>
             </Panel>
           )}
-          {tab === 'privacy' && (
-            <Panel title="Archive or delete workspace">
+          {tab === 'workspace' && owner && env.mocksEnabled && (
+            <Panel title="Request workspace deletion">
               <p>
                 Schedule deletion after a 30-day recovery period. Access becomes
                 read-only immediately. Export approved content before

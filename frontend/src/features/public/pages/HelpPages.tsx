@@ -163,38 +163,23 @@ export function LegalPage({ terms = false }: { terms?: boolean }) {
         ],
       ]
   return (
-    <section className="legal-page">
-      <p className="breadcrumb">
-        <Link to="/">Home</Link> / Legal / {title}
+    <article className="legal-document">
+      <header>
+        <h1>{title}</h1>
+        <span className="policy-draft">Policy draft</span>
+      </header>
+      <p>
+        This draft is provided for review. It is not an approved production
+        policy.
       </p>
-      <div className="legal-layout">
-        <nav aria-label="Document sections">
-          {sections.map(([heading], i) => (
-            <a key={heading} href={`#legal-${i}`}>
-              <FileText size={16} />
-              {heading}
-            </a>
-          ))}
-        </nav>
-        <article>
-          <header>
-            <h1>{title}</h1>
-            <span className="policy-draft">Policy draft</span>
-          </header>
-          <p>
-            This draft is provided for review. It is not an approved production
-            policy.
-          </p>
-          {sections.map(([heading, body], i) => (
-            <section key={heading} id={`legal-${i}`}>
-              <h2>
-                {i + 1}. {heading}
-              </h2>
-              <p>{body}</p>
-            </section>
-          ))}
-        </article>
-      </div>
-    </section>
+      {sections.map(([heading, body], i) => (
+        <section key={heading} id={`legal-${i}`}>
+          <h2>
+            {i + 1}. {heading}
+          </h2>
+          <p>{body}</p>
+        </section>
+      ))}
+    </article>
   )
 }

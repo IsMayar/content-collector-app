@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router'
 import { ErrorNotice, Field } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useState } from 'react'
@@ -5,6 +6,12 @@ import { useState } from 'react'
 export function ScenarioControls() {
   const command = useCommand()
   const [scenario, setScenario] = useState('normal')
+  const location = useLocation()
+  if (
+    /\/(settings|insights)\/?$/.test(location.pathname) &&
+    new URLSearchParams(location.search).get('demoTools') !== '1'
+  )
+    return null
   return (
     <details className="scenario-controls">
       <summary>Demo scenarios</summary>

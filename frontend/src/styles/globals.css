@@ -4,6 +4,7 @@
 @import './collection.css';
 @import './administration.css';
 @import './product-polish.css';
+@import './public-pages.css';
 
 .submission-value {
   white-space: pre-wrap;

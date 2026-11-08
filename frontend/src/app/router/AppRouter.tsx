@@ -1,3 +1,4 @@
+import { env } from '@/config/env'
 import {
   RequireAgency,
   SessionBoundary,
@@ -13,14 +14,19 @@ import { AgencyLayout } from '@/layouts/AgencyLayout'
 import { AuthLayout } from '@/layouts/AuthLayout'
 import { ClientLayout } from '@/layouts/ClientLayout'
 import { PublicLayout } from '@/layouts/PublicLayout'
-import { StatePanel } from '@/shared/components/Feedback'
+import { MockIndicator, StatePanel } from '@/shared/components/Feedback'
 import {
   AgencyFoundation,
   UnauthorizedPage,
 } from '@/shared/components/routing/AgencyAccess'
 import { NotFoundPage } from '@/shared/components/routing/RecoveryPages'
 import { lazy, Suspense } from 'react'
-import { createBrowserRouter } from 'react-router'
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+  useLocation,
+} from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 
 const WorkspaceEntry = lazy(() =>
@@ -68,11 +74,6 @@ const SettingsPage = lazy(() =>
     default: m.SettingsPage,
   })),
 )
-const BillingPage = lazy(() =>
-  import('@/features/billing/pages/BillingPage').then((m) => ({
-    default: m.BillingPage,
-  })),
-)
 const InsightsPage = lazy(() =>
   import('@/features/analytics/pages/InsightsPage').then((m) => ({
     default: m.InsightsPage,
@@ -110,6 +111,42 @@ const deferred = (element: React.ReactNode) => (
     {element}
   </Suspense>
 )
+const ScenarioControls = env.mocksEnabled
+  ? lazy(() =>
+      import('@/mocks/ScenarioControls').then((m) => ({
+        default: m.ScenarioControls,
+      })),
+    )
+  : null
+function DemoLayout() {
+  return (
+    <>
+      <MockIndicator />
+      <Outlet />
+      {ScenarioControls && (
+        <Suspense fallback={null}>
+          <ScenarioControls />
+        </Suspense>
+      )}
+    </>
+  )
+}
+
+function LegacyBillingRoute() {
+  const location = useLocation()
+  const search = new URLSearchParams(location.search)
+  if (!search.has('view')) search.set('view', 'billing')
+  return (
+    <Navigate
+      replace
+      to={
+        location.pathname.replace(/billing\/?$/, 'settings') +
+        '?' +
+        search.toString()
+      }
+    />
+  )
+}
 export const routes = [
   {
     element: <SessionBoundary />,
@@ -128,78 +165,86 @@ export const routes = [
         ],
       },
       {
-        element: <AuthLayout />,
-        children: [
-          { path: '/sign-in', element: <LoginPage /> },
-          { path: '/sign-up', element: <RegisterPage /> },
-          { path: '/forgot-password', element: <ForgotPasswordPage /> },
-          { path: '/reset-password', element: <ResetPasswordPage /> },
-          { path: '/verify-email', element: <VerifyEmailPage /> },
-          { path: '/team-invite', element: <TeamInvitationPage /> },
-        ],
-      },
-      {
-        element: <RequireAgency />,
+        element: <DemoLayout />,
         children: [
           {
-            element: <AgencyLayout />,
+            element: <AuthLayout />,
             children: [
-              { path: '/app', element: deferred(<WorkspaceEntry />) },
+              { path: '/sign-in', element: <LoginPage /> },
+              { path: '/sign-up', element: <RegisterPage /> },
+              { path: '/forgot-password', element: <ForgotPasswordPage /> },
+              { path: '/reset-password', element: <ResetPasswordPage /> },
+              { path: '/verify-email', element: <VerifyEmailPage /> },
+              { path: '/team-invite', element: <TeamInvitationPage /> },
+            ],
+          },
+          {
+            element: <RequireAgency />,
+            children: [
               {
-                path: '/app/onboarding',
-                element: deferred(<OnboardingPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/overview',
-                element: deferred(<DashboardPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/access-foundation',
-                element: <AgencyFoundation ownerOnly />,
-              },
-              {
-                path: '/app/w/:workspaceId/projects',
-                element: deferred(<ProjectsPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/projects/new',
-                element: deferred(<CreateProjectPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/projects/:projectId',
-                element: deferred(<ProjectPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/templates',
-                element: deferred(<TemplatesPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/team',
-                element: deferred(<TeamPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/settings',
-                element: deferred(<SettingsPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/billing',
-                element: deferred(<BillingPage />),
-              },
-              {
-                path: '/app/w/:workspaceId/insights',
-                element: deferred(<InsightsPage />),
+                element: <AgencyLayout />,
+                children: [
+                  { path: '/app', element: deferred(<WorkspaceEntry />) },
+                  {
+                    path: '/app/onboarding',
+                    element: deferred(<OnboardingPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/overview',
+                    element: deferred(<DashboardPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/access-foundation',
+                    element: <AgencyFoundation ownerOnly />,
+                  },
+                  {
+                    path: '/app/w/:workspaceId/projects',
+                    element: deferred(<ProjectsPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/projects/new',
+                    element: deferred(<CreateProjectPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/projects/:projectId',
+                    element: deferred(<ProjectPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/templates',
+                    element: deferred(<TemplatesPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/team',
+                    element: deferred(<TeamPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/settings',
+                    element: deferred(<SettingsPage />),
+                  },
+                  {
+                    path: '/app/w/:workspaceId/billing',
+                    element: <LegacyBillingRoute />,
+                  },
+                  {
+                    path: '/app/w/:workspaceId/insights',
+                    element: deferred(<InsightsPage />),
+                  },
+                ],
               },
             ],
           },
-        ],
-      },
-      {
-        element: <ClientLayout />,
-        children: [
-          { path: '/client/access', element: deferred(<ClientAccessPage />) },
           {
-            path: '/client/projects/:projectId',
-            element: deferred(<ClientProjectPage />),
+            element: <ClientLayout />,
+            children: [
+              {
+                path: '/client/access',
+                element: deferred(<ClientAccessPage />),
+              },
+              {
+                path: '/client/projects/:projectId',
+                element: deferred(<ClientProjectPage />),
+              },
+            ],
           },
         ],
       },

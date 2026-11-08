@@ -35,7 +35,6 @@ export function AuthLayout() {
         <aside className="auth-story" aria-label="About Content Collector">
           <Brand />
           <div className="story-copy">
-            <span className="auth-side-eyebrow">Content Collector</span>
             <h2>{story.title}</h2>
             <p>{story.description}</p>
             <Link className="auth-side-action" to={story.to}>
@@ -46,20 +45,21 @@ export function AuthLayout() {
           <span className="auth-decoration auth-diamond" aria-hidden="true" />
         </aside>
         <main id="main-content" tabIndex={-1} className="auth-content">
-          <Outlet />
+          <div className="auth-form-region">
+            <Outlet />
+          </div>
           <nav className="auth-help-nav" aria-label="Help and navigation">
             <Link to="/about">Help</Link>
             <Link to="/">Home</Link>
           </nav>
+          <footer className="auth-footer">
+            <nav aria-label="Legal navigation">
+              <Link to="/privacy">Privacy</Link>
+              <Link to="/terms">Terms</Link>
+            </nav>
+          </footer>
         </main>
       </div>
-      <footer className="auth-footer">
-        <span>Content Collector by AYAANTRIX</span>
-        <nav aria-label="Legal navigation">
-          <Link to="/privacy">Privacy</Link>
-          <Link to="/terms">Terms</Link>
-        </nav>
-      </footer>
     </div>
   )
 }

@@ -894,3 +894,17 @@ T33 is Complete for original-roadmap local acceptance: **limits are disclosed an
 ## M7 / T35 rate limits, accessibility and isolation — 5 November 2026
 
 Local implementation adds a normalized-email login limit alongside the existing remote-address limit, strengthens accessible field associations and verifies representative keyboard flows at desktop, tablet and phone widths. Targeted PostgreSQL, provider fixture and browser runs give local passing evidence for 30 acceptance cases and partial evidence for A18. All staging results remain pending because there is no approved staging environment. The deployed model evaluation and native zoom and assistive technology checks remain open. T35 and M7 remain In progress. M6 remains In progress pending actual Stripe sandbox acceptance. [A01–A31 evidence, changed files and release gates](T35_IMPLEMENTATION.md).
+
+## Settings interface redesign
+
+Settings now groups account security and digest preferences, workspace details and team management, billing and usage, and privacy information. Existing billing URLs resolve to the combined Settings section. Mock scenarios remain available through the demoTools query parameter in mock mode.
+
+The live workspace form uses the existing workspace read and update endpoints. Profile edits, inline password changes, workspace logo changes, and workspace deletion remain available in mock mode because the current backend does not expose those mutations. Live accounts can request password recovery and manage their active sessions.
+
+Verification passed with 12 billing unit tests, three mock browser checks across desktop, tablet, and phone, TypeScript, and changed-file lint. Browser coverage includes keyboard activation and legacy billing navigation. Native 200% browser zoom and live service mutations were not exercised in this pass.
+
+## Insights dashboard redesign
+
+Insights now separates authorized project-list totals from the selected-project snapshot. The overview labels assigned or partial project lists explicitly, counts only ACTIVE projects in its active card, and uses the supplied required-item progress counts. The snapshot shows a section chart and collapsible status table when section data is returned. The current live analytics DTO supplies project totals and a timestamp without sections, so the live view falls back to project totals. Template friction retains the existing grouping and sample safeguards.
+
+Verified with three Playwright viewport checks, five focused frontend tests, and eight focused backend tests, including three PostgreSQL reporting integration cases. TypeScript and changed-file lint passed. Native 200% browser zoom and assistive technology were not exercised.

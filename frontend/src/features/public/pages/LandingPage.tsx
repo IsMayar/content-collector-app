@@ -1,126 +1,221 @@
-import { Check, Layers, MessageSquare, ShieldCheck } from 'lucide-react'
+import { useAppSelector } from '@/shared/hooks/useAppStore'
+import {
+  Check,
+  ClipboardCheck,
+  Download,
+  FileText,
+  House,
+  Image,
+  Play,
+  Send,
+  Settings,
+  Tag,
+  User,
+  Users,
+} from 'lucide-react'
 import { Link } from 'react-router'
+import { publicPlans } from '../publicPlans'
+
+const previewNav = [
+  { Icon: House, label: 'Projects' },
+  { Icon: FileText, label: 'Requests' },
+  { Icon: User, label: 'Clients' },
+  { Icon: Users, label: 'Team' },
+  { Icon: Settings, label: 'Settings' },
+]
+const previewItems = [
+  {
+    Icon: User,
+    title: 'Project overview',
+    description: 'Brief, goals and key details',
+    complete: true,
+  },
+  {
+    Icon: Tag,
+    title: 'Brand information',
+    description: 'Logo, colors and identity',
+    complete: true,
+  },
+  {
+    Icon: Image,
+    title: 'Images & assets',
+    description: 'Photos, graphics and files',
+    complete: false,
+  },
+]
+const steps = [
+  {
+    Icon: Send,
+    title: 'Request',
+    description: 'Create a project and invite your clients.',
+  },
+  {
+    Icon: ClipboardCheck,
+    title: 'Review',
+    description: 'Collect, check and approve submissions.',
+  },
+  {
+    Icon: Download,
+    title: 'Export',
+    description: 'Download your organized content and files.',
+  },
+]
 
 export function LandingPage() {
+  const authenticated = useAppSelector((s) => s.auth.status === 'authenticated')
   return (
     <>
-      <section className="landing-hero">
-        <div>
-          <p className="eyebrow">FOR AGENCIES, TEAMS AND FREELANCERS</p>
-          <h1>
-            Get client content.
-            <br />
-            Keep projects moving.
-          </h1>
-          <p className="hero-description">
-            Collect copy, requirements and files for websites, web apps and
-            mobile apps in one clear project space.
-          </p>
-          <div className="actions">
-            <Link to="/sign-up" className="primary-button">
-              Create workspace
-            </Link>
-            <Link to="/client/access" className="secondary-button">
-              View client experience
-            </Link>
-          </div>
-          <p className="subtle">
-            <span>
-              <Check size={14} /> Invite clients in minutes
-            </span>
-            <span>
-              <Check size={14} /> Keep everything in one place
-            </span>
-            <span>
-              <Check size={14} /> Clearer handoffs
-            </span>
-          </p>
-        </div>
-        <div className="hero-preview" aria-label="Example collection workspace">
-          <div className="preview-browser">
-            <i />
-            <i />
-            <i />
-            <span>Website redesign · Client workspace</span>
-          </div>
-          <div className="preview-product-layout">
-            <aside>
-              <strong>▣ Content Collector</strong>
-              <span className="selected">▣ Projects</span>
-              <span>▤ Requests</span>
-              <span>♙ Clients</span>
-              <span>♧ Team</span>
-              <span>⚙ Settings</span>
-            </aside>
-            <div className="hero-preview-body">
-              <p className="eyebrow">LAMAR DENTAL WEBSITE</p>
-              <h2>Project content</h2>
-              <p>Keep your client and team aligned from brief to handoff.</p>
-              <div className="preview-progress">
-                <span>
-                  Client progress <strong>8 / 12 complete</strong>
-                </span>
-                <progress
-                  value={8}
-                  max={12}
-                  aria-label="Example submitted progress"
-                />
-              </div>
+      <section className="marketing-hero">
+        <div className="marketing-width marketing-hero-grid">
+          <div className="marketing-intro">
+            <p className="marketing-audience">
+              <Users size={18} aria-hidden="true" /> For agencies, teams and
+              freelancers
+            </p>
+            <h1>
+              Get client content
+              <br />
+              without the back-and-forth.
+            </h1>
+            <p className="marketing-description">
+              A simple, organized way to request, collect, review and export all
+              the content you need for websites, web apps and mobile apps.
+            </p>
+            <div className="actions">
+              <Link
+                to={authenticated ? '/app' : '/sign-up'}
+                className="primary-button"
+              >
+                {authenticated ? 'Open workspace' : 'Get started free'}
+              </Link>
+              <a href="#how-it-works" className="secondary-button">
+                <Play size={18} aria-hidden="true" /> See how it works
+              </a>
+            </div>
+            <ul className="marketing-benefits">
               {[
-                ['Project overview', 'Brief and project details', true],
-                ['Brand information', 'Your voice and identity', true],
-                ['Images & assets', 'Photos and supporting files', false],
-              ].map(([title, desc, done]) => (
-                <div className="hero-task" key={String(title)}>
-                  <span className={done ? 'done' : ''}>
-                    {done ? <Check size={17} /> : <Layers size={17} />}
+                'Invite clients in minutes',
+                'Keep everything in one place',
+                'Faster delivery',
+              ].map((benefit) => (
+                <li key={benefit}>
+                  <Check size={18} aria-hidden="true" /> {benefit}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div
+            className="marketing-preview"
+            role="img"
+            aria-label="Example project with eight of twelve items complete, including project overview and brand information"
+          >
+            <div className="marketing-preview-nav" aria-hidden="true">
+              <strong>
+                <span className="brand-mark">C</span> Content Collector
+              </strong>
+              {previewNav.map(({ Icon, label }) => (
+                <span key={label}>
+                  <Icon size={15} /> {label}
+                </span>
+              ))}
+            </div>
+            <div className="marketing-preview-body" aria-hidden="true">
+              <div className="marketing-preview-header">
+                <div>
+                  <strong>Project content</strong>
+                  <p>Website · Acme Co.</p>
+                </div>
+                <div>
+                  <span>8 of 12 complete (67%)</span>
+                  <progress value={8} max={12} />
+                </div>
+              </div>
+              {previewItems.map(({ Icon, title, description, complete }) => (
+                <div className="marketing-preview-item" key={title}>
+                  <span
+                    className={
+                      complete ? 'preview-complete' : 'preview-pending'
+                    }
+                  >
+                    {complete && <Check size={15} />}
+                  </span>
+                  <span className="marketing-icon">
+                    <Icon size={22} />
                   </span>
                   <div>
                     <strong>{title}</strong>
-                    <p>{desc}</p>
+                    <p>{description}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          <div className="floating-note">
-            <ShieldCheck size={22} />
-            <div>
-              <strong>Reviewed. Approved. Ready.</strong>
-              <p>Approved content, ready for your next stage.</p>
-            </div>
-          </div>
         </div>
       </section>
-      <section className="landing-section">
-        <div className="feature-grid">
-          {[
-            [
-              Layers,
-              'Collect',
-              'Give every client a guided checklist for copy, requirements and files.',
-            ],
-            [
-              MessageSquare,
-              'Review',
-              'Keep submissions, feedback and approvals beside the right project item.',
-            ],
-            [
-              ShieldCheck,
-              'Export',
-              'Prepare approved content and files for your next project stage.',
-            ],
-          ].map(([Icon, title, description]) => {
-            const Symbol = Icon as typeof Layers
+      <section
+        className="marketing-width marketing-steps"
+        aria-labelledby="how-it-works"
+      >
+        <h2 id="how-it-works" tabIndex={-1}>
+          How it works
+        </h2>
+        <p>From request to delivery in three simple steps.</p>
+        <ol>
+          {steps.map(({ Icon, title, description }, index) => (
+            <li key={title}>
+              <span className="marketing-icon">
+                <Icon size={34} aria-hidden="true" />
+              </span>
+              <div>
+                <h3>
+                  {index + 1}. {title}
+                </h3>
+                <p>{description}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+      <section
+        className="marketing-width marketing-pricing"
+        aria-labelledby="marketing-pricing-title"
+      >
+        <div>
+          <p className="eyebrow">Simple, transparent pricing</p>
+          <h2 id="marketing-pricing-title">
+            Choose the plan that fits your team.
+          </h2>
+          <p>Start with a 14-day free trial.</p>
+        </div>
+        <div className="marketing-plans">
+          {publicPlans.map(([name, price, description]) => {
+            const agency = name === 'Agency'
+            const Icon = agency ? Users : User
             return (
-              <article key={String(title)}>
-                <Symbol size={24} />
-                <h3>{String(title)}</h3>
-                <p>{String(description)}</p>
+              <article
+                key={name}
+                className={
+                  agency ? 'marketing-plan featured' : 'marketing-plan'
+                }
+              >
+                <div className="marketing-plan-heading">
+                  <Icon size={24} aria-hidden="true" />
+                  <div>
+                    <h3>{name}</h3>
+                    <p>{description}</p>
+                  </div>
+                  {agency && <span>Popular</span>}
+                </div>
+                <p className="marketing-price">
+                  <strong>${price}</strong> / month
+                </p>
               </article>
             )
           })}
         </div>
+        <Link className="secondary-button" to="/pricing">
+          View all plans
+        </Link>
       </section>
     </>
   )

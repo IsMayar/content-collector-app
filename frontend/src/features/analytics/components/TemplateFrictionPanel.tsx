@@ -13,7 +13,7 @@ export function TemplateFrictionPanel({
     groups.set(key, [...(groups.get(key) || []), m])
   }
   return (
-    <Panel title="Template friction comparisons">
+    <Panel title="Template friction insights">
       <p>
         Separate template versions, item keys and project types. Test projects
         and agency preview are excluded. Counts cover starts in the last 90
@@ -32,7 +32,11 @@ export function TemplateFrictionPanel({
             <FrictionTable rows={rows} />
           </section>
         ))}
-        {q.data?.length === 0 && <p>No eligible template observations yet.</p>}
+        {q.data?.length === 0 && (
+          <p className="insights-template-empty">
+            No eligible template observations yet.
+          </p>
+        )}
       </QueryState>
     </Panel>
   )

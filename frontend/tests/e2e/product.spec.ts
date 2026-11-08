@@ -254,6 +254,52 @@ test('public landing and pricing remain responsive and keyboard accessible', asy
   await noOverflow(page)
 })
 
+test('public legal documents use simple navigation without demo chrome', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await mainReady(page)
+  await expect(page.getByRole('link', { name: 'Product' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await page.getByRole('link', { name: 'See how it works' }).click()
+  await expect(page).toHaveURL(/#how-it-works$/)
+  const footer = page.getByRole('navigation', { name: 'Legal navigation' })
+  await footer.getByRole('link', { name: 'Privacy' }).click()
+  for (const [title, section] of [
+    ['Privacy Policy', '6. Your rights'],
+    ['Terms of Service', '4. Service availability'],
+  ]) {
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: section, exact: true }),
+    ).toBeVisible()
+    await expect(page.getByText('Policy draft', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Development environment')).toHaveCount(0)
+    await expect(page.getByText('Demo scenarios', { exact: true })).toHaveCount(
+      0,
+    )
+    await expect(
+      page.getByRole('navigation', { name: 'Document sections' }),
+    ).toHaveCount(0)
+    await noOverflow(page)
+    if (title === 'Privacy Policy')
+      await footer.getByRole('link', { name: 'Terms' }).click()
+  }
+  const header = page.getByRole('navigation', { name: 'Main navigation' })
+  await header.getByRole('link', { name: 'Home', exact: true }).click()
+  await expect(page).toHaveURL((url) => url.pathname === '/' && !url.hash)
+  await footer.getByRole('link', { name: 'Terms' }).click()
+  await header.getByRole('link', { name: 'Sign in', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Welcome back' }),
+  ).toBeVisible()
+  await expect(page.getByLabel('Development environment')).toBeVisible()
+})
+
 test('wizard preserves details and item drawer traps and restores keyboard focus', async ({
   page,
 }) => {
@@ -818,5 +864,53 @@ test('T12 customers, explicit project contacts and preview keep their boundaries
       await expect(field).toBeDisabled()
   }
   expect(writes).toEqual([])
+  await noOverflow(page)
+})
+
+test('four settings sections retain account workspace billing and privacy flows', async ({
+  page,
+}) => {
+  await signIn(page)
+  await nav(page, 'Settings')
+  const settings = page.getByRole('navigation', { name: 'Settings navigation' })
+  await expect(settings.getByRole('link')).toHaveCount(4)
+  await expect(page.getByText('Demo scenarios', { exact: true })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Save profile', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Daily digest', exact: true }),
+  ).toBeVisible()
+  const workspace = settings.getByRole('link', { name: /Workspace & Team/ })
+  await workspace.focus()
+  await expect(workspace).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(
+    page.getByRole('button', { name: 'Save workspace', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Transfer workspace ownership' }),
+  ).toBeVisible()
+  await settings.getByRole('link', { name: /Billing & Usage/ }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Storage and resource usage' }),
+  ).toBeVisible()
+  await settings.getByRole('link', { name: /Privacy & Data/ }).click()
+  await expect(
+    page.getByRole('link', { name: 'Privacy Policy', exact: true }),
+  ).toBeVisible()
+  await noOverflow(page)
+  const path = new URL(page.url()).pathname.replace(/settings$/, 'billing')
+  await page.evaluate(async (target) => {
+    const modulePath = '/src/app/router/AppRouter.tsx'
+    const { router } = await import(modulePath)
+    await router.navigate(target)
+  }, path + '?view=usage')
+  await expect(
+    settings.getByRole('link', { name: /Billing & Usage/ }),
+  ).toHaveAttribute('aria-current', 'page')
+  await expect(
+    page.getByRole('heading', { name: 'Storage and resource usage' }),
+  ).toBeVisible()
   await noOverflow(page)
 })

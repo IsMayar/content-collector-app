@@ -1,3 +1,5 @@
+import { env } from '@/config/env'
+import { Bell, Building2, CreditCard, ShieldCheck } from 'lucide-react'
 import { authApi } from '@/features/auth/api/authApi'
 import { identityReceived } from '@/features/auth/store/authSlice'
 import { Notice } from '@/shared/components/Feedback'
@@ -10,32 +12,42 @@ import { Link } from 'react-router'
 
 export function SettingsNav({ active }: { active: string }) {
   const { base, owner } = useWorkspace()
+  const icons = [Bell, Building2, CreditCard, ShieldCheck]
+  const sections = [
+    [
+      'account',
+      'Account & Notifications',
+      'Profile, password, sessions, daily digest',
+    ],
+    [
+      'workspace',
+      'Workspace & Team',
+      'Workspace details, members and ownership',
+    ],
+    ['billing', 'Billing & Usage', 'Subscription, trial and resource usage'],
+    ['privacy', 'Privacy & Data', 'Privacy, retention and data information'],
+  ]
   return (
-    <nav
-      className="reference-tabs settings-tabs"
-      aria-label="Settings navigation"
-    >
-      {[
-        ...(owner ? [['workspace', `${base}/settings`, 'Workspace']] : []),
-        ['account', `${base}/settings?view=account`, 'My account'],
-        ['digest', `${base}/settings?view=digest`, 'Daily digest'],
-        ...(owner
-          ? [
-              ['billing', `${base}/billing`, 'Billing'],
-              ['usage', `${base}/billing?view=usage`, 'Usage'],
-              ['privacy', `${base}/settings?view=privacy`, 'Data & privacy'],
-            ]
-          : []),
-      ].map(([key, to, label]) => (
-        <Link
-          key={key}
-          className={active === key ? 'active' : ''}
-          aria-current={active === key ? 'page' : undefined}
-          to={to}
-        >
-          {label}
-        </Link>
-      ))}
+    <nav className="settings-navigation" aria-label="Settings navigation">
+      {sections.map(([key, label, description], index) => {
+        const Icon = icons[index]
+        return (
+          <Link
+            key={key}
+            to={base + '/settings?view=' + key}
+            aria-current={active === key ? 'page' : undefined}
+          >
+            <Icon size={21} aria-hidden="true" />
+            <strong>{label}</strong>
+            <span>
+              {description}
+              {!owner && ['workspace', 'billing'].includes(key)
+                ? ' · Owner access'
+                : ''}
+            </span>
+          </Link>
+        )
+      })}
     </nav>
   )
 }
@@ -44,6 +56,21 @@ export function AccountPanel() {
     command = useCommand(),
     dispatch = useAppDispatch()
   const [message, setMessage] = useState('')
+  if (!env.mocksEnabled)
+    return (
+      <>
+        <Panel title="Profile">
+          <p>{user?.displayName}</p>
+          <p>{user?.email}</p>
+          <Badge>{user?.verified ? 'VERIFIED' : 'UNVERIFIED'}</Badge>
+        </Panel>
+        <Panel title="Password">
+          <Link className="secondary-button" to="/forgot-password">
+            Request a password reset
+          </Link>
+        </Panel>
+      </>
+    )
   return (
     <>
       <Panel title="Profile">

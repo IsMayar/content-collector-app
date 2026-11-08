@@ -21,7 +21,7 @@ import { useRef, useState } from 'react'
 import { env } from '@/config/env'
 import { errorMessage } from '@/shared/utils/apiError'
 
-export function BillingPage() {
+export function BillingPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const checkoutKeys = useRef<Record<string, string>>({})
   const [redirectError, setRedirectError] = useState('')
@@ -52,7 +52,7 @@ export function BillingPage() {
     pollingInterval: view === 'status' ? 10000 : undefined,
   })
   const usage = useBillingUsageQuery(id, {
-    skip: !owner || view !== 'usage',
+    skip: !owner || (!embedded && view !== 'usage'),
   })
   const command = useCommand()
   if (!owner)
@@ -64,17 +64,19 @@ export function BillingPage() {
     )
   return (
     <>
-      <Heading
-        title={
-          view === 'usage'
-            ? 'Usage'
-            : view === 'status'
-              ? 'Subscription status'
-              : 'Billing'
-        }
-        description="Clear limits. A plan that fits how you work."
-      />
-      <SettingsNav active={view} />
+      {!embedded && (
+        <Heading
+          title={
+            view === 'usage'
+              ? 'Usage'
+              : view === 'status'
+                ? 'Subscription status'
+                : 'Billing'
+          }
+          description="Clear limits. A plan that fits how you work."
+        />
+      )}
+      {!embedded && <SettingsNav active="billing" />}
       <SubscriptionNotice subscription={q.data} />
       {q.isLoading && <p role="status">Loading subscription details…</p>}
       <Link className="subscription-status-link" to="?view=status">
@@ -105,7 +107,7 @@ export function BillingPage() {
           subscription was changed.
         </Notice>
       )}
-      {view !== 'usage' && (
+      {(embedded || view !== 'usage') && (
         <div className="billing-summary">
           <Panel title="Current plan">
             <h2>
@@ -128,8 +130,19 @@ export function BillingPage() {
               .
             </p>
             <ul>
-              <li>{usage.data?.seatsLimit || 0} seats</li>
-              <li>50 GB storage</li>
+              {usage.data && (
+                <>
+                  <li>{usage.data.seatsLimit} seats</li>
+                  <li>{formatBytes(usage.data.storageLimitBytes)} storage</li>
+                  <li>
+                    {usage.data.aiDraftAllowance} AI drafts per allowance period
+                  </li>
+                  <li>
+                    {usage.data.smsSegmentAllowance} SMS segments per allowance
+                    period
+                  </li>
+                </>
+              )}
               <li>Unlimited active projects within resource limits</li>
             </ul>
             <Link className="secondary-button" to="/pricing">
@@ -144,7 +157,9 @@ export function BillingPage() {
                   <Badge>{q.data.state}</Badge>
                 </div>
                 <p>
-                  Current period ends{' '}
+                  {q.data.state === 'TRIALING'
+                    ? 'Trial ends'
+                    : 'Current period ends'}{' '}
                   {new Date(q.data.currentPeriodEnd).toLocaleDateString()}
                 </p>
                 <p className="subtle">
@@ -170,7 +185,7 @@ export function BillingPage() {
           </Panel>
         </div>
       )}
-      {view === 'usage' && (
+      {(embedded || view === 'usage') && (
         <>
           <Panel title="Storage and resource usage">
             {usage.isLoading && <p role="status">Loading current usage…</p>}
@@ -251,9 +266,11 @@ export function BillingPage() {
             )}
           </Panel>
           <div className="actions">
-            <Link className="secondary-button" to="?view=billing">
-              Go to billing
-            </Link>
+            {!embedded && (
+              <Link className="secondary-button" to="?view=billing">
+                Go to billing
+              </Link>
+            )}
             <Link className="secondary-button" to={`${base}/team`}>
               Manage team seats
             </Link>
