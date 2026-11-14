@@ -12,6 +12,7 @@ export function TypedValue({
   root,
   preview = false,
   liveUploads = false,
+  uploadsUnavailable = false,
   currentValue,
   onFilesChanged,
   beforeDelete,
@@ -23,6 +24,7 @@ export function TypedValue({
   root: string
   preview?: boolean
   liveUploads?: boolean
+  uploadsUnavailable?: boolean
   currentValue?: () => AnswerValue
   onFilesChanged?: () => void
   beforeDelete?: () => Promise<boolean>
@@ -45,7 +47,7 @@ export function TypedValue({
       >
         {item.type === 'LONG_TEXT' ? (
           <textarea
-            rows={9}
+            rows={5}
             value={String(data.text || '')}
             disabled={disabled}
             maxLength={rules.maxLength || 10000}
@@ -116,12 +118,14 @@ export function TypedValue({
       </fieldset>
     )
   if (item.type === 'FILE' || item.type === 'IMAGE')
-    return preview ? (
+    return preview || uploadsUnavailable ? (
       <p className="disabled-preview">
         {item.type === 'IMAGE' ? 'Image upload' : 'File upload'} ·{' '}
         {rules.minFiles || 0}–{rules.maxFiles || 1} files ·{' '}
-        {rules.allowedExtensions?.join(', ') || 'Supported file types'}. Uploads
-        are unavailable in preview.
+        {rules.allowedExtensions?.join(', ') || 'Supported file types'}.{' '}
+        {preview
+          ? 'Uploads are unavailable in preview.'
+          : 'Uploads are currently unavailable for this project. Contact your agency for help.'}
       </p>
     ) : (
       <UploadQueue
@@ -173,9 +177,12 @@ export function TypedValue({
                   ),
                 })
               if (column.type === 'IMAGE')
-                return preview ? (
+                return preview || uploadsUnavailable ? (
                   <p key={column.key}>
-                    {column.label}: image upload unavailable in preview.
+                    {column.label}:{' '}
+                    {preview
+                      ? 'image upload unavailable in preview.'
+                      : 'image uploads are currently unavailable for this project. Contact your agency for help.'}
                   </p>
                 ) : (
                   <div key={column.key}>
@@ -250,6 +257,7 @@ export function TypedValue({
                     </select>
                   ) : column.type === 'LONG_TEXT' ? (
                     <textarea
+                      rows={4}
                       value={String(cell || '')}
                       maxLength={10000}
                       onChange={(e) => update(e.target.value)}

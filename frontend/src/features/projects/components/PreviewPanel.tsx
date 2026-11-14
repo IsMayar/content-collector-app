@@ -1,6 +1,4 @@
 import { useClientPreview } from '@/features/projects/api/previewApi'
-import { TypedValue } from '@/features/client/components/TypedValue'
-import type { AnswerValue } from '@/features/client/types/client.types'
 import { Notice } from '@/shared/components/Feedback'
 import { Panel, QueryState } from '@/shared/components/ProductUI'
 import { useState } from 'react'
@@ -47,22 +45,6 @@ export function PreviewPanel({ root }: { root: string }) {
                   <p>No visible requests in this section.</p>
                 )}
                 {s.items.map((i) => {
-                  const value: AnswerValue =
-                    i.type === 'REPEATER'
-                      ? {
-                          rows: [
-                            {
-                              rowId: 'preview',
-                              values: Object.fromEntries(
-                                (i.validation.columns || []).map((c) => [
-                                  c.key,
-                                  c.type === 'IMAGE' ? [] : '',
-                                ]),
-                              ),
-                            },
-                          ],
-                        }
-                      : { text: '' }
                   return (
                     <div className="preview-item" key={i.id}>
                       <h3>
@@ -71,14 +53,6 @@ export function PreviewPanel({ root }: { root: string }) {
                       </h3>
                       <p>{i.instructions}</p>
                       {i.example && <p>Example: {i.example}</p>}
-                      <TypedValue
-                        item={i}
-                        value={value}
-                        onChange={() => {}}
-                        disabled
-                        root=""
-                        preview
-                      />
                     </div>
                   )
                 })}

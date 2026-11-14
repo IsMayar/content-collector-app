@@ -1,3 +1,4 @@
+import { env } from '@/config/env'
 import type { UsageSummary } from '@/features/billing/types/billing.types'
 import { UploadQueue } from '@/features/client/components/UploadQueue'
 import type { AssetSummary } from '@/features/projects/types/file.types'
@@ -10,7 +11,6 @@ import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
 import { Modal } from '@/shared/components/Modal'
 import {
   Badge,
-  DualProgress,
   Empty,
   ErrorNotice,
   Heading,
@@ -38,6 +38,21 @@ export function FilesPanel({
   root: string
   project: Project
 }) {
+  if (env.mocksEnabled) return <DemoFilesPanel root={root} project={project} />
+  return (
+    <Panel title="Project files">
+      <p>
+        The live service does not provide a project-wide file gallery. Clients
+        add files to individual questions. Submitted files are available to
+        authorized agency users from the exact revision.
+      </p>
+      <Link className="secondary-button" to="?tab=checklist">
+        Open project content
+      </Link>
+    </Panel>
+  )
+}
+function DemoFilesPanel({ root, project }: { root: string; project: Project }) {
   const detail = useData<ProjectDetail>(root)
   const [upload, setUpload] = useState(false),
     [uploadItem, setUploadItem] = useState(''),
@@ -93,17 +108,19 @@ export function FilesPanel({
         title="Project files"
         description="Manage images and documents linked to your project content."
       >
-        <div className="storage-meter">
-          <strong>{formatBytes(usage.data?.storageUsedBytes || 0)}</strong> of{' '}
-          {formatBytes(usage.data?.storageLimitBytes || 0)} used
-          <progress
-            aria-label="Workspace storage"
-            value={usage.data?.storageUsedBytes || 0}
-            max={usage.data?.storageLimitBytes || 1}
-          />
-        </div>
+        {usage.data && (
+          <div className="storage-meter">
+            <strong>{formatBytes(usage.data?.storageUsedBytes || 0)}</strong> of{' '}
+            {formatBytes(usage.data?.storageLimitBytes || 0)} used
+            <progress
+              aria-label="Workspace storage"
+              value={usage.data?.storageUsedBytes || 0}
+              max={usage.data?.storageLimitBytes || 1}
+            />
+          </div>
+        )}
       </Heading>
-      {project.permissions.canEditStructure && (
+      {q.data && project.permissions.canEditStructure && (
         <button
           className="primary-button"
           disabled={
@@ -350,9 +367,6 @@ export function CompletionPanel({
       >
         <Badge>{project.state}</Badge>
       </Heading>
-      <Panel>
-        <DualProgress progress={project.progress} />
-      </Panel>
       <Panel
         title={
           ready
@@ -374,9 +388,14 @@ export function CompletionPanel({
                 : `${project.progress.clientActionRequired} required items still need client action.`}
             </p>
           </div>
-          <Link className="primary-button" to="?tab=exports">
-            Download approved package
-          </Link>
+          {project.permissions.canExport &&
+            project.progress.approvedRequired +
+              project.progress.optionalApproved >
+              0 && (
+              <Link className="primary-button" to="?tab=exports">
+                Download approved package
+              </Link>
+            )}
         </div>
       </Panel>
       <Panel title="Need to make a change?">
@@ -384,22 +403,23 @@ export function CompletionPanel({
           You can reopen an approved item to request updates. Previous approvals
           remain in history.
         </p>
-        <Link className="secondary-button" to="?tab=review">
+        <Link className="secondary-button" to="?tab=checklist">
           Reopen an item
         </Link>
       </Panel>
-      {project.state === 'ACTIVE' && (
-        <Panel title="Mark project complete">
-          <p>Complete the project once all required content is approved.</p>
-          <button
-            className="primary-button"
-            disabled={!ready}
-            onClick={() => setAction('complete')}
-          >
-            Complete project
-          </button>
-        </Panel>
-      )}
+      {project.permissions.canManageAccess &&
+        ['ACTIVE', 'PAUSED'].includes(project.state) && (
+          <Panel title="Mark project complete">
+            <p>Complete the project once all required content is approved.</p>
+            <button
+              className="primary-button"
+              disabled={!ready}
+              onClick={() => setAction('complete')}
+            >
+              Complete project
+            </button>
+          </Panel>
+        )}
       <Panel
         title={
           project.state === 'ARCHIVED' ? 'Restore project' : 'Archive project'

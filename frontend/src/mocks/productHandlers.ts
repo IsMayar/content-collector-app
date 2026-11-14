@@ -10,7 +10,7 @@ import {
 } from '@/mocks/productDb'
 import type { ProjectRecord } from '@/mocks/types/fixtures.types'
 import { apiBaseUrl } from '@/services/api/baseQuery'
-import { progressFor } from '@/shared/utils/domain'
+import { progressFor, visibleItems } from '@/shared/utils/domain'
 import { delay, http, HttpResponse } from 'msw'
 
 export const apiRoot = new URL(
@@ -450,12 +450,22 @@ function foundation(
       method === 'GET' ? 'read' : 'owner',
       method !== 'GET',
     )
-    if (method === 'GET')
+    if (method === 'GET') {
+      const visible = new Set(
+        visibleItems(record.structure, record.answers).map((item) => item.id),
+      )
       return response({
         project,
         progress: project.progress,
-        structure: record.structure,
+        structure: record.structure.map((section) => ({
+          ...section,
+          items: section.items.map((item) => ({
+            ...item,
+            visible: visible.has(item.id),
+          })),
+        })),
       })
+    }
     if (method === 'PATCH') {
       checkVersion(record.project.version, body.expectedVersion)
       for (const key of ['title', 'dueDate', 'timezone'] as const)

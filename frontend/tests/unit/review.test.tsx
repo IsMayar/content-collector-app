@@ -75,6 +75,9 @@ function mount(overrides: Partial<typeof item> = {}) {
     <LiveRevisionReview
       root="workspaces/test/projects/test"
       item={{ ...item, ...overrides }}
+      initialRevision={
+        overrides.currentRevisionId === id ? revisionId : undefined
+      }
     />,
   )
 }

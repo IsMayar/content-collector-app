@@ -1,5 +1,13 @@
+import {
+  Bell,
+  ChevronRight,
+  FileText,
+  LogOut,
+  CheckCircle2,
+} from 'lucide-react'
+import { Modal } from '@/shared/components/Modal'
+import './ClientPortal.css'
 import { ClientPreferences } from './ClientPreferences'
-import { SubmissionValidationSummary } from './SubmissionValidationSummary'
 import { UnsavedDraftRecovery } from './UnsavedDraftRecovery'
 import { useEffect, useState } from 'react'
 import { useInteraction } from '../hooks/useInteraction'
@@ -21,6 +29,7 @@ export function CollectionPortal({
     interaction()
   }, [interaction])
   const [selected, setSelected] = useState('')
+  const [expanded, setExpanded] = useState('')
   const [preferences, setPreferences] = useState(
     () =>
       new URLSearchParams(window.location.search).get('preferences') === '1',
@@ -29,6 +38,12 @@ export function CollectionPortal({
   const navigate = useNavigate()
   const current =
     data.sections.find((s) => s.id === selected) || data.sections[0]
+  const required = data.sections
+    .flatMap((s) => s.items)
+    .filter((i) => i.required)
+  const submitted = required.filter((i) =>
+    ['SUBMITTED', 'APPROVED'].includes(i.state),
+  ).length
   async function flush() {
     const visibleIds = new Set(
       data.sections.flatMap((s) =>
@@ -42,17 +57,17 @@ export function CollectionPortal({
     return results.every(Boolean)
   }
   return (
-    <>
+    <div className="collection-portal">
       <Heading
         title={data.project.title}
-        description="Save your answers, then submit each completed question for review. Submitted answers stay read-only until an eligible withdrawal or agency reopening. Approved revisions remain in history."
+        description="Share your answers and files, then send each question for review."
       >
         <button
           className="secondary-button"
           aria-expanded={preferences}
           onClick={() => setPreferences(!preferences)}
         >
-          Reminder preferences
+          <Bell size={16} aria-hidden="true" /> Reminder preferences
         </button>
         <button
           className="secondary-button"
@@ -65,12 +80,32 @@ export function CollectionPortal({
             }
           }}
         >
-          Leave project
+          <LogOut size={16} aria-hidden="true" /> Leave project
         </button>
       </Heading>
+      {required.length > 0 && (
+        <div className="client-project-progress" aria-label="Project progress">
+          <span>
+            {submitted} of {required.length} required questions submitted
+          </span>
+          <progress
+            value={submitted}
+            max={required.length}
+            aria-label="Submitted or approved required questions"
+          />
+          <strong>{Math.round((submitted / required.length) * 100)}%</strong>
+        </div>
+      )}
       <ErrorNotice error={command.error} />
       {preferences && (
-        <ClientPreferences root={`client/projects/${data.project.id}`} />
+        <Modal
+          title="Reminder preferences"
+          onClose={() => setPreferences(false)}
+        >
+          <div className="client-preferences-dialog">
+            <ClientPreferences root={`client/projects/${data.project.id}`} />
+          </div>
+        </Modal>
       )}
       <UnsavedDraftRecovery projectId={data.project.id} />
       {!data.capabilities.canRespond && (
@@ -78,20 +113,12 @@ export function CollectionPortal({
           This project is read-only. Your saved drafts remain available.
         </p>
       )}
-      <SubmissionValidationSummary
-        data={data}
-        onSelect={async (section, item) => {
-          if (!(await flush())) return
-          setSelected(section)
-          requestAnimationFrame(() => {
-            const target = document.getElementById('question-' + item)
-            target?.setAttribute('tabindex', '-1')
-            target?.focus()
-          })
-        }}
-      />
+
       <div className="client-workspace">
         <nav className="client-checklist" aria-label="Requested sections">
+          <p className="client-sections-label">
+            <FileText size={16} aria-hidden="true" /> Content sections
+          </p>
           {data.sections.map((s) => (
             <button
               key={s.id}
@@ -100,22 +127,50 @@ export function CollectionPortal({
               onClick={async () => {
                 if (await flush()) {
                   setSelected(s.id)
+                  setExpanded('')
                   requestAnimationFrame(() =>
                     document.getElementById('section-' + s.id)?.focus(),
                   )
                 }
               }}
             >
-              {s.title}
+              <span>
+                {s.title}
+                <small>
+                  {
+                    s.items.filter((i) =>
+                      ['SUBMITTED', 'APPROVED'].includes(i.state),
+                    ).length
+                  }{' '}
+                  of {s.items.length} submitted
+                </small>
+              </span>
+              <ChevronRight size={17} aria-hidden="true" />
             </button>
           ))}
         </nav>
         <div className="client-editor">
           {data.sections.map((s) => (
             <section key={s.id} hidden={s.id !== current?.id}>
-              <h2 tabIndex={-1} id={'section-' + s.id}>
-                {s.title}
-              </h2>
+              <header className="client-section-heading">
+                <h2 tabIndex={-1} id={'section-' + s.id}>
+                  {s.title}
+                </h2>
+                <span>
+                  <CheckCircle2 size={15} aria-hidden="true" />{' '}
+                  {
+                    s.items.filter((i) =>
+                      ['SUBMITTED', 'APPROVED'].includes(i.state),
+                    ).length
+                  }{' '}
+                  of {s.items.length} submitted
+                </span>
+              </header>
+              {!s.items.length && (
+                <p className="client-empty-section">
+                  No questions in this section yet.
+                </p>
+              )}
               {s.items.map((item) => (
                 <ClientDraftField
                   key={
@@ -124,6 +179,11 @@ export function CollectionPortal({
                     (item.state === 'SUBMITTED' ? 'submitted' : 'editable')
                   }
                   item={item}
+                  expanded={expanded === item.id}
+                  onToggle={async () => {
+                    if (!(await flush())) return
+                    setExpanded((open) => (open === item.id ? '' : item.id))
+                  }}
                   projectId={data.project.id}
                   structureVersion={data.project.structureVersion}
                   onSaved={onRefresh}
@@ -136,6 +196,6 @@ export function CollectionPortal({
           ))}
         </div>
       </div>
-    </>
+    </div>
   )
 }

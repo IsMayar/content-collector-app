@@ -1,5 +1,7 @@
 # Website Content Collector
 
+[Run the frontend against the real local backend](docs/LOCAL_DEVELOPMENT.md).
+
 A responsive, multi-tenant web application for freelancers and small development agencies to collect client content, requirements and files for website, web application and mobile application projects. The MVP includes templates, private client access, draft saving, optional AI writing assistance, item-level review, reminders and approved ZIP, Markdown and JSON exports. The collector is a web app with a planned installable PWA shell.
 
 ## Project layout

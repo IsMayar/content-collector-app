@@ -1,3 +1,4 @@
+import { env } from '@/config/env'
 import { authApi } from '@/features/auth/api/authApi'
 import { AuthCard, AuthHeading } from '@/features/auth/components/AuthCard'
 import { email, tokenField } from '@/features/auth/components/authFields'
@@ -39,25 +40,34 @@ export function VerifyEmailPage() {
           }}
         />
       )}
-      <details className="resend-panel">
-        <summary>Need a new verification link?</summary>
-        {sent ? (
-          <Notice>
-            If verification is needed for that email, we’ll send a fresh link.
-          </Notice>
-        ) : (
-          <AuthForm
-            schema={emailSchema}
-            fields={[email]}
-            submitLabel="Resend verification"
-            onSubmit={async (values) => {
-              await resend({ email: values.email }).unwrap()
-              resendResult.reset()
-              setSent(true)
-            }}
-          />
-        )}
-      </details>
+      {env.mocksEnabled ? (
+        <details className="resend-panel">
+          <summary>Need a new verification link?</summary>
+          {sent ? (
+            <Notice>
+              If verification is needed for that email, we’ll send a fresh link.
+            </Notice>
+          ) : (
+            <AuthForm
+              schema={emailSchema}
+              fields={[email]}
+              submitLabel="Resend verification"
+              onSubmit={async (values) => {
+                await resend({ email: values.email }).unwrap()
+                resendResult.reset()
+                setSent(true)
+              }}
+            />
+          )}
+        </details>
+      ) : (
+        !verified && (
+          <p className="subtle">
+            Verification resend is unavailable. Use the link from your original
+            email.
+          </p>
+        )
+      )}
       <p className="auth-switch">
         <Link to="/sign-in">Back to sign in</Link>
       </p>

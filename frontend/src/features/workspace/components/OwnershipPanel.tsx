@@ -19,7 +19,7 @@ export function OwnershipPanel() {
     [password, setPassword] = useState(''),
     [confirm, setConfirm] = useState(false)
   return (
-    <Panel title="Transfer workspace ownership">
+    <Panel title="Workspace ownership">
       <p>
         Transfer ownership of this workspace. The new owner will manage members,
         client access, projects and settings.

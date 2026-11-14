@@ -1,3 +1,5 @@
+import { ProfileDropdown } from '@/features/settings/components/ProfileDropdown'
+import { env } from '@/config/env'
 import { logoutSession, selectWorkspace } from '@/features/auth/store/session'
 import { WorkspaceBillingNotice } from '@/features/billing/components/WorkspaceBillingNotice'
 import type { WorkspaceDetail } from '@/features/workspace/types/workspace.types'
@@ -12,7 +14,6 @@ import {
   FolderKanban,
   Layers,
   LayoutDashboard,
-  Settings,
   Users,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -25,7 +26,7 @@ import {
   useParams,
 } from 'react-router'
 export function AgencyLayout() {
-  const { pathname } = useLocation()
+  const { pathname, search, hash } = useLocation()
   const state = useAppSelector((s) => s.auth)
   const { workspaceId } = useParams()
   const membership = state.memberships.find(
@@ -64,14 +65,6 @@ export function AgencyLayout() {
             <Layers size={18} />
             <span>Templates</span>
           </NavLink>
-          {membership.role !== 'OWNER' && (
-            <NavLink
-              to={`/app/w/${membership.workspaceId}/settings?view=account`}
-            >
-              <Settings size={18} />
-              <span>My account</span>
-            </NavLink>
-          )}
           {membership.role === 'OWNER' && (
             <>
               <span className="nav-section-label">MANAGE</span>
@@ -82,23 +75,6 @@ export function AgencyLayout() {
               <NavLink to={`/app/w/${membership.workspaceId}/insights`}>
                 <ChartNoAxesCombined size={18} />
                 <span>Insights</span>
-              </NavLink>
-              <NavLink
-                to={`/app/w/${membership.workspaceId}/settings`}
-                className={({ isActive }) =>
-                  isActive ||
-                  pathname === `/app/w/${membership.workspaceId}/billing`
-                    ? 'active'
-                    : undefined
-                }
-                aria-current={
-                  pathname === `/app/w/${membership.workspaceId}/billing`
-                    ? 'page'
-                    : undefined
-                }
-              >
-                <Settings size={18} />
-                <span>Settings</span>
               </NavLink>
             </>
           )}
@@ -156,27 +132,13 @@ export function AgencyLayout() {
           <Link className="help-link" to="/about">
             Help
           </Link>
-          <div className="account-menu">
-            <span className="account-avatar" aria-hidden="true">
-              {state.user?.displayName?.slice(0, 1).toUpperCase() || 'A'}
-            </span>
-            <div>
-              <strong>{state.user?.displayName}</strong>
-              <span>
-                {membership?.role === 'OWNER'
-                  ? 'Workspace owner'
-                  : membership
-                    ? 'Team member'
-                    : 'Agency account'}
-              </span>
-            </div>
-            <button
-              className="account-signout"
-              onClick={() => setConfirm(true)}
-            >
-              Sign out
-            </button>
-          </div>
+          <ProfileDropdown
+            key={pathname + search + hash + membership?.workspaceId}
+            name={state.user?.displayName || 'Your account'}
+            email={state.user?.email || ''}
+            base={membership ? '/app/w/' + membership.workspaceId : undefined}
+            onSignOut={() => setConfirm(true)}
+          />
         </div>
       </header>
       <aside className="agency-sidebar">
@@ -222,7 +184,8 @@ export function AgencyLayout() {
           <Outlet />
         </main>
         <footer className="agency-footer">
-          Website Content Collector <span>Frontend preview</span>
+          Website Content Collector{' '}
+          {env.mocksEnabled && <span>Frontend preview</span>}
         </footer>
       </div>
       <ConfirmDialog

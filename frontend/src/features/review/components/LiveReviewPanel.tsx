@@ -1,142 +1,55 @@
+import { Check, Copy, MessageCircle, History } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useData } from '@/services/api/resourceApi'
 import { useCommand } from '@/shared/hooks/useCommand'
-import {
-  Badge,
-  ErrorNotice,
-  Field,
-  Panel,
-  QueryState,
-} from '@/shared/components/ProductUI'
+import { ErrorNotice, Field, QueryState } from '@/shared/components/ProductUI'
 import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
 import { SubmittedAnswer } from '@/shared/components/SubmittedAnswer'
 import { downloadFile } from '@/shared/utils/download'
 import type { Item } from '@/features/structure-editor/types/structure.types'
 import type {
   SubmissionSummary,
-  ReviewDecision,
   Comment,
   ReviewCommand,
-  SubmissionRevision,
 } from '../types/review.types'
+import { answerText, useSubmittedRevision } from './SubmittedRevisionValue'
 import { decisionResultSchema } from '../schemas/reviewSchema'
-
-export function LiveReviewPanel({
-  root,
-  items,
-  canMutate = true,
-}: {
-  root: string
-  items: Item[]
-  canMutate?: boolean
-}) {
-  const [page, setPage] = useState(0)
-  const queue = useData<{
-    data: SubmissionSummary[]
-    page: { number: number; size: number; totalElements: number }
-  }>(`${root}/review-queue?page=${page}&size=25`)
-  const [selected, setSelected] = useState('')
-  const item = items.find((i) => i.id === selected)
-  return (
-    <>
-      {item ? (
-        <>
-          <button
-            type="button"
-            className="text-link"
-            onClick={() => setSelected('')}
-          >
-            Back to review queue
-          </button>
-          <LiveRevisionReview
-            key={root + item.id}
-            root={root}
-            item={item}
-            canMutate={canMutate}
-          />
-        </>
-      ) : (
-        <Panel title="Content review queue">
-          <p>
-            Review exact submitted content. Saved drafts never replace this
-            snapshot.
-          </p>
-          <QueryState query={queue}>
-            <ul>
-              {queue.data?.data.map((r) => (
-                <li key={r.revisionId}>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setSelected(r.itemId)}
-                  >
-                    {items.find((i) => i.id === r.itemId)?.label || r.itemKey} ·
-                    Revision {r.revisionNo}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {queue.data?.data.length === 0 && (
-              <p>No items are awaiting review.</p>
-            )}
-          </QueryState>
-          <div className="actions">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={page === 0 || queue.isFetching}
-              onClick={() => setPage(page - 1)}
-            >
-              Previous page
-            </button>
-            <span>Page {page + 1}</span>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={
-                queue.isFetching ||
-                !queue.data ||
-                (page + 1) * 25 >= queue.data.page.totalElements
-              }
-              onClick={() => setPage(page + 1)}
-            >
-              Next page
-            </button>
-          </div>
-        </Panel>
-      )}
-      <Field label="Browse submitted item history">
-        <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-          <option value="">Choose a question</option>
-          {items.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.label} · {i.state}
-            </option>
-          ))}
-        </select>
-      </Field>
-    </>
-  )
-}
 export function LiveRevisionReview({
   root,
   item,
   canMutate = true,
+  canReview = true,
+  initialRevision = '',
+  contacts,
 }: {
   root: string
   item: Item
   canMutate?: boolean
+  canReview?: boolean
+  initialRevision?: string
+  contacts?: ReadonlyMap<string, string>
 }) {
   const history = useData<{ data: SubmissionSummary[] }>(
     `${root}/items/${item.id}/revisions`,
   )
-  const [selected, setSelected] = useState('')
-  const revisionId = selected || history.data?.data[0]?.revisionId || ''
-  const detail = useData<{
-    revision: SubmissionRevision
-    decisions: ReviewDecision[]
-  }>(`${root}/items/${item.id}/revisions/${revisionId}`, { skip: !revisionId })
+  const [selected, setSelected] = useState(initialRevision)
+  const revisionId = selected || item.currentRevisionId || ''
+  const detail = useSubmittedRevision(root, item.id, revisionId)
   const revision = detail.data?.revision
+  const copy = revision ? answerText(revision) : null
+  const [copiedRevision, setCopiedRevision] = useState('')
+  const [copyError, setCopyError] = useState(false)
+
+  async function copySubmittedAnswer() {
+    if (copy === null || !revision) return
+    try {
+      await navigator.clipboard.writeText(copy)
+      setCopiedRevision(revision.revisionId)
+      setCopyError(false)
+    } catch {
+      setCopyError(true)
+    }
+  }
   const command = useCommand()
   const [intent, setIntent] = useState<
     | (Omit<ReviewCommand, 'decision'> & {
@@ -150,7 +63,9 @@ export function LiveRevisionReview({
   const busy = useRef(false)
   const retry = useRef({ body: '', key: '' })
   const current =
+    canReview &&
     canMutate &&
+    !!revision &&
     item.state === 'SUBMITTED' &&
     revisionId === item.currentRevisionId &&
     !detail.isFetching
@@ -226,37 +141,55 @@ export function LiveRevisionReview({
   }
   return (
     <div className="revision-layout">
-      <Panel title={item.label}>
-        <Badge>{item.state}</Badge>
-        <QueryState query={history}>
-          <Field label="Submitted revision">
-            <select
-              value={revisionId}
-              disabled={command.pending}
-              onChange={(e) => {
-                setSelected(e.target.value)
-                setMessage('')
-              }}
-            >
-              {history.data?.data.map((r) => (
-                <option key={r.revisionId} value={r.revisionId}>
-                  Revision {r.revisionNo} ·{' '}
-                  {new Date(r.submittedAt).toLocaleString()}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </QueryState>
-        {!revisionId && <p>No submitted versions for this question.</p>}
+      <div className="content-revision">
+        {!revisionId && (
+          <p>
+            No current submission. Earlier versions, if any, are in History.
+          </p>
+        )}
         {revisionId && (
           <QueryState query={detail}>
             {revision && !detail.isFetching && (
               <>
-                <h3>Submitted revision {revision.revisionNo}</h3>
-                <SubmittedAnswer
-                  schema={revision.schemaSnapshot}
-                  value={revision.valueSnapshot}
-                />
+                {/* The SubmittedAnswer component owns the visual answer surface.
+                    This positioning wrapper is transparent: no second card or color. */}
+                <div className="relative min-w-0">
+                  <div
+                    className={
+                      copy !== null ? '[&>*:first-child]:!pt-14' : undefined
+                    }
+                  >
+                    <SubmittedAnswer
+                      schema={revision.schemaSnapshot}
+                      value={revision.valueSnapshot}
+                    />
+                  </div>
+                  {copy !== null && (
+                    <button
+                      type="button"
+                      onClick={() => void copySubmittedAnswer()}
+                      aria-label="Copy submitted answer"
+                      title="Copy submitted answer"
+                      className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                    >
+                      {copiedRevision === revision.revisionId ? (
+                        <Check size={15} aria-hidden="true" />
+                      ) : (
+                        <Copy size={15} aria-hidden="true" />
+                      )}
+                      <span>
+                        {copiedRevision === revision.revisionId
+                          ? 'Copied'
+                          : 'Copy'}
+                      </span>
+                    </button>
+                  )}
+                  {copyError && (
+                    <p role="status" className="mt-2 text-xs text-red-600">
+                      Unable to copy. Check clipboard permissions and try again.
+                    </p>
+                  )}
+                </div>
                 {revision.assets.map((a) => (
                   <button
                     type="button"
@@ -286,45 +219,63 @@ export function LiveRevisionReview({
                     Download {a.originalName}
                   </button>
                 ))}
-                {!current && (
+                <div className="revision-meta-actions">
+                  <p className="subtle">
+                    Submitted{' '}
+                    <time dateTime={revision.submittedAt}>
+                      {new Date(revision.submittedAt).toLocaleString()}
+                    </time>{' '}
+                    · Revision {revision.revisionNo}
+                    {contacts?.get(revision.submittedByContactId) && (
+                      <> · {contacts.get(revision.submittedByContactId)}</>
+                    )}
+                  </p>
+                  <div className="revision-actions">
+                    {canReview && (
+                      <div className="actions">
+                        <button
+                          type="button"
+                          className="secondary-button approve-revision-button"
+                          disabled={!current || command.pending}
+                          onClick={() => {
+                            setError('')
+                            setIntent({
+                              revisionId,
+                              expectedItemVersion: item.version,
+                              decision: 'APPROVE',
+                            })
+                          }}
+                        >
+                          <Check size={18} aria-hidden="true" /> Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={!current || command.pending}
+                          onClick={() => {
+                            setError('')
+                            setIntent({
+                              revisionId,
+                              expectedItemVersion: item.version,
+                              decision: 'REQUEST_CHANGES',
+                            })
+                          }}
+                        >
+                          <MessageCircle size={18} aria-hidden="true" /> Request
+                          changes
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {canReview && !current && (
                   <Notice>
                     This revision is read-only. Only the current submitted
                     revision can receive a decision.
                   </Notice>
                 )}
-                <div className="actions">
-                  <button
-                    type="button"
-                    className="primary-button"
-                    disabled={!current || command.pending}
-                    onClick={() => {
-                      setError('')
-                      setIntent({
-                        revisionId,
-                        expectedItemVersion: item.version,
-                        decision: 'APPROVE',
-                      })
-                    }}
-                  >
-                    Approve revision
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={!current || command.pending}
-                    onClick={() => {
-                      setError('')
-                      setIntent({
-                        revisionId,
-                        expectedItemVersion: item.version,
-                        decision: 'REQUEST_CHANGES',
-                      })
-                    }}
-                  >
-                    Request changes
-                  </button>
-                </div>
-                {item.state === 'APPROVED' &&
+                {canReview &&
+                  item.state === 'APPROVED' &&
                   revisionId === item.currentRevisionId && (
                     <button
                       type="button"
@@ -343,8 +294,11 @@ export function LiveRevisionReview({
                       Reopen approved item
                     </button>
                   )}
-                <ul aria-label="Review decisions">
-                  {detail.data?.decisions.map((d) => (
+                <ul
+                  className="revision-decisions"
+                  aria-label="Review decisions"
+                >
+                  {detail.data?.decisions?.map((d) => (
                     <li key={d.id}>
                       <strong>
                         {d.decision === 'APPROVE'
@@ -361,10 +315,47 @@ export function LiveRevisionReview({
             )}
           </QueryState>
         )}
+        {((history.data?.data.length || 0) > 1 ||
+          (!item.currentRevisionId && !!history.data?.data.length)) && (
+          <details className="revision-history">
+            <summary>
+              <History size={17} aria-hidden="true" /> History (
+              {history.data?.data.length || 0})
+            </summary>
+            <QueryState query={history}>
+              <ul aria-label="Submitted revisions">
+                {history.data?.data.map((r) => (
+                  <li key={r.revisionId}>
+                    <button
+                      type="button"
+                      disabled={command.pending}
+                      aria-pressed={revisionId === r.revisionId}
+                      onClick={() => {
+                        setSelected(r.revisionId)
+                        setMessage('')
+                      }}
+                    >
+                      <span>
+                        Revision {r.revisionNo}
+                        {r.revisionId === item.currentRevisionId && (
+                          <span className="revision-current">Current</span>
+                        )}
+                      </span>
+                      <time dateTime={r.submittedAt}>
+                        {new Date(r.submittedAt).toLocaleString()}
+                      </time>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </QueryState>
+          </details>
+        )}
+        {history.isError && <QueryState query={history}>{null}</QueryState>}
         <ErrorNotice error={error || command.error} />
         {message && <p role="status">{message}</p>}
-      </Panel>
-      <ReviewComments root={root} itemId={item.id} />
+      </div>
+      <ReviewComments root={root} itemId={item.id} canComment={canMutate} />
       <ConfirmDialog
         open={!!intent}
         pending={command.pending}
@@ -410,27 +401,32 @@ export function LiveRevisionReview({
 export function ReviewComments({
   root,
   itemId,
+  canComment = true,
 }: {
   root: string
   itemId: string
+  canComment?: boolean
 }) {
   const query = useData<{ data: Comment[] }>(`${root}/items/${itemId}/comments`)
   const command = useCommand()
   const [visibility, setVisibility] = useState<'CLIENT' | 'INTERNAL'>('CLIENT')
   const [body, setBody] = useState('')
   return (
-    <Panel title="Conversation">
-      <Field label="Comment visibility">
-        <select
-          value={visibility}
-          onChange={(e) =>
-            setVisibility(e.target.value as 'CLIENT' | 'INTERNAL')
-          }
-        >
-          <option value="CLIENT">Client conversation</option>
-          <option value="INTERNAL">Internal agency notes</option>
-        </select>
-      </Field>
+    <section className="content-conversation">
+      <header>
+        <h3>Conversation</h3>
+        <Field label="Comment visibility">
+          <select
+            value={visibility}
+            onChange={(e) =>
+              setVisibility(e.target.value as 'CLIENT' | 'INTERNAL')
+            }
+          >
+            <option value="CLIENT">Client conversation</option>
+            <option value="INTERNAL">Internal agency notes</option>
+          </select>
+        </Field>
+      </header>
       <p>
         {visibility === 'CLIENT'
           ? 'Shared with the client.'
@@ -441,44 +437,58 @@ export function ReviewComments({
           {query.data?.data
             .filter((c) => c.visibility === visibility)
             .map((c) => (
-              <li key={c.id}>
-                <strong>{c.authorDisplayName}</strong>
+              <li key={c.id} className="conversation-message">
+                <span className="conversation-avatar" aria-hidden="true">
+                  {c.authorDisplayName.slice(0, 1)}
+                </span>
+                <strong>
+                  {c.authorDisplayName}
+                  {c.visibility === 'INTERNAL' && (
+                    <span className="comment-author-role">Agency</span>
+                  )}
+                </strong>
                 <p className="preserve-text">{c.body}</p>
-                <time>{new Date(c.createdAt).toLocaleString()}</time>
+                <time dateTime={c.createdAt}>
+                  {new Date(c.createdAt).toLocaleString()}
+                </time>
               </li>
             ))}
         </ul>
       </QueryState>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault()
-          if (!body.trim() || command.pending) return
-          if (
-            await command.run(`${root}/items/${itemId}/comments`, {
-              body: body.trim(),
-              visibility,
-            })
-          )
-            setBody('')
-        }}
-      >
-        <Field label="Comment">
-          <textarea
-            required
-            maxLength={5000}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-        </Field>
-        <button
-          type="submit"
-          className="secondary-button"
-          disabled={command.pending}
+      {canComment && (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (!body.trim() || command.pending) return
+            if (
+              await command.run(`${root}/items/${itemId}/comments`, {
+                body: body.trim(),
+                visibility,
+              })
+            )
+              setBody('')
+          }}
         >
-          Add comment
-        </button>
-      </form>
+          <Field label="Comment">
+            <textarea
+              placeholder="Write a comment…"
+              rows={1}
+              required
+              maxLength={5000}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+          </Field>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={command.pending}
+          >
+            Add comment
+          </button>
+        </form>
+      )}
       <ErrorNotice error={command.error} />
-    </Panel>
+    </section>
   )
 }

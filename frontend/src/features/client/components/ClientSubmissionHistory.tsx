@@ -1,56 +1,111 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { z } from 'zod'
-import { submissionRevisionSchema } from '../schemas/submissionSchema'
+import type { submissionRevisionSchema } from '../schemas/submissionSchema'
+import { History } from 'lucide-react'
 import { useLazyReadDraftQuery } from '../api/clientAnswersApi'
 import { SubmittedAnswer } from '@/shared/components/SubmittedAnswer'
 export function ClientSubmissionHistory({
   projectId,
   itemId,
+  active,
+  hasSavedAnswer = false,
+  currentRevisionId,
+  currentState,
 }: {
   projectId: string
   itemId: string
+  active: boolean
+  hasSavedAnswer?: boolean
+  currentRevisionId?: string | null
+  currentState: string
 }) {
-  const [read] = useLazyReadDraftQuery()
-  const [rows, setRows] = useState<z.infer<typeof submissionRevisionSchema>[]>(
-    [],
-  )
-  const [error, setError] = useState('')
+  const [open, setOpen] = useState(false)
+  const [read, query] = useLazyReadDraftQuery()
+  useEffect(() => {
+    if (active && open) void read({ projectId, itemId }, false)
+  }, [active, open, projectId, itemId, currentRevisionId, currentState, read])
+  if (!currentRevisionId && !hasSavedAnswer) return null
   return (
     <details
-      onToggle={async (e) => {
-        if (!e.currentTarget.open) return
-        try {
-          setError('')
-          const data = await read({ projectId, itemId }, false).unwrap()
-          setRows(data.revisions || [])
-        } catch {
-          setError(
-            'Submitted history could not be loaded. Check your connection and project access.',
-          )
-        }
-      }}
+      className="client-history"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>Previous submitted versions</summary>
-      {error && <p role="alert">{error}</p>}
-      {rows.length ? (
-        rows.map((r) => (
-          <article key={r.revisionId}>
+      <summary>
+        <History size={16} aria-hidden="true" /> History
+      </summary>
+      {open && (
+        <HistoryContent
+          query={query}
+          retry={() => void read({ projectId, itemId }, false)}
+          currentRevisionId={currentRevisionId}
+          currentState={currentState}
+        />
+      )}
+    </details>
+  )
+}
+function HistoryContent({
+  query,
+  retry,
+  currentRevisionId,
+  currentState,
+}: {
+  query: {
+    isUninitialized: boolean
+    isFetching: boolean
+    isError: boolean
+    currentData?: { revisions?: z.infer<typeof submissionRevisionSchema>[] }
+  }
+  retry: () => void
+  currentRevisionId?: string | null
+  currentState: string
+}) {
+  if (query.isUninitialized || query.isFetching)
+    return (
+      <p className="client-history-loading" role="status">
+        Loading history…
+      </p>
+    )
+  if (query.isError)
+    return (
+      <div className="client-history-error">
+        <p role="alert">
+          History couldn’t be loaded. Your answer is still available.
+        </p>
+        <button type="button" className="text-link" onClick={retry}>
+          Retry history
+        </button>
+      </div>
+    )
+  const rows = query.currentData?.revisions || []
+  if (!rows.length) return <p>No submitted revisions yet.</p>
+  return (
+    <div>
+      {rows.map((r) => (
+        <article key={r.revisionId}>
+          <header>
             <h4>Revision {r.revisionNo}</h4>
-            <p>Submitted {new Date(r.submittedAt).toLocaleString()}</p>
-            <SubmittedAnswer
-              schema={r.schemaSnapshot}
-              value={r.valueSnapshot}
-            />
+            {r.revisionId === currentRevisionId ? (
+              <span className="client-history-state">
+                {currentState.replaceAll('_', ' ').toLowerCase()}
+              </span>
+            ) : (
+              <span className="client-history-state">Submitted revision</span>
+            )}
+            <time dateTime={r.submittedAt}>
+              {new Date(r.submittedAt).toLocaleString()}
+            </time>
+          </header>
+          <SubmittedAnswer schema={r.schemaSnapshot} value={r.valueSnapshot} />
+          {r.assets.length > 0 && (
             <ul>
               {r.assets.map((a) => (
                 <li key={a.id}>{a.originalName}</li>
               ))}
             </ul>
-          </article>
-        ))
-      ) : (
-        <p>No submitted versions loaded.</p>
-      )}
-    </details>
+          )}
+        </article>
+      ))}
+    </div>
   )
 }

@@ -88,11 +88,37 @@ public class ProjectStructureRepository {
             values(?,?,?,'USER',?,?,?,?,?::jsonb,?,?)
             """,UUID.randomUUID(),project.workspaceId(),project.id(),actor,action,kind,resource,metadata.toString(),time,time);
     }
-    public Map<UUID,Progress> progress(UUID workspace,List<UUID> projects){
-        if(projects.isEmpty())return Map.of();var result=new HashMap<UUID,Progress>();
-        for(UUID project:projects){var all=structure(workspace,project);var values=new HashMap<UUID,JsonNode>();jdbc.query("select item_id,value_json from collector.answers where workspace_id=? and project_id=?",(org.springframework.jdbc.core.RowCallbackHandler)rs->values.put(rs.getObject(1,UUID.class),json.readTree(rs.getString(2))),workspace,project);
-        long required=0,submitted=0,approved=0,action=0,optional=0;
-        for(var section:all)for(var item:section.path("items")){if(!com.ayaantrix.collector.project.service.ProjectDraftVisibility.visible(section,item,all,values))continue;boolean req=item.path("required").asBoolean();String state=item.path("state").asText();if(req){required++;if(Set.of("SUBMITTED","APPROVED").contains(state))submitted++;if(state.equals("APPROVED"))approved++;else if(!state.equals("SUBMITTED"))action++;}else if(state.equals("APPROVED"))optional++;}
-        result.put(project,new Progress(required,submitted,approved,action,optional));}return result;
+    public record Content(List<JsonNode> structure, Progress progress) {}
+
+    public Content content(UUID workspace, UUID project) {
+        var sections = structure(workspace, project);
+        var drafts = new HashMap<UUID, JsonNode>();
+        jdbc.query("select item_id,value_json from collector.answers where workspace_id=? and project_id=?",
+            (org.springframework.jdbc.core.RowCallbackHandler) rs ->
+                drafts.put(rs.getObject(1, UUID.class), json.readTree(rs.getString(2))),
+            workspace, project);
+        long required = 0, submitted = 0, approved = 0, action = 0, optional = 0;
+        for (var section : sections) {
+            for (var item : section.path("items")) {
+                boolean visible = com.ayaantrix.collector.project.service.ProjectDraftVisibility
+                    .visible(section, item, sections, drafts);
+                ((ObjectNode) item).put("visible", visible);
+                if (!visible) continue;
+                String state = item.path("state").asText();
+                if (item.path("required").asBoolean()) {
+                    required++;
+                    if (state.equals("APPROVED") || state.equals("SUBMITTED")) submitted++;
+                    if (state.equals("APPROVED")) approved++;
+                    else if (!state.equals("SUBMITTED")) action++;
+                } else if (state.equals("APPROVED")) optional++;
+            }
+        }
+        return new Content(sections, new Progress(required, submitted, approved, action, optional));
+    }
+
+    public Map<UUID, Progress> progress(UUID workspace, List<UUID> projects) {
+        var result = new HashMap<UUID, Progress>();
+        for (UUID project : projects) result.put(project, content(workspace, project).progress());
+        return result;
     }
 }

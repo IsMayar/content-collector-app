@@ -51,9 +51,9 @@ public class ProjectService {
         var access=authorization.access(workspace,false);authorization.readableProject(access,id);
         var project=projects.findByWorkspaceIdAndId(workspace,id).orElseThrow(ProjectAuthorization::missing);
         var customer=customers.findByWorkspaceIdAndId(workspace,project.clientId()).orElseThrow(ProjectAuthorization::missing);
-        var progress=progress(workspace,id);var original=view(project,customer.businessName(),progress,false);var permissions=authorization.permissions(access,id,project.structureEditable());
+        var content=structure.content(workspace,id);var progress=content.progress();var original=view(project,customer.businessName(),progress,false);var permissions=authorization.permissions(access,id,project.structureEditable());
         var result=new View(original.id(),original.workspaceId(),original.title(),original.clientBusinessName(),original.projectType(),original.state(),original.dueDate(),original.timezone(),original.progress(),original.updatedAt(),original.clientId(),original.version(),original.structureVersion(),original.aiEnabled(),permissions);
-        return new Detail(result,progress,structure.structure(workspace,id));
+        return new Detail(result,progress,content.structure());
     }
     public Paged<Summary> list(UUID workspace,String search,ProjectType type,ProjectState state,String sort,int page,int size){
         var access=authorization.access(workspace,false);authorization.readableUntil(access);pagination(page,size);

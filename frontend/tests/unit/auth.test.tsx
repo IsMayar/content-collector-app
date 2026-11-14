@@ -1,3 +1,7 @@
+import {
+  tokenInputSchema,
+  resetSchema,
+} from '@/features/auth/schemas/accountSchemas'
 import { routes } from '@/app/router/AppRouter'
 import { createAppStore } from '@/app/store/store'
 import { authApi } from '@/features/auth/api/authApi'
@@ -445,4 +449,31 @@ it('serializes live identity reconciliation before explicit bootstrap without re
   expect(store.getState().auth.memberships).toEqual([])
   expect(store.getState().auth.workspaceId).toBeNull()
   expect(reads).toBe(2)
+})
+
+it('accepts same-origin verification and reset URLs without submitting the URL itself', () => {
+  const token = 'a'.repeat(43)
+  expect(
+    tokenInputSchema.parse({
+      token: window.location.origin + '/verify-email#token=' + token,
+    }).token,
+  ).toBe(token)
+  expect(
+    tokenInputSchema.safeParse({
+      token: 'https://example.test/verify-email#token=' + token,
+    }).success,
+  ).toBe(false)
+  expect(
+    tokenInputSchema.safeParse({
+      token: window.location.origin + '/reset-password#token=' + token,
+    }).success,
+  ).toBe(false)
+  const password = 'Strong test password'
+  expect(
+    resetSchema.parse({
+      token: window.location.origin + '/reset-password?token=' + token,
+      password,
+      confirmPassword: password,
+    }).token,
+  ).toBe(token)
 })

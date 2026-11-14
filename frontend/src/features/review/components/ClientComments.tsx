@@ -17,15 +17,23 @@ export function ClientComments({
   const command = useCommand(true)
   const [body, setBody] = useState('')
   return (
-    <section aria-label="Client conversation">
-      <h3>Comments and feedback</h3>
+    <section className="client-conversation" aria-label="Client conversation">
+      <h3>Conversation</h3>
+      <p className="client-conversation-note">
+        Visible to you and your agency.
+      </p>
       <QueryState query={query}>
         <ul>
           {query.data?.data.map((c) => (
-            <li key={c.id}>
+            <li className="client-message" key={c.id}>
+              <span className="client-message-avatar" aria-hidden="true">
+                {c.authorDisplayName.slice(0, 1)}
+              </span>
               <strong>{c.authorDisplayName}</strong>
               <p className="preserve-text">{c.body}</p>
-              <time>{new Date(c.createdAt).toLocaleString()}</time>
+              <time dateTime={c.createdAt}>
+                {new Date(c.createdAt).toLocaleString()}
+              </time>
             </li>
           ))}
         </ul>
@@ -40,6 +48,8 @@ export function ClientComments({
         >
           <Field label="Message to your agency">
             <textarea
+              rows={1}
+              placeholder="Write a comment…"
               required
               maxLength={5000}
               value={body}
@@ -48,7 +58,7 @@ export function ClientComments({
           </Field>
           <button
             type="submit"
-            className="secondary-button"
+            className="primary-button"
             disabled={command.pending}
           >
             Send comment

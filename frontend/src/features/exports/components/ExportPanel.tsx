@@ -34,22 +34,21 @@ export function ExportPanel({
   const [job, setJob] = useState('')
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(1)
+  const listedJob = q.data?.data.find((entry) => entry.id === job)
+  const needsStatus =
+    !listedJob || ['QUEUED', 'RUNNING'].includes(listedJob.state)
   const poll = useData<{ export: ExportSummary }>(
     job ? `${root}/exports/${job}` : '',
     {
-      pollingInterval:
-        job &&
-        !q.data?.data.some(
-          (j) => j.id === job && !['QUEUED', 'RUNNING'].includes(j.state),
-        )
-          ? 1000
-          : 0,
+      pollingInterval: job && needsStatus ? 1000 : 0,
     },
   )
   const [message, setMessage] = useState('')
+  const hasApproved =
+    project.progress.approvedRequired + project.progress.optionalApproved > 0
   const jobs =
     q.data?.data.map((j) =>
-      j.id === poll.data?.export?.id ? poll.data.export : j,
+      needsStatus && j.id === poll.data?.export?.id ? poll.data.export : j,
     ) || []
   return (
     <>
@@ -58,17 +57,25 @@ export function ExportPanel({
           <h2>Export history</h2>
           <p>View and manage exports for this project.</p>
         </div>
-        <button
-          className="primary-button"
-          onClick={() => {
-            setStep(1)
-            setOpen(true)
-          }}
-        >
-          ＋ New export
-        </button>
+        {hasApproved && (
+          <button
+            className="primary-button"
+            onClick={() => {
+              setStep(1)
+              setOpen(true)
+            }}
+          >
+            ＋ New export
+          </button>
+        )}
       </div>
-      {open && (
+      {!hasApproved && (
+        <p>
+          Approve a response before creating an export. Previous exports stay
+          available below.
+        </p>
+      )}
+      {open && hasApproved && (
         <Modal
           title="Export approved content"
           onClose={() => setOpen(false)}

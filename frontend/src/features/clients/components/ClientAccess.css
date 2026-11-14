@@ -1,0 +1,412 @@
+/* Approved Client access surface. No global header/sidebar or Content styles. */
+.client-access-project-header {
+  margin-bottom: 24px;
+}
+.client-access-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #526585;
+  font-size: 13px;
+  margin-bottom: 22px;
+}
+.client-access-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+}
+.client-access-project-summary {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+.client-access-project-icon,
+.client-access-customer-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 62px;
+  height: 62px;
+  border-radius: 15px;
+  background: #e6efff;
+  color: #0563ff;
+}
+.client-access-project-info {
+  flex: 1;
+  min-width: 0;
+}
+.client-access-title {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.client-access-title h1 {
+  font-size: 26px;
+  line-height: 1.2;
+  margin: 0;
+  letter-spacing: -0.7px;
+  color: #0b1838;
+  overflow-wrap: anywhere;
+}
+.client-access-project-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #405574;
+}
+.client-access-project-meta > span {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.client-access-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.client-access-header-actions a,
+.client-access-header-actions button {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+  min-height: 40px;
+  font-size: 13px;
+}
+.client-access-customer.product-panel,
+.client-access-contacts.product-panel {
+  background: #fff;
+  border: 1px solid #dce6f5;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 2px 5px #173a6910;
+  margin: 22px 0;
+}
+.client-access-customer-row {
+  display: grid;
+  grid-template-columns:
+    58px minmax(160px, 1fr) minmax(140px, 0.8fr) minmax(180px, 1.4fr)
+    auto;
+  gap: 18px;
+  align-items: center;
+  margin: 0;
+}
+.client-access-customer-icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+}
+.client-access-customer-row > div:not(:first-child):not(:last-child) {
+  border-left: 1px solid #dce6f5;
+  padding-left: 18px;
+}
+.client-access-customer-row > div:nth-child(3),
+.client-access-customer-row > div:nth-child(4) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.client-access-customer-row dt {
+  margin: 0 0 5px;
+  font-size: 12px;
+  color: #526585;
+}
+.client-access-customer-row dd {
+  font-size: 13px;
+  color: #0b1838;
+}
+.client-access-customer-row > div:nth-child(2) dd > span {
+  font-size: 16px;
+}
+.client-access-edit button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 9px 15px;
+}
+.client-access-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.client-access-card-heading > svg {
+  color: #0563ff;
+  flex-shrink: 0;
+}
+.client-access-card-heading h2 {
+  margin: 0 0 5px;
+  font-size: 20px;
+  color: #0b1838;
+}
+.client-access-card-heading p {
+  margin: 0;
+  font-size: 13px;
+  color: #526585;
+}
+.client-access-table-wrap {
+  border: 1px solid #dce6f5;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.client-access-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  text-align: left;
+}
+.client-access-table th {
+  background: #edf3fc;
+  color: #405574;
+  font-weight: 600;
+  padding: 10px 14px;
+  white-space: nowrap;
+}
+.client-access-table td {
+  padding: 10px 14px;
+  border-top: 1px solid #e6edf7;
+  vertical-align: middle;
+}
+.client-access-person,
+.client-access-inline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.client-access-inline {
+  white-space: nowrap;
+}
+.client-access-inline svg {
+  flex-shrink: 0;
+  color: #405574;
+}
+.client-access-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e1f0ff;
+  color: #0563ff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.client-access-table .status-badge {
+  font-size: 11px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.client-contact-actions summary {
+  display: flex;
+  justify-content: center;
+  border: 1px solid #ccdaee;
+  border-radius: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  list-style: none;
+  color: #405574;
+}
+.client-contact-actions summary::-webkit-details-marker {
+  display: none;
+}
+.client-contact-actions > div {
+  display: grid;
+  gap: 7px;
+  padding-top: 8px;
+}
+.client-contact-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  padding: 5px;
+  cursor: pointer;
+  color: #0563ff;
+}
+.client-contact-actions .danger-link {
+  color: #cf2636;
+}
+.client-contact-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.client-access-invitation {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid #e1e9f5;
+}
+.client-access-invite-form {
+  background: #edf4ff;
+  padding: 14px;
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1fr) minmax(150px, 1fr) minmax(180px, 1.2fr)
+    minmax(160px, 0.9fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+.client-access-invite-form h3 {
+  font-size: 14px;
+  margin: 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  align-self: center;
+  color: #0b1838;
+}
+.client-access-invite-form h3 svg {
+  color: #0563ff;
+  flex-shrink: 0;
+}
+.client-access-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #405574;
+}
+.client-access-input {
+  position: relative;
+  display: block;
+}
+.client-access-input svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #526585;
+  pointer-events: none;
+}
+.client-access-invite-form input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #cbd9ef;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  color: #0b1838;
+}
+.client-access-input input {
+  padding-left: 35px;
+}
+.client-access-invite-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.client-access-invite-actions button {
+  min-height: 38px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  padding: 8px 13px;
+  white-space: nowrap;
+}
+.client-access-publish-notice {
+  display: grid;
+  gap: 5px;
+  padding: 12px 4px;
+  color: #405574;
+  font-size: 13px;
+}
+.client-access-publish-notice span {
+  font-size: 12px;
+}
+.client-access-contacts :focus-visible,
+.client-access-customer :focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+@media (max-width: 1200px) {
+  .client-access-invite-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .client-access-invite-form h3 {
+    grid-column: 1/-1;
+  }
+  .client-access-invite-actions {
+    grid-column: 1/-1;
+    justify-content: flex-end;
+  }
+  .client-access-customer-row {
+    grid-template-columns: 54px 1fr 1fr;
+  }
+  .client-access-edit {
+    justify-self: end;
+  }
+}
+@media (max-width: 640px) {
+  .client-access-project-summary {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .client-access-project-icon {
+    width: 45px;
+    height: 45px;
+  }
+  .client-access-title h1 {
+    font-size: 22px;
+  }
+  .client-access-header-actions {
+    width: 100%;
+  }
+  .client-access-customer-row {
+    grid-template-columns: 45px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .client-access-customer-row > div:nth-child(3),
+  .client-access-customer-row > div:nth-child(4) {
+    grid-column: 1/-1;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .client-access-edit {
+    grid-column: 1/-1;
+  }
+  .client-access-invite-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .client-access-contacts.product-panel {
+    padding: 14px;
+  }
+  .client-access-card-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+.client-access-table th,
+.client-access-table td {
+  font-size: 14px;
+}
+.client-access-card-heading p,
+.client-access-project-meta,
+.client-access-customer-row dd {
+  font-size: 14px;
+}
+.client-access-invite-form input,
+.client-access-invite-actions button {
+  font-size: 13px;
+}
+.client-access-field {
+  font-size: 13px;
+}
+.client-contact-actions summary {
+  width: 40px;
+  box-sizing: border-box;
+  margin-left: auto;
+}

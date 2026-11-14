@@ -85,12 +85,7 @@ export function PortalFoundation({ data }: { data: PortalData }) {
                 }
               >
                 <p>{item.instructions}</p>
-                {item.example && (
-                  <details>
-                    <summary>Example answer</summary>
-                    <p>{item.example}</p>
-                  </details>
-                )}
+
                 {item.type === 'REPEATER' ? (
                   <div>
                     <p>

@@ -914,3 +914,105 @@ Verified with three Playwright viewport checks, five focused frontend tests, and
 Sign-in, registration, verification and resend, password recovery and reset, and team invitation now share a full-height authentication layout. Desktop uses a 60/40 split, tablet uses a 45/55 split, and phones use a compact brand header above the form. Legal links sit at the bottom of the form panel, and short screens can scroll naturally. The sign-in security callout and duplicate registration action were removed. Mock mode retains a compact synthetic-data notice and exposes scenario controls on auth routes through the demoTools query parameter.
 
 Verification passed with 30 auth unit tests, 12 Playwright checks, TypeScript, changed-file lint and formatting, and the real HTTPS authentication lifecycle with mocks disabled. Playwright confirmed the full-height 60/40 split at 1024px and 1440px, keyboard sign-in, and registration at a 320px viewport. Native 200% browser zoom and screen-reader testing remain unverified.
+
+
+## Local integration readiness — 9 November 2026
+
+The isolated Compose database and real loopback Vite/Spring stack passed the account, inbox, and workspace browser smoke. The focused HTTPS suite covered team and client access, all project types, draft collection, attachments, review, and exports. The local scanner still needs DNS access or approved definitions before enabling manual uploads. See [startup, walkthrough, regression evidence and remaining limits](LOCAL_DEVELOPMENT.md).
+
+## Project workflow simplification
+
+Project navigation now groups Content, Client access, Responses & Review, and Analytics ahead of a More selector for secondary work. Existing project links remain supported, including submitted history, preview, and assignments. The content checklist separates request editing and read-only preview. The client-access flow checks publish prerequisites and confirms invitations. Live Files links to authorized revision attachments because the project-wide gallery API is demo-only. Reminder settings and advanced analytics are collapsed by default. Export history gives terminal states precedence over stale detail polling.
+
+Verification passed with 237 frontend unit tests, TypeScript and production build, changed-file lint and formatting, three targeted Playwright journeys (including 1440, 1280, 768, 390, and 360 px), the real local account smoke, 1,088 backend regression tests, and one real HTTPS workspace integration test with MSW disabled. The isolated HTTPS fixture exercised separate agency and client sessions, drafts, review, private attachments, approved exports, lifecycle changes, expiry, and revocation. The manual local storage stack still needs approved scanner definitions or working container DNS. Native 200% browser zoom, assistive-technology testing, and moderated novice timing remain open. Existing release gates are unchanged.
+
+## Local P0 storage, scanning and approved exports — 10 November 2026
+
+The existing Docker Desktop stack passed the live storage journey. The first FreshClam bootstrap downloaded daily signatures but then lost DNS resolution after a main database HTTPS timeout. Container DNS resolved both ClamAV records during diagnosis. Verified cached main v63 and bytecode v339 filled the missing files, and FreshClam updated daily to v28178. ClamAV 1.5.4 loaded the complete database and remained healthy after restart.
+
+The isolated loopback stack uses PostgreSQL database collector_storage_p0 and separate private S3 buckets. The MSW-disabled browser verified quarantine, a clean upload and download, a MALWARE_DETECTED rejection, actual workspace storage usage, exact-revision approval, a worker-generated ZIP with the approved bytes, and anonymous download denial. ClamAV and Spring Boot restarted successfully, Flyway validated all 26 migrations, and the prior READY export remained in PostgreSQL. The full browser workflow passed again after restart.
+
+Focused verification passed with 46 attachment storage, 8 scanner protocol, 2 export renderer, and 198 submission tests. The storage suite used the local ClamAV listener with official definitions. TypeScript, production build, and the smoke script lint passed. Production provider and staging gates remain open. See [startup, DNS diagnosis, and manual walkthrough](LOCAL_DEVELOPMENT.md).
+
+## Content workspace and operational Insights — 10 November 2026
+
+Project navigation now has Content, Client access, and More. Existing review, submission, analytics, and preview URLs redirect into Content. Item and revision query parameters are retained when supplied. Content presents visible questions by section, previews only authorized immutable submissions, and copies complete text or faithful structured values. Inline review retains current-revision checks, private files, discussions, and collapsible history. The agency preview and client-facing example panels were removed from the interface. Counts-only share controls moved to More → Details.
+
+Section counts use visible, enabled, required questions. Current submitted and approved items count toward completion. Drafts, withdrawn and reopened items, and changes-requested items do not. Project details now use the same scoped visibility evaluation for item flags and progress, so conditional questions agree with the backend totals without returning draft values. Content polls project state every 15 seconds and agency mutations invalidate the shared cache.
+
+Insights distinguishes workspace or assigned-project totals from a selected project snapshot. Partial project lists are labeled. Advanced reporting controls, friction tables, and internal identifiers are absent from Insights. Existing reporting APIs and stored data remain available.
+
+Verification: 240 frontend unit tests and the TypeScript/production build passed. Five targeted Edge scenarios passed across the focused runs, including 1440, 1280, 768, 390, and 360 px layout checks and keyboard clipboard copy at 390 px. Targeted PostgreSQL verification passed 66 tests, followed by one passing rerun with the new visibility and draft-privacy assertions. The isolated local browser smoke with MSW disabled passed real upload, ClamAV rejection, private download, inline exact-revision approval, and approved ZIP export. Native 200% zoom and assistive technology were not exercised.
+
+
+
+### T37 approved-reference visual correction — 11 November 2026
+
+Frontend-only refinement of Project Content and Client access: compact question toggles with real state indicators, inset submitted answers, exact-revision actions, expandable dated revision rows, and inline conversation/visibility controls. Client access now has separate customer-summary, contact-table and invitation cards with matching blue iconography, spacing and responsive styling. Customer listing/creation remains secondary and expandable. The invitation form uses the assigned customer ID and requests only the additional contact's name/email; the existing access-expiry control, retry handling, confirmations and authorization remain.
+
+Verification for this correction: frontend TypeScript and changed-component ESLint passed; affected files formatted. No new tests, regression suites or browser automation were run, per the supplied brief. Rendered pixel parity remains unverified. No backend, API, migration or supplied-specification changes; protected collection-file SHA-256 hashes match their original values. No commit or push.
+
+
+### Client portal UI simplification (user brief T38) — 12 November 2026
+
+Frontend presentation refinement of the existing live collection portal; this does not close or redefine original-roadmap release tasks. The existing section navigation now uses compact blue-highlighted section controls and expandable question rows, one open at a time. Mounted draft/upload editors are retained when collapsed. The header uses a short instruction and real submitted/approved required-question progress. Existing Reminder preferences opens in the shared accessible dialog; SMS consent, opt-out and notices remain, with allowance detail secondary.
+
+Save draft, Clear answer and the existing two-step Review and submit controls are grouped. Required-question readiness is a compact expandable list with direct question navigation. History loads for expanded questions using the existing draft read API, hides when empty, separates failures from empty results and displays revision dates/current state where available. Client-visible conversations use compact author/message/date rows and one Send comment action. No agency-private comment API, example answers, extra navigation pages or unsupported SMS features were introduced.
+
+Changed frontend files: CollectionPortal.tsx, ClientDraftField.tsx, ClientPortal.css, SubmissionControls.tsx, SubmissionValidationSummary.tsx, ClientSubmissionHistory.tsx, ClientPreferences.tsx and ClientComments.tsx. Strict application TypeScript, changed-component ESLint and formatting passed. No tests were added; browser automation, full regression and unrelated suites were intentionally not run under the lean UI-only brief. Rendered visual parity and mobile/keyboard interaction remain unverified in a browser. Invitation/project-opening code, APIs, backend and migrations were not modified. Protected collection Java file hashes match the original values. Existing uncommitted work is preserved; no commit or push.
+
+
+### Settings profile navigation and Team consolidation — 13 November 2026
+
+Frontend presentation/navigation change only; original roadmap statuses and release gates are unchanged.
+
+- Replaced the agency header profile/sign-out controls with one accessible disclosure dropdown: My account, Notifications (existing account view plus #daily-digest), Workspace settings, Billing & usage, Privacy & data, and the existing confirmed logout workflow. Supports click toggle, outside dismissal, Escape/focus restoration, Tab navigation, and route-change dismissal.
+- Removed Settings/My account from primary navigation and removed the secondary SettingsNav component and its obsolete redesign styles. Existing settings query aliases remain; view=team redirects to the workspace's canonical Team route.
+- Workspace settings now contains only workspace configuration, read-only owner information, and the existing mock-only logo/deletion controls. No embedded TeamPage, ownership transfer, or duplicate team links.
+- Team remains owner-gated and retains invitation/member controls. Reused OwnershipPanel exactly once under Workspace ownership, preserving its password, confirmation, idempotency, API, and identity refresh behavior. No unsupported role-edit capability was added.
+- Reused project assignment controls inside Team's Project access disclosure, with project search/pagination and independent review/export permissions. Legacy project tab=assignments links redirect to Team with projectId. Only Team renders assignment management now.
+- Desktop table/mobile member layout and profile dropdown use scoped styles; no new dependencies or backend/API changes.
+
+Files changed in this task (in addition to pre-existing unrelated work):
+- frontend/src/layouts/AgencyLayout.tsx
+- frontend/src/features/settings/components/ProfileDropdown.tsx and ProfileDropdown.css (new)
+- frontend/src/features/settings/pages/SettingsPage.tsx
+- frontend/src/features/auth/components/AccountPanel.tsx
+- frontend/src/features/billing/pages/BillingPage.tsx
+- frontend/src/features/workspace/pages/TeamPage.tsx and TeamPage.css (new CSS)
+- frontend/src/features/workspace/components/OwnershipPanel.tsx
+- frontend/src/features/workspace/components/TeamProjectAccess.tsx (new)
+- frontend/src/features/projects/pages/ProjectPage.tsx
+- frontend/src/styles/product-polish.css
+- frontend/tests/unit/settings-navigation.test.tsx and team-navigation.test.tsx (new)
+- frontend/tests/e2e/settings-navigation.spec.ts (new)
+- docs/IMPLEMENTATION_STATUS.md
+
+Verification:
+- 27 focused settings-navigation, team-contract, and billing unit tests passed; 3 additional Team placement/confirmation/non-owner tests passed (30 total).
+- Changed TSX/TS lint passed. Changed files formatted.
+- Focused Playwright mock journey passed desktop and phone (2/2). After the mobile avatar CSS correction, phone passed again (1/1). Covered profile links, Notifications focus, Escape, no secondary/sidebar Settings navigation, legacy Team deep link after mock reauthentication, invitation dialog, confirmed logout, and horizontal overflow. Screenshots inspected; artifacts remain under frontend/.artifacts/.
+- Initial browser attempts failed on an ambiguous workspace-name selector and mock in-memory session loss on hard reload. Tests corrected to use the exact label and reauthenticate for the deep link; no authentication behavior changed.
+- TypeScript remains blocked by unrelated existing CustomerPanel/ProjectContactsPanel unused imports/variables and submissions.test.tsx importing the deleted SubmissionValidationSummary component. Those user edits were preserved, not repaired as part of this task. A production build/full regression was not run.
+- Real backend ownership transfer, invitations, workspace saves, and billing-provider mutations were not exercised; browser evidence uses synthetic MSW data. Existing APIs and mutation handlers were preserved.
+- Protected ClientAnswerController.java SHA-256 remains 671023385490849D05B93CA3447F17A7E34D69D7B2CE34494215CE751309331B; ClientAnswerRepository.java remains 33C660007381630D3730E7791FE885FAACD40A0C2B929AB82D68986BEF1FC1B2.
+- No commit or push. Existing dirty working tree preserved.
+
+
+### User T39 — Final Client access UI
+
+- Limited application changes to CustomerPanel.tsx, ProjectContactsPanel.tsx, new ClientAccess.css, and the Client access-only header/publishing branch in ProjectPage.tsx. Shared shell/sidebar and Content / Client access / More destinations unchanged.
+- Compact customer strip and project contacts table, supported resend/revoke disclosure actions, inline contact name/email/optional expiration and Send invitation. Existing customer ID reused; blank expiry retains the existing 90-day default.
+- One Publish project action beside View project for DRAFT, using the existing confirmed lifecycle request and backend-confirmed state. Notice immediately above invitation form; invitations disabled until published. Backend requires an active contact before publication, so the existing draft Save contact behavior remains available without sending an invitation. Due-date/question/contact prerequisites remain enforced.
+- Invitation records report Issued rather than Sent because accessInitializedAt does not prove delivery. Queued delivery is not represented as sent.
+- Focused verification: client-access-ui.test.tsx 3/3 passed; Client access Playwright desktop layout smoke 1/1 passed with synthetic MSW data, screenshot inspected; changed source/test ESLint passed. TypeScript blocked only by pre-existing submissions.test.tsx imports of the deleted SubmissionValidationSummary component. No full regression, backend mutation smoke or production build. No live invitations sent.
+- Existing customer data, confirmation dialogs, idempotency, failed-send retry, permissions, and expiry checks preserved. Backend, migrations and protected collection files unchanged. No commit/push.
+
+
+### User T40 — Client questionnaire simplification (2026-11-14)
+- Frontend-only changes: ClientDraftField, TypedValue, ClientSubmissionHistory, ClientPortal.css; focused coverage in client-questionnaire.test.tsx.
+- Long answers start at five rows (repeater long answers four), remain resizable with existing limits. Short answers stay single-line. Compact upload area and quiet clear action with cancellation/confirmation; no submission or autosave transport changes.
+- Conversation is collapsed and only mounts client-visible comments on first opening, preserving the message draft thereafter. History requests are deferred until the relevant disclosure opens; initial unanswered items have no history control.
+- Diagnosed misleading live upload text: ClientDraftField previously mapped !canUpload to preview. Live denial now has honest unavailable wording; actual preview wording remains. Backend capability still requires writable access, enabled storage and workspace upload authorization. No capabilities were bypassed; the specific running server's reason for denying uploads was not verified.
+- Verification: 22 focused questionnaire/autosave tests passed; changed-file ESLint passed; Vite production bundling passed (existing large-chunk warning). TypeScript remains blocked ONLY by two pre-existing imports of the deleted SubmissionValidationSummary component in submissions.test.tsx; preserved that existing deletion. No full regression, backend, real upload or browser suite run for T40.
+- Protected collection Java files remained byte-for-byte unchanged. Latest user instruction authorizes committing/pushing accumulated existing changes as well as T40; their broader behavior was not reverified in this focused UI task. No roadmap/release gates closed.

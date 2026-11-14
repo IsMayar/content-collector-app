@@ -1,13 +1,8 @@
 import { env } from '@/config/env'
 import { BillingPage } from '@/features/billing/pages/BillingPage'
-import { TeamPage } from '@/features/workspace/pages/TeamPage'
 import { DigestPreview } from '@/features/analytics/components/DigestPreview'
-import {
-  AccountPanel,
-  SettingsNav,
-} from '@/features/auth/components/AccountPanel'
+import { AccountPanel } from '@/features/auth/components/AccountPanel'
 import type { SessionSummary } from '@/features/auth/types/auth.types'
-import { OwnershipPanel } from '@/features/workspace/components/OwnershipPanel'
 import type { WorkspaceDetail } from '@/features/workspace/types/workspace.types'
 import { useData } from '@/services/api/resourceApi'
 import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
@@ -21,15 +16,22 @@ import {
 } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
-import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router'
 
 export function SettingsPage() {
   const { id, owner, base, user } = useWorkspace()
   const [search] = useSearchParams()
+  const { hash } = useLocation()
+  const digest = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (hash === '#daily-digest' || search.get('view') === 'digest') {
+      digest.current?.scrollIntoView({ block: 'start' })
+      digest.current?.focus({ preventScroll: true })
+    }
+  }, [hash, search])
   const requestedView = search.get('view') || 'account'
   const aliases = new Map([
-    ['team', 'workspace'],
     ['digest', 'account'],
     ['security', 'account'],
     ['usage', 'billing'],
@@ -53,30 +55,27 @@ export function SettingsPage() {
   const [deletion, setDeletion] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
+  if (requestedView === 'team') return <Navigate replace to={base + '/team'} />
   return (
     <>
       <Heading
-        title="Settings"
+        title={
+          {
+            account: 'My account',
+            workspace: 'Workspace settings',
+            billing: 'Billing & usage',
+            privacy: 'Privacy & data',
+          }[tab] || 'Settings'
+        }
         description="Manage your account, workspace, billing, and data."
       />
-      <div className="settings-layout settings-redesign">
-        <SettingsNav active={tab} />
+      <div className="settings-content">
         <div className="settings-body">
           {!owner && tab === 'workspace' && (
             <Notice>
               Your workspace owner manages workspace details and team access.
             </Notice>
           )}
-          <h2 className="settings-section-title">
-            {
-              {
-                account: 'Account & Notifications',
-                workspace: 'Workspace & Team',
-                billing: 'Billing & Usage',
-                privacy: 'Privacy & Data',
-              }[tab]
-            }
-          </h2>
           {tab === 'privacy' && (
             <Panel title="Privacy information">
               <p>
@@ -100,16 +99,32 @@ export function SettingsPage() {
           )}
 
           {tab === 'account' && <AccountPanel />}
-          {tab === 'account' && <DigestPreview workspaceId={id} />}
+          {tab === 'account' && (
+            <section
+              id="daily-digest"
+              ref={digest}
+              tabIndex={-1}
+              aria-label="Daily digest"
+              style={{ scrollMarginTop: 120 }}
+            >
+              <DigestPreview workspaceId={id} />
+            </section>
+          )}
           {tab === 'billing' && <BillingPage embedded />}
           {tab === 'workspace' && owner && (
-            <>
-              <div className="workspace-identity">
-                <Panel title="Workspace details">
-                  <QueryState query={q}>
+            <div className="workspace-identity min-w-0">
+              <Panel title="Workspace details">
+                <QueryState query={q}>
+                  <div className="space-y-7">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm leading-6 text-slate-500">
+                        Set the name and default timezone for your workspace.
+                      </p>
+                    </div>
+
                     {q.data && (
                       <form
-                        className="stack-form"
+                        className="space-y-6"
                         key={q.data.workspace.version}
                         onSubmit={async (e) => {
                           e.preventDefault()
@@ -131,103 +146,130 @@ export function SettingsPage() {
                             setMessage('Workspace preferences saved.')
                         }}
                       >
-                        <div className="form-grid">
-                          <Field label="Workspace name">
-                            <input
-                              name="name"
-                              required
-                              defaultValue={q.data.workspace.name}
-                            />
-                          </Field>
-                          <Field label="Default timezone">
-                            <input
-                              name="timezone"
-                              required
-                              defaultValue={q.data.workspace.timezone}
-                            />
-                          </Field>
-                        </div>
-                        {env.mocksEnabled && (
-                          <>
-                            <Field label="Workspace logo (PNG/JPEG/WebP, 1 MB)">
+                        <div className="grid grid-cols-1 gap-x-5 gap-y-5 md:grid-cols-2">
+                          <div className="min-w-0">
+                            <Field label="Workspace name">
                               <input
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (!file) return
-                                  if (
-                                    file.size > 1e6 ||
-                                    ![
-                                      'image/png',
-                                      'image/jpeg',
-                                      'image/webp',
-                                    ].includes(file.type)
-                                  ) {
-                                    setMessage(
-                                      'Choose a PNG, JPEG or WebP under 1 MB.',
-                                    )
-                                    return
-                                  }
-                                  const reader = new FileReader()
-                                  reader.onload = () =>
-                                    setLogo(String(reader.result))
-                                  reader.readAsDataURL(file)
-                                }}
+                                name="name"
+                                required
+                                defaultValue={q.data.workspace.name}
+                                className="!box-border !h-11 !w-full !min-w-0 !rounded-lg !border !border-slate-300 !bg-white !px-3 !text-sm !text-slate-900 focus:!border-blue-500 focus:!outline-none focus:!ring-2 focus:!ring-blue-500/15"
                               />
                             </Field>
-                            {(logo ?? q.data.logo) && (
-                              <img
-                                className="workspace-logo"
-                                src={logo ?? q.data.logo}
-                                alt="Workspace logo preview"
+                          </div>
+                          <div className="min-w-0">
+                            <Field label="Default timezone">
+                              <input
+                                name="timezone"
+                                required
+                                defaultValue={q.data.workspace.timezone}
+                                className="!box-border !h-11 !w-full !min-w-0 !rounded-lg !border !border-slate-300 !bg-white !px-3 !text-sm !text-slate-900 focus:!border-blue-500 focus:!outline-none focus:!ring-2 focus:!ring-blue-500/15"
                               />
-                            )}
-                            <button
-                              type="button"
-                              className="danger-link"
-                              onClick={() => setLogo('')}
-                            >
-                              Remove logo
-                            </button>
-                          </>
+                            </Field>
+                          </div>
+                        </div>
+
+                        {env.mocksEnabled && (
+                          <div className="space-y-3 border-t border-slate-200 pt-5">
+                            <div>
+                              <h3 className="text-sm font-semibold text-slate-900">
+                                Workspace logo
+                              </h3>
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                PNG, JPEG or WebP, up to 1 MB.
+                              </p>
+                            </div>
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                              {(logo ?? q.data.logo) && (
+                                <img
+                                  className="workspace-logo !h-14 !w-14 shrink-0 !rounded-xl !border !border-slate-200 !object-contain"
+                                  src={logo ?? q.data.logo}
+                                  alt="Workspace logo preview"
+                                />
+                              )}
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <Field label="Upload logo">
+                                  <input
+                                    className="!block !w-full !min-w-0 !rounded-lg !border !border-slate-300 !bg-white !p-2 !text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700"
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (!file) return
+                                      if (
+                                        file.size > 1e6 ||
+                                        ![
+                                          'image/png',
+                                          'image/jpeg',
+                                          'image/webp',
+                                        ].includes(file.type)
+                                      ) {
+                                        setMessage(
+                                          'Choose a PNG, JPEG or WebP under 1 MB.',
+                                        )
+                                        return
+                                      }
+                                      const reader = new FileReader()
+                                      reader.onload = () =>
+                                        setLogo(String(reader.result))
+                                      reader.readAsDataURL(file)
+                                    }}
+                                  />
+                                </Field>
+                                <button
+                                  type="button"
+                                  className="danger-link !text-sm"
+                                  onClick={() => setLogo('')}
+                                >
+                                  Remove logo
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         )}
 
-                        <button
-                          className="primary-button"
-                          disabled={command.pending}
-                        >
-                          Save workspace
-                        </button>
+                        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-5">
+                          <button
+                            type="submit"
+                            className="primary-button !inline-flex !min-h-10 items-center justify-center !rounded-lg !px-5"
+                            disabled={command.pending}
+                          >
+                            Save workspace
+                          </button>
+                        </div>
                       </form>
                     )}
 
-                    <div className="workspace-owner">
-                      <span className="profile-avatar" aria-hidden="true">
-                        {user?.displayName.slice(0, 2).toUpperCase()}
-                      </span>
-                      <div>
-                        <strong>{user?.displayName}</strong>
-                        <p>{user?.email}</p>
+                    <div className="border-t border-slate-200 pt-5">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span
+                            className="profile-avatar !flex !h-11 !w-11 shrink-0 !items-center !justify-center !rounded-full !bg-slate-100 !text-sm !font-semibold !text-slate-700"
+                            aria-hidden="true"
+                          >
+                            {user?.displayName.slice(0, 2).toUpperCase()}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-slate-500">
+                              Workspace owner
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <strong className="break-words text-sm font-semibold text-slate-900">
+                                {user?.displayName}
+                              </strong>
+                              <Badge>OWNER</Badge>
+                            </div>
+                            <p className="mt-1 break-all text-xs text-slate-500">
+                              {user?.email}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <Badge>OWNER</Badge>
                     </div>
-                    <Link className="reference-info" to={`${base}/team`}>
-                      Manage team settings
-                    </Link>
-                  </QueryState>
-                </Panel>
-              </div>
-            </>
-          )}
-          {tab === 'workspace' && owner && (
-            <>
-              <TeamPage />
-              <OwnershipPanel />
-              <Link className="secondary-button" to={`${base}/team`}>
-                Manage team settings
-              </Link>
-            </>
+                  </div>
+                </QueryState>
+              </Panel>
+            </div>
           )}
           {tab === 'account' && (
             <Panel title="Active sessions">

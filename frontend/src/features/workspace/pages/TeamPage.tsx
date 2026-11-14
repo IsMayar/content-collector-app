@@ -1,3 +1,6 @@
+import { TeamProjectAccess } from '../components/TeamProjectAccess'
+import { OwnershipPanel } from '../components/OwnershipPanel'
+import './TeamPage.css'
 import type {
   InviteSummary,
   Member,
@@ -22,10 +25,11 @@ import { useWorkspace } from '@/shared/hooks/useWorkspace'
 import { ShieldCheck, Users } from 'lucide-react'
 import { useState } from 'react'
 import { teamInvitationSchema } from '@/features/workspace/schemas/teamSchema'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 export function TeamPage() {
   const { id, owner } = useWorkspace()
+  const [params] = useSearchParams()
   const q = useTeam(id, owner)
   const workspace = useTeamEntitlements(id, owner)
   const form = useForm<
@@ -124,9 +128,11 @@ export function TeamPage() {
                         <strong>{m.user.displayName}</strong>
                       </div>
                     </td>
-                    <td>{m.user.email}</td>
-                    <td>{m.role === 'OWNER' ? 'Owner' : 'Member'}</td>
-                    <td>
+                    <td data-label="Email">{m.user.email}</td>
+                    <td data-label="Role">
+                      {m.role === 'OWNER' ? 'Owner' : 'Member'}
+                    </td>
+                    <td data-label="Status">
                       <Badge>{m.state}</Badge>
                     </td>
                     <td>
@@ -181,10 +187,12 @@ export function TeamPage() {
                     : pending
                   ).map((i) => (
                     <tr key={i.id}>
-                      <td>{i.email}</td>
-                      <td>Member</td>
-                      <td>{new Date(i.expiresAt).toLocaleDateString()}</td>
-                      <td>
+                      <td data-label="Email">{i.email}</td>
+                      <td data-label="Role">Member</td>
+                      <td data-label="Expires">
+                        {new Date(i.expiresAt).toLocaleDateString()}
+                      </td>
+                      <td data-label="Status">
                         <Badge>{i.state}</Badge>
                       </td>
                       <td>
@@ -213,6 +221,14 @@ export function TeamPage() {
           <Link to={demo}>Open synthetic team invitation</Link>
         </Notice>
       )}
+      <details
+        className="team-access-disclosure"
+        open={params.has('projectId') || undefined}
+      >
+        <summary>Manage project access and permissions</summary>
+        <TeamProjectAccess />
+      </details>
+      <OwnershipPanel />
       {invite && (
         <Modal
           title="Invite a team member"
@@ -265,7 +281,7 @@ export function TeamPage() {
               <ShieldCheck size={20} />
               <strong>Private project access</strong>
               <p>
-                After acceptance, open a project’s Team tab to assign this
+                After acceptance, use Project access on this page to assign this
                 teammate. Review and export permissions are granted separately.
                 Invitations do not grant project access automatically.
               </p>

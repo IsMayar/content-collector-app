@@ -101,19 +101,22 @@ export function SubmissionControls({
     }
   }
   return (
-    <section aria-label={'Submission for ' + item.label}>
+    <section
+      className="client-submission-controls"
+      aria-label={'Submission for ' + item.label}
+    >
       <p
         role={message || item.state === 'SUBMITTED' ? 'status' : undefined}
         aria-live="polite"
       >
         {message ||
           (item.state === 'SUBMITTED'
-            ? 'Submitted for review. Your saved submission is read-only.'
+            ? 'Submitted for review. Withdraw to edit.'
             : item.state === 'APPROVED'
-              ? 'Approved. This revision is read-only until your agency explicitly reopens it.'
+              ? 'Approved. Ask your agency if changes are needed.'
               : item.state === 'CHANGES_REQUESTED'
                 ? 'Changes requested. Update your draft before submitting a new revision.'
-                : 'Draft answers are not submitted automatically.')}
+                : 'Save a draft now. Submit when you’re ready.')}
       </p>
       <ErrorNotice error={command.error} />
       {pending && (
@@ -133,7 +136,11 @@ export function SubmissionControls({
         </button>
       )}
       {confirm && (
-        <div role="group" aria-label="Confirm submission">
+        <div
+          className="client-submit-confirmation"
+          role="group"
+          aria-label="Confirm submission"
+        >
           <p>
             Submit this saved answer and its verified files? You can withdraw it
             while it awaits review.

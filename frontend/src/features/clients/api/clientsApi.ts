@@ -9,7 +9,7 @@ export function useCustomers(workspaceId: string, page = 0) {
   )
 }
 export function useProjectContacts(root: string) {
-  return useData<{ data: ProjectContact[] }>(`${root}/contacts`)
+  return useData<{ data: ProjectContact[] }>(root ? `${root}/contacts` : '')
 }
 
 export function useClientCommands() {

@@ -11,12 +11,22 @@ const progress = {
   clientActionRequired: 0,
   optionalApproved: 0,
 }
-function mount(state: Project['state'] = 'ACTIVE', counts = progress) {
+function mount(
+  state: Project['state'] = 'ACTIVE',
+  counts = progress,
+  canManageAccess = true,
+) {
   const action = vi.fn()
   render(
     <MemoryRouter>
       <LiveCompletionPanel
-        project={{ state, progress: counts } as Project}
+        project={
+          {
+            state,
+            progress: counts,
+            permissions: { canManageAccess },
+          } as Project
+        }
         onAction={action}
       />
     </MemoryRouter>,
@@ -56,5 +66,15 @@ it('offers archive restoration without inventing export or deletion features', a
   expect(action).toHaveBeenCalledWith('restore')
   expect(
     screen.queryByRole('button', { name: /complete|delete|export/i }),
+  ).not.toBeInTheDocument()
+})
+
+it('shows readiness without offering administrative actions to a read-only user', () => {
+  mount('ACTIVE', progress, false)
+  expect(
+    screen.getByRole('heading', { name: 'Project completion' }),
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: /complete|archive/i }),
   ).not.toBeInTheDocument()
 })

@@ -39,7 +39,9 @@ registerProductResolver((request, path, _search, body) => {
         ? 'review'
         : request.method === 'GET'
           ? 'read'
-          : 'review',
+          : action === 'comments'
+            ? 'read'
+            : 'review',
     request.method !== 'GET' && area !== 'exports',
   )
   const { record: r, project: p } = ctx

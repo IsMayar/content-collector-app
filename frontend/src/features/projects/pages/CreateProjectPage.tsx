@@ -75,7 +75,7 @@ export function CreateProjectPage() {
     e.preventDefault()
     setStep(3)
   }
-  async function create(sendInvitation: boolean) {
+  async function create(sendInvitation: boolean, openAccess = false) {
     if (busy) return
     setBusy(true)
     try {
@@ -113,13 +113,6 @@ export function CreateProjectPage() {
       const project = createdProject.current
       if (sendInvitation) {
         const root = `workspaces/${id}/projects/${project.id}`
-        const published = await command.run(`${root}/publish`, {
-          expectedVersion: project.version,
-        })
-        if (!published) {
-          setPartial(project.id)
-          return
-        }
         const contact = await command.run<{ contact: { id: string } }>(
           `${root}/contacts`,
           {
@@ -135,10 +128,24 @@ export function CreateProjectPage() {
           setPartial(project.id)
           return
         }
+        const published = await command.run(
+          `${root}/publish`,
+          {
+            expectedVersion: project.version,
+          },
+          'POST',
+          { 'Idempotency-Key': crypto.randomUUID() },
+        )
+        if (!published) {
+          setPartial(project.id)
+          return
+        }
         if (
           !(await command.run(
             `${root}/contacts/${contact.contact.id}/invite`,
             {},
+            'POST',
+            { 'Idempotency-Key': crypto.randomUUID() },
           ))
         ) {
           setPartial(project.id)
@@ -146,7 +153,7 @@ export function CreateProjectPage() {
         }
       }
       navigate(
-        `${base}/projects/${project.id}${sendInvitation ? '?tab=access' : ''}`,
+        `${base}/projects/${project.id}${sendInvitation || openAccess ? '?tab=access' : ''}`,
       )
     } finally {
       setBusy(false)
@@ -527,19 +534,21 @@ export function CreateProjectPage() {
                 <Mail size={18} />
                 {email || 'Add an email in project access'}
               </div>
-              <label className="check-row">
-                <input
-                  type="checkbox"
-                  checked={invite}
-                  disabled={!env.mocksEnabled || !email}
-                  onChange={(e) => setInvite(e.target.checked)}
-                />
-                Send client invitation after creating project
-              </label>
+              {env.mocksEnabled && (
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={invite}
+                    disabled={!env.mocksEnabled || !email}
+                    onChange={(e) => setInvite(e.target.checked)}
+                  />
+                  Send client invitation after creating project
+                </label>
+              )}
               <p className="subtle">
                 {env.mocksEnabled
                   ? 'Sending an invitation publishes the demo project. Client access expires after 30 days.'
-                  : 'Save a draft to continue. Invitation sending and real client sessions are not enabled yet.'}
+                  : 'Create the project to review its request, add a contact, and send a private invitation from Client access.'}
               </p>
             </Panel>
           </div>
@@ -566,7 +575,7 @@ export function CreateProjectPage() {
                 type="button"
                 className="primary-button"
                 disabled={busy}
-                onClick={() => void create(invite)}
+                onClick={() => void create(invite, !env.mocksEnabled)}
               >
                 {busy
                   ? 'Creating…'

@@ -16,6 +16,11 @@ class InitializeBuckets {
         try (var in = Files.newInputStream(Path.of(".env"))) {
             env.load(in);
         }
+        // Allow an isolated local browser run to use its own buckets and origin.
+        for (String key : List.of("APP_BASE_URL", "S3_BUCKET_STAGING", "S3_BUCKET_PRIVATE")) {
+            String value = System.getenv(key);
+            if (value != null && !value.isBlank()) env.setProperty(key, value);
+        }
         String endpoint = env.getProperty("S3_ENDPOINT", "");
         if (!endpoint.equals("http://127.0.0.1:8333"))
             throw new IllegalStateException("Local loopback setup only");

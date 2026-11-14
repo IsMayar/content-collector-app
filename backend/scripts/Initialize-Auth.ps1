@@ -1,27 +1,53 @@
 param(
     [string]$Directory = (Join-Path $PSScriptRoot '..\.local\auth'),
-    [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env')
+    [string]$EnvFile = (Join-Path $PSScriptRoot '..\.env'),
+    [string]$Java = 'java'
 )
 $ErrorActionPreference = 'Stop'
 $authRoot = [IO.Path]::GetFullPath($Directory)
 $authEnv = [IO.Path]::GetFullPath($EnvFile)
-if ((Test-Path -LiteralPath $authEnv) -and (Select-String -LiteralPath $authEnv -Pattern '^JWT_PRIVATE_KEY=.+' -Quiet)) {
+$required = @('JWT_PRIVATE_KEY', 'JWT_PUBLIC_KEYS', 'JWT_KEY_ID', 'JWT_ISSUER', 'JWT_AUDIENCE', 'TOKEN_HASH_PEPPER')
+$configured = @($required | Where-Object {
+    (Test-Path -LiteralPath $authEnv) -and (Select-String -LiteralPath $authEnv -Pattern "^$($_)=\s*\S" -Quiet)
+})
+if ($configured.Count -eq $required.Count) {
     Write-Output 'Existing auth configuration preserved.'
-    exit 0
+    return
 }
-if (Test-Path -LiteralPath (Join-Path $authRoot 'auth.properties')) {
-    throw 'Existing key files preserved. Restore the matching configuration securely; do not regenerate keys.'
+if ($configured.Count -gt 0) {
+    throw 'Partial auth configuration in backend/.env. Restore its matching values before retrying.'
 }
+
 New-Item -ItemType Directory -Path $authRoot -Force | Out-Null
-# Restrict the directory before creating secrets. Children inherit only this user's access.
-$authAcl = Get-Acl -LiteralPath $authRoot
+$authAcl = New-Object Security.AccessControl.DirectorySecurity
 $authAcl.SetAccessRuleProtection($true, $false)
 $authIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $authRule = New-Object Security.AccessControl.FileSystemAccessRule($authIdentity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
 $authAcl.AddAccessRule($authRule)
-Set-Acl -LiteralPath $authRoot -AclObject $authAcl
-& java (Join-Path $PSScriptRoot 'GenerateAuthKeys.java') $authRoot
-if ($LASTEXITCODE -ne 0) { throw 'Local auth key generation failed; preserve any generated files for inspection.' }
+$authDirectory = [IO.DirectoryInfo]::new($authRoot)
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    [IO.FileSystemAclExtensions]::SetAccessControl($authDirectory, $authAcl)
+} else {
+    $authDirectory.SetAccessControl($authAcl)
+}
+
+$files = @('private.pem', 'public.jwks.json', 'auth.properties')
+$existing = @($files | Where-Object { Test-Path -LiteralPath (Join-Path $authRoot $_) -PathType Leaf })
+if ($existing.Count -eq 0) {
+    $source = Join-Path $PSScriptRoot 'GenerateAuthKeys.java'
+    $arguments = @(('"{0}"' -f $source), ('"{0}"' -f $authRoot))
+    $generator = Start-Process -FilePath $Java -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+    if ($generator.ExitCode -ne 0) {
+        throw 'Local auth key generation failed; preserve any generated files for inspection.'
+    }
+} elseif ($existing.Count -ne $files.Count) {
+    throw 'Partial key files preserved. Restore the matching files before retrying.'
+}
 $authLines = [IO.File]::ReadAllLines((Join-Path $authRoot 'auth.properties'))
-[IO.File]::AppendAllText($authEnv, [Environment]::NewLine + [string]::Join([Environment]::NewLine, $authLines) + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
-Write-Output 'Local signing keys and refresh hash configuration created. Secret values were not printed.'
+foreach ($setting in $required) {
+    if (-not ($authLines -match "^$setting=\s*\S")) {
+        throw 'Generated auth configuration is incomplete.'
+    }
+}
+[IO.File]::AppendAllText($authEnv, [Environment]::NewLine + [string]::Join([Environment]::NewLine, $authLines) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+Write-Output 'Local signing keys and refresh hash configuration are ready.'

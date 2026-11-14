@@ -14,3 +14,23 @@ export function captureToken(purpose: string) {
   }
   return tokenVault.get(purpose) || ''
 }
+
+export function parseActionCode(value: string, path: string) {
+  if (/^[A-Za-z0-9_-]+$/.test(value)) return value
+  try {
+    const url = new URL(value)
+    if (
+      url.origin !== window.location.origin ||
+      url.pathname !== path ||
+      url.username ||
+      url.password
+    )
+      return
+    const token =
+      new URLSearchParams(url.hash.slice(1)).get('token') ??
+      url.searchParams.get('token')
+    if (token && /^[A-Za-z0-9_-]+$/.test(token)) return token
+  } catch {
+    // Malformed input is reported on the field.
+  }
+}

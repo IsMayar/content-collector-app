@@ -1,3 +1,12 @@
+import {
+  CalendarDays,
+  Mail,
+  MoreHorizontal,
+  Send,
+  Trash2,
+  UserRound,
+  UsersRound,
+} from 'lucide-react'
 import { env } from '@/config/env'
 import {
   useProjectContacts,
@@ -6,286 +15,392 @@ import {
 import { contactCreateSchema } from '@/features/clients/schemas/clientSchema'
 import type { ProjectContact } from '@/features/projects/types/project.types'
 import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
-import { Modal } from '@/shared/components/Modal'
-import {
-  Badge,
-  ErrorNotice,
-  Field,
-  Panel,
-  QueryState,
-} from '@/shared/components/ProductUI'
+import { Badge, ErrorNotice, QueryState } from '@/shared/components/ProductUI'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import './ClientAccess.css'
 
 export function ContactsPanel({
   root,
   clientId,
   canInvite = true,
+  canManage = true,
+  unpublished = false,
+  publicationMissing = [],
 }: {
   root: string
   clientId: string
   canInvite?: boolean
+  canManage?: boolean
+  unpublished?: boolean
+  publicationMissing?: (string | false)[]
 }) {
   const q = useProjectContacts(root),
     command = useClientCommands()
-  const [open, setOpen] = useState(false),
-    [link, setLink] = useState(''),
+  const [link, setLink] = useState(''),
     [name, setName] = useState(''),
     [email, setEmail] = useState(''),
     [created, setCreated] = useState(''),
     [revoke, setRevoke] = useState<ProjectContact | null>(null),
     [message, setMessage] = useState('')
+  const [inviteContact, setInviteContact] = useState<ProjectContact | null>(
+    null,
+  )
   const [inviteKeys, setInviteKeys] = useState<Record<string, string>>({})
   async function invite(id: string) {
+    if (!canManage || !canInvite || unpublished) return false
     const key = inviteKeys[id] || crypto.randomUUID()
     setInviteKeys((keys) => ({ ...keys, [id]: key }))
     const result = await command.run<{ demoUrl?: string }>(
-      `${root}/contacts/${id}/invite`,
+      root + '/contacts/' + id + '/invite',
       {},
       'POST',
       { 'Idempotency-Key': key },
     )
     if (result) {
       setLink(result.demoUrl || '')
-      setMessage('Invitation sent.')
+      setMessage(
+        env.mocksEnabled
+          ? 'Invitation created.'
+          : 'Invitation queued for delivery.',
+      )
       setInviteKeys((keys) => ({ ...keys, [id]: crypto.randomUUID() }))
       return true
     }
     return false
   }
   return (
-    <Panel title="Client access">
-      <div className="board-toolbar">
-        <p>
-          Manage who can access this project. All listed contacts belong to the
-          client’s organisation.
-        </p>
-        <button className="primary-button" onClick={() => setOpen(true)}>
-          {env.mocksEnabled ? 'Invite client ＋' : 'Add project contact'}
-        </button>
-      </div>
-      {!env.mocksEnabled && (
-        <Notice>
-          Contacts receive a private, single-use email link. Publish your
-          project before sending invitations. Revoking access ends every client
-          session for this contact.
-        </Notice>
-      )}
-      <QueryState query={q}>
-        <div className="reference-table-wrap">
-          <table className="reference-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Access expires</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {q.data?.data.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <div className="person-cell">
-                      <span className="person-avatar">
-                        {c.name.slice(0, 2).toUpperCase()}
-                      </span>
-                      <strong>{c.name}</strong>
-                    </div>
-                  </td>
-                  <td>{c.email}</td>
-                  <td>Client contact</td>
-                  <td>
-                    <Badge>
-                      {c.state !== 'ACTIVE'
-                        ? c.state
-                        : Date.parse(c.accessExpiresAt) <= Date.now()
-                          ? 'EXPIRED'
-                          : c.accessInitializedAt === null
-                            ? 'NOT_INVITED'
-                            : 'ACTIVE'}
-                    </Badge>
-                  </td>
-                  <td>{new Date(c.accessExpiresAt).toLocaleDateString()}</td>
-                  <td>
-                    <div className="actions">
-                      <button
-                        className="text-link"
-                        disabled={!canInvite || command.pending}
-                        onClick={() => void invite(c.id)}
-                      >
-                        Send / resend invite
-                      </button>
-                      <button
-                        className="danger-link"
-                        disabled={command.pending || c.state !== 'ACTIVE'}
-                        onClick={() => setRevoke(c)}
-                      >
-                        Revoke
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </QueryState>
-      <ErrorNotice error={command.error} />
-      {message && <Notice>{message}</Notice>}
-      {link && (
-        <Notice>
-          Development invitation: <Link to={link}>Open client access</Link>.
-          Keep this tab open to retain in-memory demo state.
-        </Notice>
-      )}
-      {open && (
-        <Modal
-          title={
-            env.mocksEnabled
-              ? 'Invite client to this project'
-              : 'Add project contact'
-          }
-          drawer
-          pending={command.pending}
-          onClose={() => setOpen(false)}
-        >
-          <div className="invite-assignment-grid">
+    <>
+      <section className="product-panel client-access-contacts">
+        <header className="client-access-card-heading">
+          <UsersRound size={32} aria-hidden="true" />
+          <div>
+            <h2>Project contacts</h2>
+            <p>
+              People from this customer who can access and submit content for
+              this project.
+            </p>
+          </div>
+        </header>
+        <QueryState query={q}>
+          {q.data?.data.length === 0 ? (
+            <p className="subtle">No project contacts yet.</p>
+          ) : (
+            <div className="client-access-table-wrap">
+              <table className="client-access-table">
+                <thead>
+                  <tr>
+                    <th>Contact</th>
+                    <th>Email</th>
+                    <th>Access status</th>
+                    <th>Invitation</th>
+                    <th>Access expires</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {q.data?.data.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        <div className="client-access-person">
+                          <span
+                            className="client-access-avatar"
+                            aria-hidden="true"
+                          >
+                            {c.name
+                              .trim()
+                              .split(/\s+/)
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join('')
+                              .toUpperCase()}
+                          </span>
+                          <strong>{c.name}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="client-access-inline">
+                          <Mail size={17} aria-hidden="true" />
+                          {c.email}
+                        </span>
+                      </td>
+                      <td>
+                        <Badge>
+                          {c.state !== 'ACTIVE'
+                            ? c.state
+                            : Date.parse(c.accessExpiresAt) <= Date.now()
+                              ? 'EXPIRED'
+                              : !c.accessInitializedAt
+                                ? 'NOT_INVITED'
+                                : 'ACTIVE'}
+                        </Badge>
+                      </td>
+                      <td>
+                        <span
+                          className="client-access-inline"
+                          title={
+                            c.accessInitializedAt
+                              ? 'An invitation was issued. Delivery is not confirmed by the contact record.'
+                              : undefined
+                          }
+                        >
+                          {c.accessInitializedAt && (
+                            <Send size={17} aria-hidden="true" />
+                          )}
+                          {c.accessInitializedAt ? 'Issued' : 'Not issued'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="client-access-inline">
+                          <CalendarDays size={17} aria-hidden="true" />
+                          <time dateTime={c.accessExpiresAt}>
+                            {new Date(c.accessExpiresAt).toLocaleDateString(
+                              undefined,
+                              {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              },
+                            )}
+                          </time>
+                        </span>
+                      </td>
+                      <td>
+                        <details
+                          className="client-contact-actions"
+                          onBlur={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget))
+                              e.currentTarget.open = false
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.currentTarget.open = false
+                              e.currentTarget.querySelector('summary')?.focus()
+                            }
+                          }}
+                        >
+                          <summary aria-label={'Actions for ' + c.name}>
+                            <MoreHorizontal size={20} aria-hidden="true" />
+                          </summary>
+                          <div>
+                            <button
+                              type="button"
+                              disabled={
+                                !canManage ||
+                                !canInvite ||
+                                unpublished ||
+                                command.pending ||
+                                c.state !== 'ACTIVE' ||
+                                Date.parse(c.accessExpiresAt) <= Date.now()
+                              }
+                              onClick={(e) => {
+                                e.currentTarget.closest('details')!.open = false
+                                setInviteContact(c)
+                              }}
+                            >
+                              <Send size={16} aria-hidden="true" />
+                              {c.accessInitializedAt
+                                ? 'Resend invite'
+                                : 'Send invite'}
+                            </button>
+                            <button
+                              type="button"
+                              className="danger-link"
+                              disabled={
+                                !canManage ||
+                                command.pending ||
+                                c.state !== 'ACTIVE'
+                              }
+                              onClick={(e) => {
+                                e.currentTarget.closest('details')!.open = false
+                                setRevoke(c)
+                              }}
+                            >
+                              <Trash2 size={16} aria-hidden="true" />
+                              Revoke
+                            </button>
+                          </div>
+                        </details>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </QueryState>
+        {canManage && (
+          <div className="client-access-invitation">
+            {unpublished && (
+              <div className="client-access-publish-notice" role="status">
+                <strong>Publish this project before inviting clients.</strong>
+                {publicationMissing.length > 0 && (
+                  <span>
+                    Still needed: {publicationMissing.join(', ')}. Save a
+                    contact below if needed; no invitation will be sent.
+                  </span>
+                )}
+              </div>
+            )}
             <form
-              className="stack-form"
-              id="client-invite-form"
+              className="client-access-invite-form"
               onSubmit={async (e) => {
                 e.preventDefault()
+                if (!canManage || command.pending) return
+                const saveOnly =
+                  (e.nativeEvent as SubmitEvent).submitter?.getAttribute(
+                    'value',
+                  ) === 'save'
+                if (saveOnly ? !unpublished : !canInvite || unpublished) return
                 const f = new FormData(e.currentTarget)
+                const expiry = String(
+                  f.get('expiry') ||
+                    new Date(Date.now() + 90 * 864e5)
+                      .toISOString()
+                      .slice(0, 10),
+                )
                 const parsed = contactCreateSchema.safeParse({
                   name,
                   email,
-                  expiry: String(f.get('expiry')),
+                  expiry,
                 })
-                if (!parsed.success) {
-                  setMessage('Enter a name, valid email and access expiry.')
+                if (
+                  !parsed.success ||
+                  !Number.isFinite(Date.parse(expiry)) ||
+                  Date.parse(expiry) <= Date.now()
+                ) {
+                  setMessage(
+                    'Enter a contact name, valid email and a future access expiration.',
+                  )
                   return
                 }
                 let id = created
                 if (!id) {
                   const result = await command.createContact(root, {
                     clientId,
-                    name,
-                    email,
-                    accessExpiresAt: new Date(
-                      String(f.get('expiry')),
-                    ).toISOString(),
+                    name: parsed.data.name,
+                    email: parsed.data.email,
+                    accessExpiresAt: new Date(expiry).toISOString(),
                   })
                   if (!result) return
                   id = result.contact.id
                   setCreated(id)
                 }
-                if (!env.mocksEnabled || (await invite(id))) {
-                  if (!env.mocksEnabled)
+                if (saveOnly || (await invite(id))) {
+                  if (saveOnly)
                     setMessage(
-                      'Contact saved. Use Send / resend invite when the project is published.',
+                      'Contact saved. Publish the project, then send the invitation from the contact actions.',
                     )
-                  setOpen(false)
                   setCreated('')
                   setName('')
                   setEmail('')
                 }
               }}
             >
-              <h3>Contact details</h3>
-              <Field label="Contact name">
-                <input
-                  required
-                  value={name}
-                  disabled={!!created}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </Field>
-              <Field label="Contact email">
-                <input
-                  required
-                  type="email"
-                  value={email}
-                  disabled={!!created}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </Field>
-              <Field label="Role">
-                <select disabled>
-                  <option>Client contact</option>
-                </select>
-              </Field>
-              <Field label="Access expiry">
+              <h3>
+                <Send size={27} aria-hidden="true" />
+                Invite another contact
+              </h3>
+              <label className="client-access-field">
+                <span>Contact name</span>
+                <span className="client-access-input">
+                  <UserRound size={18} aria-hidden="true" />
+                  <input
+                    autoComplete="name"
+                    placeholder="e.g., Ayan Khan"
+                    required
+                    value={name}
+                    disabled={!!created}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </span>
+              </label>
+              <label className="client-access-field">
+                <span>Email address</span>
+                <span className="client-access-input">
+                  <Mail size={18} aria-hidden="true" />
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="e.g., ayan@example.com"
+                    required
+                    value={email}
+                    disabled={!!created}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </span>
+              </label>
+              <label className="client-access-field">
+                <span>Access expires (optional)</span>
                 <input
                   name="expiry"
-                  required
                   type="date"
-                  disabled={!!created}
-                  defaultValue={new Date(Date.now() + 90 * 864e5)
-                    .toISOString()
-                    .slice(0, 10)}
+                  readOnly={!!created}
+                  title="Defaults to 90 days when left blank"
                 />
-              </Field>
-              <p className="subtle">
-                Client contacts can provide content and collaborate on this
-                project only.
-              </p>
-              {created && (
-                <Notice>
-                  Contact created. Retry sending the invitation below.
-                </Notice>
-              )}
-              <ErrorNotice error={command.error} />
+              </label>
+              <div className="client-access-invite-actions">
+                {unpublished && (
+                  <button
+                    className="secondary-button"
+                    type="submit"
+                    value="save"
+                    disabled={command.pending || !canManage}
+                  >
+                    Save contact
+                  </button>
+                )}
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={
+                    command.pending || !canManage || !canInvite || unpublished
+                  }
+                >
+                  <Send size={17} aria-hidden="true" />
+                  Send invitation
+                </button>
+              </div>
             </form>
-            {env.mocksEnabled ? (
-              <section className="email-preview">
-                <h3>Email invitation preview</h3>
-                <div className="email-preview-card">
-                  <strong className="email-brand">▣ Content Collector</strong>
-                  <h4>Hi {name || 'there'},</h4>
-                  <p>You’re invited to share content for your project.</p>
-                  <div className="reference-info">
-                    <strong>You’ll be able to:</strong>
-                    <p>✓ Provide answers and files</p>
-                    <p>✓ Submit for agency review</p>
-                    <p>✓ Read feedback and revise</p>
-                  </div>
-                  <p>
-                    You’ll only see this project and its related content. You
-                    won’t have access to other projects or agency data.
-                  </p>
-                  <small>
-                    Invitation recipient: {email || 'Your client’s email'}
-                  </small>
-                </div>
-              </section>
-            ) : (
-              <section className="email-preview">
-                <h3>Contact record only</h3>
-                <Notice>
-                  Saving this contact does not send email, create an agency
-                  account or open the client portal. Invitation and
-                  client-session workflows are not available yet.
-                </Notice>
-              </section>
+            {created && (
+              <Notice>Contact created. Retry sending the invitation.</Notice>
             )}
           </div>
-          <div className="modal-actions">
-            <button className="secondary-button" onClick={() => setOpen(false)}>
-              Cancel
-            </button>
-            <button
-              className="primary-button"
-              form="client-invite-form"
-              disabled={command.pending}
-            >
-              {env.mocksEnabled ? 'Send invitation' : 'Save contact'}
-            </button>
-          </div>
-        </Modal>
-      )}
+        )}
+        <ErrorNotice error={command.error} />
+        {message && <Notice>{message}</Notice>}
+        {link && (
+          <Notice>
+            Development invitation: <Link to={link}>Open client access</Link>.
+            Keep this tab open to retain in-memory demo state.
+          </Notice>
+        )}
+      </section>
+      <ConfirmDialog
+        open={!!inviteContact}
+        title="Send client invitation?"
+        description={
+          <>
+            <p>
+              Send a private link for this project to {inviteContact?.email}.
+            </p>
+            <p>
+              This replaces any earlier unused invitation links for this
+              contact. Ask the client to use only the newest invitation.
+            </p>
+            <ErrorNotice error={command.error} />
+          </>
+        }
+        confirmLabel="Send invitation"
+        pending={command.pending}
+        onCancel={() => setInviteContact(null)}
+        onConfirm={() => {
+          if (inviteContact)
+            void invite(inviteContact.id).then((sent) => {
+              if (sent) setInviteContact(null)
+            })
+        }}
+      />
       <ConfirmDialog
         open={!!revoke}
         title="Revoke client access"
@@ -318,6 +433,6 @@ export function ContactsPanel({
           })()
         }
       />
-    </Panel>
+    </>
   )
 }

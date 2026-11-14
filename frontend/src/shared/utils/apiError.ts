@@ -35,9 +35,19 @@ export function errorMessage(error: unknown): string {
   if (problem.code === 'INVALID_CREDENTIALS')
     return 'Email or password is incorrect. Please try again.'
   if (problem.code === 'EMAIL_NOT_VERIFIED')
-    return 'Verify your email before signing in. You can request a new link below.'
+    return 'Open the verification link from your email before signing in.'
   if (problem.code === 'INVITATION_EMAIL_MISMATCH')
     return 'This invitation belongs to another email address. Sign out from your workspace, then sign in with the invited address.'
+  if (
+    problem.code === 'EXPORT_UNAVAILABLE' ||
+    problem.code === 'EXPORT_ASSET_UNAVAILABLE'
+  )
+    return 'Export storage or processing is unavailable. Try again when the export worker and approved files are ready.'
+  if (problem.code === 'STORAGE_UNAVAILABLE')
+    return 'Private file storage is unavailable. Try again after storage is configured and the scanner is ready.'
+  if (problem.status === 401) return 'Your session has ended. Sign in again.'
+  if (problem.status === 404)
+    return 'This resource is unavailable or you no longer have access.'
   if (problem.status === 429)
     return 'Too many attempts. Please wait before trying again.'
   if (problem.status === 403) return 'You do not have permission to do that.'
@@ -64,6 +74,11 @@ export function errorMessage(error: unknown): string {
     return 'This item contains collected work. Reopen it through the review workflow before changing its structure.'
   if (problem.status === 422 && problem.code === 'VALIDATION_FAILED')
     return 'This structure change is invalid. Check the field configuration and visibility dependencies.'
-  if (problem.status === 409) return 'Your session changed. Please try again.'
+  if (problem.status === 409)
+    return 'The current state changed. Refresh and review your changes before retrying.'
+  if (problem.status === 400 || problem.status === 422)
+    return 'Check the information you entered and try again.'
+  if (problem.status && problem.status >= 500)
+    return 'The service is temporarily unavailable. Try again later.'
   return 'We could not complete that request. Check your connection and try again.'
 }

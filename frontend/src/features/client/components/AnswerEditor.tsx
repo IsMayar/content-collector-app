@@ -140,24 +140,6 @@ export function AnswerEditor({
         </div>
         <h2 className="answer-title">{item.label}</h2>
         <p>{item.instructions}</p>
-        {item.example && (
-          <details className="answer-tips" open>
-            <summary>Tips and example answer</summary>
-            <div>
-              <section>
-                <strong>What to include</strong>
-                <p>
-                  {item.instructions ||
-                    'Write in your own words and include only details you know to be true.'}
-                </p>
-              </section>
-              <section>
-                <strong>Example answer</strong>
-                <p>{item.example}</p>
-              </section>
-            </div>
-          </details>
-        )}
         {item.state === 'CHANGES_REQUESTED' && (
           <Notice error>
             Changes requested. Review your agency’s feedback and update your

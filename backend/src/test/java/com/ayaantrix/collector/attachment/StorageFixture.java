@@ -150,6 +150,7 @@ public final class StorageFixture implements AutoCloseable {
             "--collector.storage.enabled=true",
             "--collector.storage.worker-enabled=false",
             "--S3_ENDPOINT=" + endpoint(),
+            "--S3_PUBLIC_ENDPOINT=" + endpoint(),
             "--S3_REGION=us-east-1",
             "--S3_BUCKET_STAGING=" + STAGING,
             "--S3_BUCKET_PRIVATE=" + PRIVATE,

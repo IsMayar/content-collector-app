@@ -1,0 +1,121 @@
+.profile-dropdown {
+  position: relative;
+  min-width: 0;
+}
+.profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 10px;
+  padding: 6px 9px;
+  background: transparent;
+  color: #0a1a2f;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.profile-trigger-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-trigger:hover,
+.profile-trigger[aria-expanded='true'] {
+  background: #edf4ff;
+}
+.profile-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 310px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  border: 1px solid #dce5ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #0a1a2f;
+  box-shadow: 0 12px 36px #0a1a2f20;
+  padding: 8px;
+  z-index: 80;
+}
+.profile-identity {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+.profile-identity strong {
+  font-size: 14px;
+}
+.profile-identity span {
+  font-size: 12px;
+  color: #52627a;
+}
+.profile-popover nav {
+  display: grid;
+  gap: 2px;
+}
+.profile-popover nav a,
+.profile-logout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  text-decoration: none;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+.profile-popover nav a:hover,
+.profile-logout:hover {
+  background: #edf4ff;
+}
+.profile-popover nav a span {
+  display: grid;
+  gap: 3px;
+}
+.profile-popover strong {
+  font-size: 13px;
+}
+.profile-popover small {
+  font-size: 12px;
+  color: #52627a;
+}
+.profile-logout {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 6px;
+  border-top: 1px solid #e2e8f0;
+  cursor: pointer;
+}
+.profile-dropdown :focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .profile-trigger-name {
+    display: none;
+  }
+  .profile-trigger {
+    gap: 6px;
+  }
+}
+
+.profile-trigger .account-avatar {
+  display: grid;
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .agency-top .workspace-picker select {
+    max-width: 78px;
+  }
+}

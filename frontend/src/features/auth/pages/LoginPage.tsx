@@ -12,7 +12,7 @@ export function LoginPage() {
       <LoginForm />
       <div className="form-links">
         <Link to="/forgot-password">Forgot your password?</Link>
-        <Link to="/verify-email">Verify email or resend link</Link>
+        <Link to="/verify-email">Verify email</Link>
       </div>
       <p className="auth-switch">
         New to Content Collector? <Link to="/sign-up">Create an account</Link>

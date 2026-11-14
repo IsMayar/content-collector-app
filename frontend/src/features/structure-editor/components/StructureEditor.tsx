@@ -13,12 +13,17 @@ import { useState } from 'react'
 export function StructureEditor({
   data,
   root,
-  editable,
+  editable: canEdit,
+  editMode,
+  onEditMode,
 }: {
   data: ProjectDetail
   root: string
   editable: boolean
+  editMode: boolean
+  onEditMode: (enabled: boolean) => void
 }) {
+  const editable = canEdit && editMode
   const latest = useData<ProjectDetail>(root)
   const command = useCommand()
   const notify = useNotify()
@@ -65,7 +70,15 @@ export function StructureEditor({
             Organise your content and capture what you need from your client.
           </p>
         </div>
-        <span className="subtle">{data.structure.length} sections</span>
+        {canEdit && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => onEditMode(!editable)}
+          >
+            {editable ? 'Done editing' : 'Edit request'}
+          </button>
+        )}
       </div>
       <ErrorNotice error={command.error} />
       {command.error && (
@@ -185,115 +198,139 @@ export function StructureEditor({
                       </form>
                     </details>
                   )}
-                  <div className="reference-table-wrap">
-                    <table className="reference-table structure-items">
-                      <thead>
-                        <tr>
-                          <th>Label</th>
-                          <th>Type</th>
-                          <th>Required</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {s.items.map((i, n) => (
-                          <tr
-                            key={i.id}
-                            draggable={editable}
-                            onDragStart={() => setDrag(i.id)}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                              e.preventDefault()
-                              if (
-                                !editable ||
-                                !s.items.some((i) => i.id === drag)
-                              )
-                                return
-                              const sections = structuredClone(data.structure)
-                              const target = sections.find(
-                                (t) => t.id === s.id,
-                              )!
-                              const from = target.items.findIndex(
-                                (i) => i.id === drag,
-                              )
-                              const [item] = target.items.splice(from, 1)
-                              target.items.splice(n, 0, item)
-                              void reorder(sections)
-                              setDrag('')
-                            }}
-                          >
-                            <td>
-                              <div className="structure-item-label">
-                                <GripVertical size={16} className="subtle" />
-                                <div>
-                                  <strong>
-                                    {i.label}{' '}
-                                    {i.required && (
-                                      <span className="required-mark">*</span>
-                                    )}
-                                  </strong>
-                                  {i.visibleWhen && <small>Conditional</small>}
-                                  {i.enabled === false && (
-                                    <small>Disabled</small>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="item-type">
-                              {i.type.toLowerCase().replaceAll('_', ' ')}
-                            </td>
-                            <td className="item-required">
-                              {i.required ? 'Yes' : 'No'}
-                            </td>
-                            <td>
-                              <Badge>{i.state}</Badge>
-                            </td>
-                            <td>
-                              {editable && (
-                                <div className="actions">
-                                  <button
-                                    className="icon-button"
-                                    disabled={!n || command.pending}
-                                    aria-label={`Move ${i.label} up`}
-                                    onClick={() => moveItem(s, n, -1)}
-                                  >
-                                    Up
-                                  </button>
-                                  <button
-                                    className="icon-button"
-                                    disabled={
-                                      n === s.items.length - 1 ||
-                                      command.pending
-                                    }
-                                    aria-label={`Move ${i.label} down`}
-                                    onClick={() => moveItem(s, n, 1)}
-                                  >
-                                    Down
-                                  </button>
-                                  <button
-                                    className="icon-button"
-                                    aria-label={`Edit ${i.label}`}
-                                    onClick={() =>
-                                      setEditing({ section: s, item: i })
-                                    }
-                                  >
-                                    <Pencil size={16} />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
+                  {editable ? (
+                    <div className="reference-table-wrap">
+                      <table className="reference-table structure-items">
+                        <thead>
+                          <tr>
+                            <th>Label</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Status</th>
+                            <th>Actions</th>
                           </tr>
+                        </thead>
+                        <tbody>
+                          {s.items.map((i, n) => (
+                            <tr
+                              key={i.id}
+                              draggable={editable}
+                              onDragStart={() => setDrag(i.id)}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => {
+                                e.preventDefault()
+                                if (
+                                  !editable ||
+                                  !s.items.some((i) => i.id === drag)
+                                )
+                                  return
+                                const sections = structuredClone(data.structure)
+                                const target = sections.find(
+                                  (t) => t.id === s.id,
+                                )!
+                                const from = target.items.findIndex(
+                                  (i) => i.id === drag,
+                                )
+                                const [item] = target.items.splice(from, 1)
+                                target.items.splice(n, 0, item)
+                                void reorder(sections)
+                                setDrag('')
+                              }}
+                            >
+                              <td>
+                                <div className="structure-item-label">
+                                  <GripVertical size={16} className="subtle" />
+                                  <div>
+                                    <strong>
+                                      {i.label}{' '}
+                                      {i.required && (
+                                        <span className="required-mark">*</span>
+                                      )}
+                                    </strong>
+                                    {i.visibleWhen && (
+                                      <small>Conditional</small>
+                                    )}
+                                    {i.enabled === false && (
+                                      <small>Disabled</small>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="item-type">
+                                {i.type.toLowerCase().replaceAll('_', ' ')}
+                              </td>
+                              <td className="item-required">
+                                {i.required ? 'Yes' : 'No'}
+                              </td>
+                              <td>
+                                <Badge>{i.state}</Badge>
+                              </td>
+                              <td>
+                                {editable && (
+                                  <div className="actions">
+                                    <button
+                                      className="icon-button"
+                                      disabled={!n || command.pending}
+                                      aria-label={`Move ${i.label} up`}
+                                      onClick={() => moveItem(s, n, -1)}
+                                    >
+                                      Up
+                                    </button>
+                                    <button
+                                      className="icon-button"
+                                      disabled={
+                                        n === s.items.length - 1 ||
+                                        command.pending
+                                      }
+                                      aria-label={`Move ${i.label} down`}
+                                      onClick={() => moveItem(s, n, 1)}
+                                    >
+                                      Down
+                                    </button>
+                                    <button
+                                      className="icon-button"
+                                      aria-label={`Edit ${i.label}`}
+                                      onClick={() =>
+                                        setEditing({ section: s, item: i })
+                                      }
+                                    >
+                                      <Pencil size={16} />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <ul className="request-checklist">
+                      {s.items
+                        .filter((item) => item.enabled !== false)
+                        .map((item) => (
+                          <li key={item.id}>
+                            <div>
+                              <strong>{item.label}</strong>
+                              <small>
+                                {item.required ? 'Required' : 'Optional'}
+                                {item.visibleWhen ? ' · Conditional' : ''}
+                              </small>
+                            </div>
+                            <Badge>{item.state}</Badge>
+                          </li>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      {!s.items.some((item) => item.enabled !== false) && (
+                        <li>No enabled questions in this section.</li>
+                      )}
+                    </ul>
+                  )}
                   {editable && (
                     <button
                       className="add-item"
                       onClick={() => setEditing({ section: s })}
                     >
-                      <Plus size={16} /> Add item
+                      <Plus size={16} /> Add question
                     </button>
                   )}
                 </Panel>

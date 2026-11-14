@@ -1,3 +1,4 @@
+import { localEdgeOptions } from '../../../scripts/localEdge.mjs'
 import { unzipSync } from 'fflate'
 // Explicit integration runner: real Vite, HTTPS, Edge and HTTP API; no MSW or request mocks.
 import { createServer } from 'vite'
@@ -129,6 +130,14 @@ async function run(args, target = page, agency = true) {
     { args, agency },
   )
 }
+async function openContentItem(item) {
+  const target = new URL(page.url())
+  target.search = new URLSearchParams({ tab: 'checklist', item }).toString()
+  if (target.href !== page.url()) await page.goto(target.href)
+  await expect(
+    page.getByRole('button', { name: 'Close answer', exact: true }),
+  ).toBeVisible()
+}
 async function rawMutation(path, target = page) {
   return target.evaluate(async (path) => {
     const { store } = await import('/src/app/store/store.ts')
@@ -179,7 +188,7 @@ async function command(input) {
       })
       await server.listen()
       origin = 'https://127.0.0.1:' + server.httpServer.address().port
-      browser = await chromium.launch({ channel: 'msedge', headless: true })
+      browser = await chromium.launch({ ...localEdgeOptions(), headless: true })
       context = await browser.newContext({
         ignoreHTTPSErrors: true,
         viewport: { width: 1440, height: 1000 },
@@ -511,6 +520,9 @@ async function command(input) {
             new URL(res.url()).pathname === '/api/v1/' + path + suffix &&
             res.request().method() === method,
         )
+      await page
+        .getByRole('button', { name: 'Edit request', exact: true })
+        .click()
       await page.locator('summary').filter({ hasText: 'Add section' }).click()
       await page
         .getByLabel('Section title', { exact: true })
@@ -558,7 +570,7 @@ async function command(input) {
       ]) {
         phase = 'structure-create-' + type
         await page
-          .getByRole('button', { name: 'Add item', exact: true })
+          .getByRole('button', { name: 'Add question', exact: true })
           .click()
         await dialog
           .getByLabel('Label', { exact: true })
@@ -777,6 +789,7 @@ async function command(input) {
       await page
         .getByRole('link', { name: 'Client access', exact: true })
         .click()
+      await page.getByText('Customer information', { exact: true }).click()
       await expect(
         page.getByRole('heading', { name: 'Customers', exact: true }),
       ).toBeVisible()
@@ -834,51 +847,44 @@ async function command(input) {
       }
       page.on('request', observeWrites)
       try {
+        const target = new URL(page.url())
+        target.search = '?tab=preview'
+        await page.goto(target.href)
+        await expect(page).toHaveURL(/[?]tab=checklist$/)
+        await expect(
+          page.getByRole('link', { name: 'Client preview' }),
+        ).toHaveCount(0)
         await page
-          .getByRole('link', { name: 'Client preview', exact: true })
+          .getByRole('navigation', { name: 'Content sections' })
+          .getByRole('button', { name: /Concurrent section edit/ })
           .click()
-        await expect(page.getByText(/Read-only owner preview/)).toBeVisible()
         await expect(
           page
-            .getByRole('heading', { name: 'Browser WEBSITE', exact: true })
-            .first(),
-        ).toBeVisible()
-        await page
-          .getByRole('button', { name: 'Concurrent section edit', exact: true })
-          .click()
+            .getByRole('region', { name: 'Concurrent section edit' })
+            .getByRole('article'),
+        ).toHaveCount(7)
         await expect(
-          page.getByRole('heading', { name: /Preserved instructions/ }),
+          page.locator('.content-question textarea,.content-question input'),
         ).toHaveCount(0)
-        await expect(
-          page.getByText('Preserved instructions', { exact: true }),
-        ).toBeVisible()
-        assert.ok(
-          (await page.locator('.preview-item').count()) === 7,
-          'Preview did not filter the unanswered conditional item',
-        )
-        for (const control of await page
-          .locator(
-            '.preview-item input,.preview-item textarea,.preview-item select',
-          )
-          .all())
-          await expect(control).toBeDisabled()
         await page.setViewportSize({ width: 390, height: 844 })
+        await expect(
+          page.getByLabel('Content section', { exact: true }),
+        ).toBeVisible()
         assert.ok(
           await page.evaluate(
-            () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
           ),
-          'Mobile preview overflows',
         )
         await page.reload()
         await waitState('authenticated')
-        await expect(page.getByText(/Read-only owner preview/)).toBeVisible()
         await expect(
-          page.getByRole('button', {
-            name: 'Concurrent section edit',
-            exact: true,
-          }),
+          page.getByRole('region', { name: 'Concurrent section edit' }),
         ).toBeVisible()
-        assert.deepEqual(writes, [], 'Preview persisted application writes')
+        assert.deepEqual(
+          writes,
+          [],
+          'Content navigation persisted application writes',
+        )
       } finally {
         page.off('request', observeWrites)
         await page.setViewportSize({ width: 1440, height: 1000 })
@@ -992,7 +998,10 @@ async function command(input) {
       const panel = page
         .locator('section')
         .filter({
-          has: page.getByRole('heading', { name: 'Project team', exact: true }),
+          has: page.getByRole('heading', {
+            name: 'Project assignments',
+            exact: true,
+          }),
         })
         .last()
       await panel
@@ -1106,9 +1115,13 @@ async function command(input) {
       await row
         .getByRole('button', { name: 'Send / resend invite', exact: true })
         .click()
+      await page
+        .getByRole('dialog', { name: 'Send client invitation?' })
+        .getByRole('button', { name: 'Send invitation', exact: true })
+        .click()
       assert.equal((await sent).status(), 202)
       await expect(
-        page.getByText('Invitation sent.', { exact: true }),
+        page.getByText('Invitation queued for delivery.', { exact: true }),
       ).toBeVisible()
       break
     }
@@ -1347,22 +1360,10 @@ async function command(input) {
           settings.previewProject +
           '?tab=analytics',
       )
-      await page
-        .getByRole('button', { name: 'Item friction', exact: true })
-        .click()
-      const row = page.getByRole('row').filter({
-        has: page.getByRole('rowheader', {
-          name: input.itemKey,
-          exact: true,
-        }),
-      })
+      await expect(page).toHaveURL(/[?]tab=checklist$/)
       await expect(
-        row.getByText('Insufficient data', { exact: true }),
-      ).toBeVisible()
-      await expect(
-        row.getByText('2 still observing', { exact: true }),
-      ).toBeVisible()
-      await expect(row.getByRole('cell').nth(3)).not.toContainText('%')
+        page.getByText('Advanced analytics', { exact: true }),
+      ).toHaveCount(0)
       const templates = await run(
         'workspaces/' + settings.workspace + '/analytics/templates',
       )
@@ -1377,16 +1378,13 @@ async function command(input) {
       )
       await page.goto(origin + '/app/w/' + settings.workspace + '/insights')
       await expect(
-        page.getByRole('heading', {
-          name: 'Template friction comparisons',
-          exact: true,
-        }),
+        page.getByRole('heading', { name: 'Workspace totals' }),
       ).toBeVisible()
       await expect(
         page.getByText('Template version ' + metric.templateVersionId, {
           exact: true,
         }),
-      ).toBeVisible()
+      ).toHaveCount(0)
       break
     }
     case 'billing-prepare': {
@@ -1538,11 +1536,11 @@ async function command(input) {
           settings.workspace +
           '/projects/' +
           settings.previewProject +
-          '?tab=analytics',
+          '?tab=details',
       )
-      await page
-        .getByRole('button', { name: 'Counts-only status share', exact: true })
-        .click()
+      await expect(
+        page.getByRole('heading', { name: 'Counts-only status share' }),
+      ).toBeVisible()
       await page
         .getByLabel('Public alias', { exact: true })
         .fill('Project Evergreen')
@@ -2010,6 +2008,9 @@ async function command(input) {
           settings.previewProject +
           '?tab=reminders',
       )
+      await page
+        .getByRole('button', { name: 'Manage settings', exact: true })
+        .click()
       await expect(
         page.getByRole('button', { name: 'Save policy', exact: true }),
       ).toBeVisible()
@@ -2386,18 +2387,23 @@ async function command(input) {
           settings.previewProject +
           '?tab=submissions',
       )
-      await page
-        .getByRole('region', { name: 'Submitted versions' })
-        .getByRole('combobox', { name: 'Question' })
-        .selectOption(item)
-      phase = 'client-attachments:agency-history'
-      await page.getByRole('button', { name: /Revision 1/ }).click()
       await expect(
-        page.getByRole('heading', { name: 'Private documents · Revision 1' }),
+        page.getByText('This project view is unavailable'),
+      ).toHaveCount(0)
+      await openContentItem(item)
+      phase = 'client-attachments:agency-history'
+      await expect(
+        page.getByRole('heading', {
+          name: 'Submitted revision 1',
+          exact: true,
+        }),
       ).toBeVisible()
       phase = 'client-attachments:agency-history-file'
       await expect(
-        page.getByText('submitted-history.txt', { exact: true }),
+        page.getByRole('button', {
+          name: 'Download submitted-history.txt',
+          exact: true,
+        }),
       ).toBeVisible()
       phase = 'client-attachments:withdraw'
       await field.getByRole('button', { name: 'Withdraw to edit' }).click()
@@ -2669,9 +2675,9 @@ async function command(input) {
       await page.goto(reviewUrl.replace('?tab=review', '?tab=submissions'))
       await page
         .getByRole('navigation', { name: 'Project sections' })
-        .getByRole('link', { name: 'Review', exact: true })
+        .getByRole('link', { name: 'Responses & Review', exact: true })
         .click()
-      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await openContentItem(item)
       await expect(
         page.getByRole('heading', {
           name: 'Submitted revision 2',
@@ -2769,13 +2775,14 @@ async function command(input) {
       assert.equal(third.revisionNo, 3)
       phase = 'review-decisions:approve'
       await page.reload()
-      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await openContentItem(item)
       await expect(
         page.getByRole('heading', {
           name: 'Submitted revision 3',
           exact: true,
         }),
       ).toBeVisible()
+      await page.getByText('Previous submissions', { exact: true }).click()
       await page
         .getByLabel('Submitted revision', { exact: true })
         .selectOption(oldRevision)
@@ -2790,7 +2797,7 @@ async function command(input) {
       ).toBeDisabled()
       await page
         .getByLabel('Submitted revision', { exact: true })
-        .selectOption(third.revisionId)
+        .selectOption('')
       await expect(
         page.getByRole('heading', {
           name: 'Submitted revision 3',
@@ -2939,7 +2946,12 @@ async function command(input) {
           '/projects/' +
           settings.previewProject,
       )
-      await page.getByLabel('Project action').selectOption('publish')
+      await page
+        .getByRole('link', { name: 'Send to client', exact: true })
+        .click()
+      await page
+        .getByRole('button', { name: 'Publish project', exact: true })
+        .click()
       const published = page.waitForResponse(
         (r) =>
           r.request().method() === 'POST' &&
@@ -2975,7 +2987,15 @@ async function command(input) {
         '?tab=review'
       async function action(name, reason) {
         await waitState('authenticated')
-        await expect(page.getByLabel('Project action')).toBeVisible()
+        const completion = {
+          complete: 'Mark project completed',
+          reopen: 'Reopen project',
+          archive: 'Archive project',
+          restore: 'Restore to paused',
+        }[name]
+        if (completion)
+          await page.getByLabel('More project views').selectOption('completion')
+        else await expect(page.getByLabel('Project action')).toBeVisible()
         // A preceding item/lifecycle mutation can still be refreshing the shared
         // project query. Capture an action only after the current server version
         // is in the RTK cache; preserve the real optimistic-concurrency assertion.
@@ -2999,7 +3019,11 @@ async function command(input) {
             ),
           )
           .toBe(true)
-        await page.getByLabel('Project action').selectOption(name)
+        if (completion)
+          await page
+            .getByRole('button', { name: completion, exact: true })
+            .click()
+        else await page.getByLabel('Project action').selectOption(name)
         if (reason)
           await page
             .getByRole('dialog')
@@ -3029,7 +3053,7 @@ async function command(input) {
       )
       assert.equal(await action('resume'), 'ACTIVE')
       phase = 'project-reopening:item'
-      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await openContentItem(item)
       const previous = (await run(agency + '/items/' + item + '/revisions'))
         .data.data[0].revisionId
       const frozen = (
@@ -3125,7 +3149,7 @@ async function command(input) {
       const fourth = await (await submitted).json()
       assert.equal(fourth.revisionNo, 4)
       await page.reload()
-      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await openContentItem(item)
       await expect(
         page.getByRole('heading', {
           name: 'Submitted revision 4',
@@ -3177,7 +3201,7 @@ async function command(input) {
         await action('reopen', 'Client requests one final update.'),
         'ACTIVE',
       )
-      await page.getByLabel('Browse submitted item history').selectOption(item)
+      await openContentItem(item)
       await page
         .getByRole('button', { name: 'Reopen approved item', exact: true })
         .click()

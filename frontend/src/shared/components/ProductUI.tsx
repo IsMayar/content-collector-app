@@ -1,5 +1,6 @@
 import type { Progress } from '@/features/projects/types/project.types'
 import { Notice, StatePanel } from '@/shared/components/Feedback'
+import { errorMessage } from '@/shared/utils/apiError'
 import { percent } from '@/shared/utils/domain'
 import type { ReactElement, ReactNode } from 'react'
 import { cloneElement, useId } from 'react'
@@ -86,7 +87,12 @@ export function QueryState({
   query,
   children,
 }: {
-  query: { isLoading: boolean; isError: boolean; refetch: () => unknown }
+  query: {
+    isLoading: boolean
+    isError: boolean
+    error?: unknown
+    refetch: () => unknown
+  }
   children: ReactNode
 }) {
   if (query.isLoading)
@@ -102,7 +108,7 @@ export function QueryState({
       <StatePanel
         kind="error"
         title="Couldn’t load this view"
-        description="Check your connection and try again."
+        description={errorMessage(query.error)}
         action={
           <button className="secondary-button" onClick={() => query.refetch()}>
             Try again

@@ -2358,10 +2358,20 @@ class SubmissionTests {
         String c = enter(f).credential();
         save(f, c, control, json.createObjectNode().put("optionKey", "yes"), 0);
         save(f, c, dependent, text("retain"), 0);
+        var shown = as(f.tenant().actor(), () -> service().read(f.tenant().workspace(), f.project().id()));
+        assertThat(shown.structure().stream().flatMap(group -> group.path("items").valueStream())
+                .filter(item -> item.path("id").asText().equals(dependent.toString()))
+                .findFirst().orElseThrow().path("visible").asBoolean()).isTrue();
+        assertThat(shown.structure().toString()).doesNotContain("\"text\":\"retain\"");
         long visibleWork = reminders().missing(f.tenant().workspace(), f.project().id());
         save(f, c, control, json.createObjectNode().put("optionKey", ""), 1);
         assertThat(reminders().missing(f.tenant().workspace(), f.project().id()))
                 .isEqualTo(visibleWork - 1);
+        var hidden = as(f.tenant().actor(), () -> service().read(f.tenant().workspace(), f.project().id()));
+        assertThat(hidden.structure().stream().flatMap(group -> group.path("items").valueStream())
+                .filter(item -> item.path("id").asText().equals(dependent.toString()))
+                .findFirst().orElseThrow().path("visible").asBoolean()).isFalse();
+        assertThat(hidden.progress().requiredTotal()).isEqualTo(shown.progress().requiredTotal() - 1);
         code(() -> submit(f, c, dependent, 1, "hidden"), "NOT_FOUND");
         assertThat(
                         jdbc.queryForObject(

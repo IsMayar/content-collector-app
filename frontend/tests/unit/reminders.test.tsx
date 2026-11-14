@@ -62,6 +62,7 @@ beforeEach(() => {
 it('reads wrapped policy and saves explicit enabled rules with optimistic version', async () => {
   mocks.run.mockResolvedValue({ policy })
   render(<RemindersPanel root="workspaces/w/projects/p" />)
+  await userEvent.click(screen.getByRole('button', { name: 'Manage settings' }))
   await userEvent.click(screen.getByRole('button', { name: 'Cadence' }))
   expect(screen.getByLabelText('Local delivery time')).toHaveValue('10:00')
   await userEvent.click(screen.getByLabelText('Enable rule'))
@@ -89,6 +90,7 @@ it('uses wrapped preview and confirms queuing only after server acknowledgment',
     },
   })
   render(<RemindersPanel root="workspaces/w/projects/p" />)
+  await userEvent.click(screen.getByRole('button', { name: 'Manage settings' }))
   await userEvent.click(
     screen.getByRole('button', { name: 'Email & SMS preview' }),
   )

@@ -1,0 +1,93 @@
+.team-page {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.team-page > .product-heading {
+  margin-bottom: 0;
+}
+.team-page .seat-meter {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.team-page .reference-tabs {
+  margin: 0;
+}
+.team-page .reference-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.team-page .reference-table th {
+  background: #f8fafc;
+}
+.team-page .product-panel {
+  box-shadow: none;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.team-access-disclosure {
+  border-block: 1px solid #e2e8f0;
+  padding: 18px 0;
+}
+.team-access-disclosure > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.team-project-access {
+  padding-top: 18px;
+  display: grid;
+  gap: 16px;
+}
+.team-project-access > h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.team-page :focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .team-page .seat-meter {
+    flex-wrap: wrap;
+  }
+  .team-page .reference-table {
+    min-width: 0;
+    width: 100%;
+  }
+  .team-page .reference-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .team-page .reference-table tbody,
+  .team-page .reference-table tr {
+    display: block;
+  }
+  .team-page .reference-table tr {
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .team-page .reference-table td {
+    display: block;
+    border: 0;
+    padding: 5px 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .team-page .reference-table td::before {
+    content: attr(data-label);
+    display: inline-block;
+    min-width: 70px;
+    color: #52627a;
+    font-size: 12px;
+    margin-right: 8px;
+  }
+  .team-page .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

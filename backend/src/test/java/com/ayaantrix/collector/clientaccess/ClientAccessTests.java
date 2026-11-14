@@ -203,6 +203,31 @@ class ClientAccessTests {
       mvc.perform(delete(f.path()+"/access").with(csrf().asHeader()).header("Authorization","Bearer "+actor.access())).andExpect(status().isForbidden());assertThat(count(f.tenant(),"access_tokens")).isZero();
     }
     @Test void csrfProtectedLogoutDoesNotInvalidateAgencyIdentity() throws Exception {var f=fixture();var issued=enter(f);var cookie=new jakarta.servlet.http.Cookie(cookieName(),issued.credential());mvc.perform(post("/api/v1/client-access/logout").cookie(cookie)).andExpect(status().isForbidden());mvc.perform(checklist(f,issued.credential())).andExpect(status().isOk());mvc.perform(post("/api/v1/client-access/logout").cookie(cookie).with(csrf().asHeader())).andExpect(status().isNoContent()).andExpect(header().string("Cache-Control","no-store"));mvc.perform(checklist(f,issued.credential())).andExpect(status().isUnauthorized());mvc.perform(get("/api/v1/me").header("Authorization",bearer(f.tenant()))).andExpect(status().isOk());}
+    @ParameterizedTest
+    @ValueSource(strings = {"superseded", "revoked-contact", "expired", "not-yet-valid"})
+    void unusableInvitationNeverConsumesOrCreatesSession(String state) {
+        var f = fixture();
+        var invitation = invite(f);
+        String original = raw(invitation.id());
+        switch (state) {
+            case "superseded" -> invite(f);
+            case "revoked-contact" -> as(f.tenant().actor(), () -> {
+                access().revoke(f.tenant().workspace(), f.project().id(), f.contact());
+                return true;
+            });
+            case "expired" -> context.getBean(TestClock.class).time = invitation.expiresAt();
+            case "not-yet-valid" -> context.getBean(TestClock.class).time = NOW.minusSeconds(1);
+            default -> throw new AssertionError("Unknown synthetic state");
+        }
+        assertThatThrownBy(() -> access().exchange(input(original), null))
+                .isInstanceOfSatisfying(ApiException.class,
+                        error -> assertThat(error.getCode()).isEqualTo("CLIENT_ACCESS_UNAVAILABLE"));
+        assertThat(count(f.tenant(), "client_sessions")).isZero();
+        assertThat(jdbc.queryForObject(
+                "select consumed_at is null from collector.access_tokens where id=?",
+                Boolean.class, invitation.id())).isTrue();
+    }
+
     @Test void clientInvitationExpiryAndSessionCredentialPurposesAreIndependent(){var f=fixture();var i=invite(f);String raw=raw(i.id());assertThatThrownBy(()->portal().checklist(raw,f.project().id())).isInstanceOf(ApiException.class);context.getBean(TestClock.class).time=NOW.plus(Duration.ofDays(7));assertThatThrownBy(()->access().exchange(input(raw),null)).isInstanceOf(ApiException.class);assertThat(count(f.tenant(),"client_sessions")).isZero();}
     @Test void idleWindowSlidesOnAuthorizedReadButNeverExtendsAbsoluteExpiry(){var f=fixture();var issued=enter(f);context.getBean(TestClock.class).time=NOW.plus(Duration.ofHours(23));portal().checklist(issued.credential(),f.project().id());context.getBean(TestClock.class).time=NOW.plus(Duration.ofHours(46));portal().checklist(issued.credential(),f.project().id());assertThat(issued.expiresAt()).isEqualTo(NOW.plus(Duration.ofDays(7)));context.getBean(TestClock.class).time=NOW.plus(Duration.ofDays(7));assertThatThrownBy(()->portal().checklist(issued.credential(),f.project().id())).isInstanceOf(ApiException.class);}
     @Test void allEightFieldTypesUseSafeDefinitionsAndUnansweredConditionsRemainHidden(){var f=fixture();UUID section=emptySection(f.tenant(),f.project());for(String type:List.of("SHORT_TEXT","LONG_TEXT","URL","SINGLE_SELECT","MULTI_SELECT","IMAGE","FILE","REPEATER"))add(f.tenant(),f.project(),section,field("portal."+type.toLowerCase(),type));var hidden=field("portal.conditional","SHORT_TEXT");hidden.putObject("visibleWhen").put("dependsOnItemKey","portal.single_select").put("operator","EQUALS").put("optionKey","yes");add(f.tenant(),f.project(),section,hidden);var issued=enter(f);var tree=json.valueToTree(portal().checklist(issued.credential(),f.project().id()));String content=tree.toString();for(String type:List.of("SHORT_TEXT","LONG_TEXT","URL","SINGLE_SELECT","MULTI_SELECT","IMAGE","FILE","REPEATER"))assertThat(content).contains("portal."+type.toLowerCase());assertThat(content).doesNotContain("portal.conditional");assertThat(content).contains("columns","maxRows","options");}

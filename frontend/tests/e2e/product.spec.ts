@@ -59,6 +59,10 @@ test('owner client draft immutable review approved export', async ({
   await page.getByRole('link', { name: 'Client access', exact: true }).click()
   await page.getByRole('button', { name: 'Send / resend invite' }).click()
   await page
+    .getByRole('dialog', { name: 'Send client invitation?' })
+    .getByRole('button', { name: 'Send invitation' })
+    .click()
+  await page
     .getByRole('link', { name: 'Open client access', exact: true })
     .click()
   await expect(
@@ -102,11 +106,26 @@ test('owner client draft immutable review approved export', async ({
   await page
     .getByRole('link', { name: 'Lamar Dental website', exact: true })
     .click()
-  await page.getByRole('link', { name: 'Review', exact: true }).click()
-  await page
-    .getByRole('button', { name: 'Review', exact: true })
-    .first()
-    .click()
+  const submittedRow = page
+    .getByRole('article')
+    .filter({ hasText: 'Lamar Dental — synthetic client content' })
+  const desktopViewport = page.viewportSize()
+  await page.setViewportSize({ width: 390, height: 850 })
+  await expect(
+    page.getByLabel('Content section', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    submittedRow.getByRole('button', { name: 'View answer' }),
+  ).toHaveAttribute('aria-expanded', 'false')
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await submittedRow.getByRole('button', { name: 'Copy answer' }).press('Enter')
+  await expect(submittedRow.getByRole('status')).toHaveText('Copied')
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    'Lamar Dental — synthetic client content',
+  )
+  await noOverflow(page)
+  if (desktopViewport) await page.setViewportSize(desktopViewport)
+  await submittedRow.getByRole('button', { name: 'View answer' }).click()
   await expect(
     page.getByText('Lamar Dental — synthetic client content', { exact: true }),
   ).toBeVisible()
@@ -118,9 +137,9 @@ test('owner client draft immutable review approved export', async ({
     .getByRole('button', { name: 'Approve', exact: true })
     .click()
   await expect(
-    page.getByText('Exact revision approved.', { exact: true }),
+    page.getByText('Exact submitted revision approved.', { exact: true }),
   ).toBeVisible()
-  await page.getByRole('link', { name: 'Exports', exact: true }).click()
+  await page.getByLabel('More project views').selectOption('exports')
   await page.getByRole('button', { name: 'New export' }).click()
   await page
     .getByLabel('I understand this is a partial export', { exact: false })
@@ -495,7 +514,7 @@ test('team invitation drawer, project file upload and handoff screens', async ({
   await page
     .getByRole('link', { name: 'Lamar Dental website', exact: true })
     .click()
-  await page.getByRole('link', { name: 'Files', exact: true }).click()
+  await page.getByLabel('More project views').selectOption('files')
   await page.getByRole('button', { name: 'Upload files' }).click()
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1XkAAAAASUVORK5CYII=',
@@ -545,15 +564,17 @@ test('administration boards: settings, usage, reminders and counts-only analytic
 }, info) => {
   await signIn(page)
   await nav(page, 'Settings')
+  const settings = page.getByRole('navigation', { name: 'Settings navigation' })
+  await settings.getByRole('link', { name: /Workspace & Team/ }).click()
   await expect(
-    page.getByRole('heading', { name: 'Workspace settings', exact: true }),
+    page.getByRole('button', { name: 'Save workspace', exact: true }),
   ).toBeVisible()
   await noOverflow(page)
   await page.screenshot({
     path: info.outputPath('board13-workspace.png'),
     fullPage: true,
   })
-  await page.getByRole('link', { name: 'My account', exact: true }).click()
+  await settings.getByRole('link', { name: /Account & Notifications/ }).click()
   await page.getByLabel('Full name', { exact: true }).fill('Alex Morgan')
   await page.getByRole('button', { name: 'Save profile', exact: true }).click()
   await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
@@ -565,9 +586,9 @@ test('administration boards: settings, usage, reminders and counts-only analytic
     path: info.outputPath('board13-account.png'),
     fullPage: true,
   })
-  await page.getByRole('link', { name: 'Usage', exact: true }).click()
+  await settings.getByRole('link', { name: /Billing & Usage/ }).click()
   await expect(
-    page.getByRole('progressbar', { name: 'Storage usage' }),
+    page.getByRole('heading', { name: 'Storage and resource usage' }),
   ).toBeVisible()
   await noOverflow(page)
   await page.screenshot({
@@ -578,7 +599,8 @@ test('administration boards: settings, usage, reminders and counts-only analytic
   await page
     .getByRole('link', { name: 'Lamar Dental website', exact: true })
     .click()
-  await page.getByRole('link', { name: 'Reminders', exact: true }).click()
+  await page.getByLabel('More project views').selectOption('reminders')
+  await page.getByRole('button', { name: 'Manage settings' }).click()
   await expect(
     page.getByRole('heading', { name: 'Reminder channels', exact: true }),
   ).toBeVisible()
@@ -617,23 +639,13 @@ test('administration boards: settings, usage, reminders and counts-only analytic
       exact: true,
     }),
   ).toBeVisible()
-  await page.getByRole('link', { name: 'Analytics', exact: true }).click()
+  await page.getByLabel('More project views').selectOption('details')
   await expect(
-    page.getByRole('heading', {
-      name: 'Submissions and approvals',
-      exact: true,
-    }),
+    page.getByRole('heading', { name: 'Counts-only status share' }),
   ).toBeVisible()
-  await noOverflow(page)
-  await page.screenshot({
-    path: info.outputPath('board12-analytics.png'),
-    fullPage: true,
-  })
-  await page.getByRole('button', { name: 'Item friction', exact: true }).click()
-  await expect(page.getByText('Insufficient data').first()).toBeVisible()
-  await page
-    .getByRole('button', { name: 'Counts-only status share', exact: true })
-    .click()
+  await expect(
+    page.getByText('Advanced analytics', { exact: true }),
+  ).toHaveCount(0)
   await page
     .getByLabel('Public alias', { exact: true })
     .fill('Agency status update')
@@ -821,6 +833,7 @@ test('T12 customers, explicit project contacts and preview keep their boundaries
   await mainReady(page)
   await agencyReadsReady(page)
   await page.getByRole('link', { name: 'Client access', exact: true }).click()
+  await page.getByText('Customer information', { exact: true }).click()
   await page
     .getByRole('button', { name: 'Edit Lamar Dental', exact: true })
     .click()
@@ -840,30 +853,14 @@ test('T12 customers, explicit project contacts and preview keep their boundaries
     page.getByText('Customer updated.', { exact: true }),
   ).toBeVisible()
   await agencyReadsReady(page)
-  await page.getByRole('link', { name: 'Client preview', exact: true }).click()
-  await expect(page.getByText(/Read-only owner preview/)).toBeVisible()
-  await expect(page.locator('.preview-item').first()).toBeVisible()
-  const writes: string[] = []
-  page.on('request', (request) => {
-    if (
-      new URL(request.url()).pathname.startsWith('/api/') &&
-      request.method() !== 'GET'
-    )
-      writes.push(request.method())
-  })
-  for (const button of await page
-    .getByRole('navigation', { name: 'Preview sections', exact: true })
-    .getByRole('button')
-    .all()) {
-    await button.click()
-    for (const field of await page
-      .locator(
-        '.preview-item input,.preview-item textarea,.preview-item select',
-      )
-      .all())
-      await expect(field).toBeDisabled()
-  }
-  expect(writes).toEqual([])
+  await page.getByRole('link', { name: 'Content', exact: true }).click()
+  await expect(
+    page.getByRole('link', { name: 'Client preview', exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole('heading', { name: 'Project content', exact: true }),
+  ).toBeVisible()
+  await expect(page.locator('.content-question textarea')).toHaveCount(0)
   await noOverflow(page)
 })
 
@@ -913,4 +910,107 @@ test('four settings sections retain account workspace billing and privacy flows'
     page.getByRole('heading', { name: 'Storage and resource usage' }),
   ).toBeVisible()
   await noOverflow(page)
+})
+
+test('project navigation stays compact and supports submitted-history deep links', async ({
+  page,
+}) => {
+  await signIn(page)
+  await nav(page, 'Projects')
+  await page
+    .getByRole('link', { name: 'Lamar Dental website', exact: true })
+    .click()
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Workspace navigation', exact: true })
+      .getByRole('link'),
+  ).toHaveText([
+    'Overview',
+    'Projects',
+    'Templates',
+    'Team',
+    'Insights',
+    'Settings',
+  ])
+  const sections = page.getByRole('navigation', { name: 'Project sections' })
+  await expect(sections.getByRole('link')).toHaveText([
+    'Content',
+    'Client access',
+  ])
+  await expect(page.getByRole('button', { name: 'Edit request' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add question' })).toHaveCount(
+    0,
+  )
+  await expect(
+    page.getByLabel('More project views').locator('option'),
+  ).toHaveText([
+    'More',
+    'Activity',
+    'Assignments',
+    'Reminders',
+    'Files',
+    'Exports',
+    'Completion',
+    'Details',
+  ])
+  for (const width of [1440, 1280, 768, 390, 360]) {
+    await page.setViewportSize({ width, height: 850 })
+    await noOverflow(page)
+  }
+  await expect(
+    page.getByLabel('Content section', { exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Edit request' }).press('Enter')
+  await expect(page.getByRole('button', { name: 'Add question' })).toBeVisible()
+  const path = new URL(page.url()).pathname
+  await page.evaluate(async (target) => {
+    const modulePath = '/src/app/router/AppRouter.tsx'
+    const { router } = await import(modulePath)
+    await router.navigate(target)
+  }, path + '?tab=submissions')
+  await expect(
+    sections.getByRole('link', { name: 'Content', exact: true }),
+  ).toHaveAttribute('aria-current', 'page')
+  await expect(
+    page.getByRole('heading', { name: 'Project content' }),
+  ).toBeVisible()
+  await expect(page.getByText('This project view is unavailable')).toHaveCount(
+    0,
+  )
+  await page.getByLabel('More project views').selectOption('files')
+  await expect(
+    page.getByRole('heading', { name: 'Project files' }),
+  ).toBeVisible()
+  await noOverflow(page)
+})
+
+test('Insights separates workspace totals from the selected project and has no technical reports', async ({
+  page,
+}) => {
+  await signIn(page)
+  await nav(page, 'Insights')
+  const workspace = page.getByRole('region', { name: 'Workspace totals' })
+  await expect(
+    workspace.getByRole('heading', { name: 'Active projects' }),
+  ).toBeVisible()
+  await expect(
+    workspace.getByRole('heading', { name: 'Waiting for agency review' }),
+  ).toBeVisible()
+  const snapshot = page.getByRole('region', { name: 'Project snapshot' })
+  await expect(
+    snapshot.getByRole('link', { name: 'Open project content' }),
+  ).toHaveCount(0)
+  await snapshot
+    .getByLabel('Project', { exact: true })
+    .selectOption({ label: 'Lamar Dental website' })
+  await expect(
+    snapshot.getByRole('link', { name: 'Open project content' }),
+  ).toHaveAttribute('href', /[?]tab=checklist$/)
+  await expect(
+    page.getByText(/Advanced analytics|Template friction/),
+  ).toHaveCount(0)
+  for (const width of [1440, 1280, 768, 390, 360]) {
+    await page.setViewportSize({ width, height: 850 })
+    await noOverflow(page)
+  }
 })

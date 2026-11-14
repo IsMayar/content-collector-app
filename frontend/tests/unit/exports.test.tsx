@@ -7,7 +7,12 @@ import {
   exportSummarySchema,
 } from '@/features/exports/schemas/exportSchema'
 import type { Project } from '@/features/projects/types/project.types'
-const mocks = vi.hoisted(() => ({ run: vi.fn(), state: 'QUEUED', error: '' }))
+const mocks = vi.hoisted(() => ({
+  run: vi.fn(),
+  state: 'QUEUED',
+  detailState: '',
+  error: '',
+}))
 const id = '77777777-7777-4777-8777-777777777777'
 const job = () => ({
   id,
@@ -27,7 +32,7 @@ vi.mock('@/services/api/resourceApi', () => ({
     data: path.endsWith('/exports')
       ? { data: [job()] }
       : path.includes('/exports/')
-        ? { export: job() }
+        ? { export: { ...job(), state: mocks.detailState || mocks.state } }
         : { structure: [{ id, title: 'Home', items: [] }] },
     isLoading: false,
     isError: false,
@@ -37,11 +42,12 @@ vi.mock('@/services/api/resourceApi', () => ({
 const project = {
   title: 'Test project',
   version: 4,
-  progress: { approvedRequired: 1, requiredTotal: 2 },
+  progress: { approvedRequired: 1, optionalApproved: 0, requiredTotal: 2 },
 } as Project
 beforeEach(() => {
   mocks.run.mockReset()
   mocks.state = 'QUEUED'
+  mocks.detailState = ''
   mocks.error = ''
 })
 async function submit() {
@@ -106,6 +112,21 @@ it.each(['EXPIRED', 'FAILED'])('shows %s with no download action', (state) => {
     ),
   ).toBeVisible()
   expect(screen.getByText(/Older than current project/)).toBeVisible()
+})
+it('uses the terminal list result when the detail poll is still running', async () => {
+  mocks.run.mockResolvedValue({ jobId: id, state: 'QUEUED' })
+  const panel = (
+    <ExportPanel root="workspaces/test/projects/test" project={project} />
+  )
+  const { rerender } = render(panel)
+  await submit()
+  await waitFor(() => expect(screen.getByText(/Export queued/)).toBeVisible())
+  mocks.state = 'READY'
+  mocks.detailState = 'RUNNING'
+  rerender(
+    <ExportPanel root="workspaces/test/projects/test" project={project} />,
+  )
+  expect(screen.getByRole('button', { name: 'Download' })).toBeVisible()
 })
 it('validates states and exact queue contract', () => {
   expect(
