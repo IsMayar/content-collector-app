@@ -4,22 +4,24 @@ import { email } from '@/features/auth/components/authFields'
 import { AuthForm } from '@/features/auth/components/AuthForm'
 import { emailSchema } from '@/features/auth/schemas/accountSchemas'
 import { Notice } from '@/shared/components/Feedback'
+import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
+
 export function ForgotPasswordPage() {
   const [recover, result] = authApi.useForgotPasswordMutation()
   const [complete, setComplete] = useState(false)
+
   return (
     <AuthCard>
       <AuthHeading
-        eyebrow="Let’s get you back in"
         title="Reset your password"
-        description="Enter your email and we’ll help you take the next step."
+        description="Enter your email address and we'll send reset instructions."
       />
       {complete ? (
         <Notice>
-          If an account matches that email, you’ll receive password reset
-          instructions shortly. Check your inbox and spam folder.
+          If an account matches that email, you'll receive password reset
+          instructions. Check your inbox and spam folder.
         </Notice>
       ) : (
         <AuthForm
@@ -33,9 +35,12 @@ export function ForgotPasswordPage() {
           }}
         />
       )}
-      <p className="auth-switch">
-        <Link to="/sign-in">Back to sign in</Link>
-      </p>
+      <Link
+        to="/sign-in"
+        className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-blue-700 hover:underline"
+      >
+        <ArrowLeft size={15} aria-hidden="true" /> Back to sign in
+      </Link>
     </AuthCard>
   )
 }

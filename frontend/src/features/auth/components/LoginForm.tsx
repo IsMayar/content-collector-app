@@ -11,6 +11,7 @@ import { useNotify } from '@/shared/components/Feedback'
 import { useAppDispatch } from '@/shared/hooks/useAppStore'
 import { safeReturnDestination } from '@/shared/utils/returnDestination'
 import { useNavigate, useSearchParams } from 'react-router'
+
 export function LoginForm() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
@@ -18,12 +19,14 @@ export function LoginForm() {
   const [params] = useSearchParams()
   const destination = safeReturnDestination(params.get('returnTo'))
   const [login, loginState] = authApi.useLoginMutation()
+
   return (
     <AuthForm
       schema={loginSchema}
       fields={[email, password]}
       submitLabel="Sign in"
       onSubmit={async (values) => {
+        // Preserve the application's existing authentication sequence.
         dispatch(clearPrivateCaches())
         const result = await login({
           email: values.email,

@@ -10,26 +10,30 @@ import { signUpSchema } from '@/features/auth/schemas/accountSchemas'
 import { Notice } from '@/shared/components/Feedback'
 import { useState } from 'react'
 import { Link } from 'react-router'
+
 export function RegisterPage() {
   const [register, result] = authApi.useRegisterMutation()
   const [complete, setComplete] = useState(false)
+
   return (
     <AuthCard>
       <AuthHeading
-        eyebrow="Start something good"
-        title="Create your account"
-        description="For freelancers and teams bringing client projects to life."
+        title="Create an account"
+        description="Start collecting content with your team and clients."
       />
       {complete ? (
-        <>
+        <div className="space-y-4">
           <Notice>
-            If your address can be registered, you’ll receive an email with the
+            If your address can be registered, you'll receive an email with the
             next steps. Check your inbox to verify your account.
           </Notice>
-          <Link className="secondary-button mt-6" to="/verify-email">
+          <Link
+            to="/verify-email"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-[13px] font-semibold text-blue-700 hover:bg-slate-50"
+          >
             Verify your email
           </Link>
-        </>
+        </div>
       ) : (
         <AuthForm
           schema={signUpSchema}
@@ -51,8 +55,14 @@ export function RegisterPage() {
           }}
         />
       )}
-      <p className="auth-switch">
-        Already have an account? <Link to="/sign-in">Sign in</Link>
+      <p className="mt-5 border-t border-slate-200 pt-4 text-center text-[13px] text-slate-600">
+        Already have an account?{' '}
+        <Link
+          to="/sign-in"
+          className="font-semibold text-blue-700 hover:underline"
+        >
+          Sign in
+        </Link>
       </p>
     </AuthCard>
   )

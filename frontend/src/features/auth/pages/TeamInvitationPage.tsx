@@ -13,6 +13,10 @@ import { Notice } from '@/shared/components/Feedback'
 import { useAppDispatch, useAppSelector } from '@/shared/hooks/useAppStore'
 import { useState } from 'react'
 import { Link } from 'react-router'
+
+const actionClass =
+  'mt-4 inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-[13px] font-semibold text-blue-700 hover:bg-slate-50'
+
 export function TeamInvitationPage() {
   const [initialToken] = useState(() => captureToken('invitation'))
   const [idempotencyKey] = useState(() => crypto.randomUUID())
@@ -20,20 +24,17 @@ export function TeamInvitationPage() {
   const dispatch = useAppDispatch()
   const [accept, result] = authApi.useAcceptInvitationMutation()
   const [complete, setComplete] = useState('')
+
   return (
     <AuthCard>
       <AuthHeading
-        eyebrow="Better together"
-        title="You’re invited to join"
-        description="Accept an invitation using the verified account that matches the invited email."
+        title="Join your team"
+        description="Use the verified account that matches your invitation email."
       />
       {complete ? (
         <>
           <Notice>Your team invitation was accepted.</Notice>
-          <Link
-            className="secondary-button mt-6"
-            to={`/app/w/${complete}/overview`}
-          >
+          <Link className={actionClass} to={`/app/w/${complete}/overview`}>
             Open workspace
           </Link>
         </>
@@ -43,10 +44,7 @@ export function TeamInvitationPage() {
             Sign in to your verified agency account before accepting this
             invitation. The invitation will remain available in this tab.
           </Notice>
-          <Link
-            className="secondary-button mt-6"
-            to="/sign-in?returnTo=%2Fteam-invite"
-          >
+          <Link className={actionClass} to="/sign-in?returnTo=%2Fteam-invite">
             Sign in to accept
           </Link>
         </>
@@ -56,7 +54,12 @@ export function TeamInvitationPage() {
         </Notice>
       ) : (
         <>
-          <p className="signed-in-as">Signed in as {auth.user.email}</p>
+          <p className="mb-4 break-all text-[13px] text-slate-600">
+            Signed in as{' '}
+            <span className="font-medium text-slate-900">
+              {auth.user.email}
+            </span>
+          </p>
           <AuthForm
             schema={tokenInputSchema}
             fields={[tokenField]}

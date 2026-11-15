@@ -4,6 +4,25 @@ import type {
   ClientItem,
 } from '@/features/client/types/client.types'
 import { Field } from '@/shared/components/ProductUI'
+
+type TypedValueProps = {
+  item: Pick<ClientItem, 'id' | 'label' | 'type' | 'validation' | 'assets'>
+  value: AnswerValue
+  onChange: (value: AnswerValue) => void
+  disabled: boolean
+  root: string
+  preview?: boolean
+  liveUploads?: boolean
+  uploadsUnavailable?: boolean
+  compact?: boolean
+  currentValue?: () => AnswerValue
+  onFilesChanged?: () => void
+  beforeDelete?: () => Promise<boolean>
+}
+
+const inputClass =
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm leading-6 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600'
+
 export function TypedValue({
   item,
   value,
@@ -13,121 +32,185 @@ export function TypedValue({
   preview = false,
   liveUploads = false,
   uploadsUnavailable = false,
+  compact = false,
   currentValue,
   onFilesChanged,
   beforeDelete,
-}: {
-  item: Pick<ClientItem, 'id' | 'label' | 'type' | 'validation' | 'assets'>
-  value: AnswerValue
-  onChange: (v: AnswerValue) => void
-  disabled: boolean
-  root: string
-  preview?: boolean
-  liveUploads?: boolean
-  uploadsUnavailable?: boolean
-  currentValue?: () => AnswerValue
-  onFilesChanged?: () => void
-  beforeDelete?: () => Promise<boolean>
-}) {
+}: TypedValueProps) {
   const data = value as unknown as Record<string, unknown>
   const rules = item.validation
+
   if (
     item.type === 'SHORT_TEXT' ||
     item.type === 'LONG_TEXT' ||
     item.type === 'URL'
-  )
+  ) {
+    const text =
+      item.type === 'URL' ? String(data.url || '') : String(data.text || '')
+
+    const maxLength =
+      rules.maxLength || (item.type === 'SHORT_TEXT' ? 200 : 10000)
+
+    const control =
+      item.type === 'LONG_TEXT' ? (
+        <textarea
+          aria-label={compact ? item.label : undefined}
+          rows={4}
+          value={text}
+          disabled={disabled}
+          maxLength={maxLength}
+          placeholder={compact ? 'Write your answer...' : undefined}
+          onChange={(event) => onChange({ text: event.target.value })}
+          className={`${inputClass} min-h-30 max-h-60 resize-y`}
+        />
+      ) : (
+        <input
+          aria-label={compact ? item.label : undefined}
+          type={
+            item.type === 'URL'
+              ? 'url'
+              : rules.format === 'email'
+                ? 'email'
+                : 'text'
+          }
+          value={text}
+          disabled={disabled}
+          maxLength={maxLength}
+          placeholder={
+            item.type === 'URL'
+              ? 'https://example.com'
+              : compact
+                ? 'Enter your answer...'
+                : undefined
+          }
+          onChange={(event) =>
+            onChange(
+              item.type === 'URL'
+                ? { url: event.target.value }
+                : { text: event.target.value },
+            )
+          }
+          className={`${inputClass} min-h-11`}
+        />
+      )
+
+    if (compact) {
+      return (
+        <div>
+          {control}
+
+          {item.type === 'URL' && (
+            <p className="mt-1 text-xs text-slate-500">
+              Use a valid HTTP or HTTPS link.
+            </p>
+          )}
+        </div>
+      )
+    }
+
     return (
       <Field
         label="Your response"
         hint={
           item.type === 'URL'
             ? 'Use an HTTP or HTTPS link.'
-            : `${String(data.text || '').length} / ${rules.maxLength || (item.type === 'SHORT_TEXT' ? 200 : 10000)} characters`
+            : `${text.length} / ${maxLength} characters`
         }
       >
-        {item.type === 'LONG_TEXT' ? (
-          <textarea
-            rows={5}
-            value={String(data.text || '')}
-            disabled={disabled}
-            maxLength={rules.maxLength || 10000}
-            onChange={(e) => onChange({ text: e.target.value })}
-          />
-        ) : (
-          <input
-            type={
-              item.type === 'URL'
-                ? 'url'
-                : rules.format === 'email'
-                  ? 'email'
-                  : 'text'
-            }
-            value={String(data.text || data.url || '')}
-            disabled={disabled}
-            maxLength={rules.maxLength || 200}
-            onChange={(e) =>
-              onChange(
-                item.type === 'URL'
-                  ? { url: e.target.value }
-                  : { text: e.target.value },
-              )
-            }
-          />
-        )}
+        {control}
       </Field>
     )
-  if (item.type === 'SINGLE_SELECT')
+  }
+
+  if (item.type === 'SINGLE_SELECT') {
+    const select = (
+      <select
+        aria-label={compact ? item.label : undefined}
+        disabled={disabled}
+        value={String(data.optionKey || '')}
+        onChange={(event) => onChange({ optionKey: event.target.value })}
+        className={`${inputClass} min-h-11`}
+      >
+        <option value="">Choose an option</option>
+        {rules.options?.map((option) => (
+          <option key={option.key} value={option.key}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    )
+
+    return compact ? select : <Field label="Choose one">{select}</Field>
+  }
+
+  if (item.type === 'MULTI_SELECT') {
+    const selected = (data.optionKeys as string[]) || []
+
     return (
-      <Field label="Choose one">
-        <select
-          disabled={disabled}
-          value={String(data.optionKey || '')}
-          onChange={(e) => onChange({ optionKey: e.target.value })}
+      <fieldset
+        disabled={disabled}
+        aria-label={compact ? item.label : undefined}
+        className="space-y-2"
+      >
+        <legend
+          className={
+            compact ? 'sr-only' : 'mb-2 text-sm font-medium text-slate-700'
+          }
         >
-          <option value="">Choose an option</option>
-          {rules.options?.map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </Field>
-    )
-  if (item.type === 'MULTI_SELECT')
-    return (
-      <fieldset className="option-list" disabled={disabled}>
-        <legend>Choose all that apply</legend>
-        {rules.options?.map((o) => (
-          <label key={o.key} className="check-row">
+          Choose all that apply
+        </legend>
+
+        {rules.options?.map((option) => (
+          <label
+            key={option.key}
+            className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
+          >
             <input
               type="checkbox"
-              checked={((data.optionKeys as string[]) || []).includes(o.key)}
-              onChange={(e) =>
+              checked={selected.includes(option.key)}
+              className="h-4 w-4 shrink-0 accent-blue-600"
+              onChange={(event) =>
                 onChange({
-                  optionKeys: e.target.checked
-                    ? [...((data.optionKeys as string[]) || []), o.key]
-                    : ((data.optionKeys as string[]) || []).filter(
-                        (k) => k !== o.key,
-                      ),
+                  optionKeys: event.target.checked
+                    ? [...selected, option.key]
+                    : selected.filter((key) => key !== option.key),
                 })
               }
             />
-            {o.label}
+            <span>{option.label}</span>
           </label>
         ))}
       </fieldset>
     )
-  if (item.type === 'FILE' || item.type === 'IMAGE')
-    return preview || uploadsUnavailable ? (
-      <p className="disabled-preview">
-        {item.type === 'IMAGE' ? 'Image upload' : 'File upload'} ·{' '}
-        {rules.minFiles || 0}–{rules.maxFiles || 1} files ·{' '}
-        {rules.allowedExtensions?.join(', ') || 'Supported file types'}.{' '}
-        {preview
-          ? 'Uploads are unavailable in preview.'
-          : 'Uploads are currently unavailable for this project. Contact your agency for help.'}
-      </p>
-    ) : (
+  }
+
+  if (item.type === 'FILE' || item.type === 'IMAGE') {
+    if (preview || uploadsUnavailable) {
+      return (
+        <div
+          role="status"
+          className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-[13px] leading-5 text-slate-600"
+        >
+          <p className="font-medium text-slate-800">
+            {item.type === 'IMAGE' ? 'Image upload' : 'File upload'}
+          </p>
+
+          <p className="mt-1">
+            {rules.minFiles || 0}–{rules.maxFiles || 1} files
+            {' · '}
+            {rules.allowedExtensions?.join(', ') || 'Supported file types'}
+          </p>
+
+          <p className="mt-2">
+            {preview
+              ? 'Uploads are unavailable in preview.'
+              : 'Uploads are currently unavailable for this project. Contact your agency for help.'}
+          </p>
+        </div>
+      )
+    }
+
+    return (
       <UploadQueue
         root={root}
         itemId={item.id}
@@ -135,8 +218,10 @@ export function TypedValue({
         live={liveUploads}
         allowedExtensions={
           liveUploads
-            ? rules.allowedExtensions?.filter((e) =>
-                ['jpg', 'jpeg', 'png', 'pdf', 'docx', 'txt', 'svg'].includes(e),
+            ? rules.allowedExtensions?.filter((extension) =>
+                ['jpg', 'jpeg', 'png', 'pdf', 'docx', 'txt', 'svg'].includes(
+                  extension,
+                ),
               )
             : undefined
         }
@@ -146,7 +231,10 @@ export function TypedValue({
         onReady={
           currentValue
             ? (id) => {
-                const latest = currentValue() as { assetIds?: string[] }
+                const latest = currentValue() as {
+                  assetIds?: string[]
+                }
+
                 onChange({
                   assetIds: [...new Set([...(latest.assetIds || []), id])],
                 })
@@ -159,34 +247,62 @@ export function TypedValue({
         disabled={disabled}
       />
     )
+  }
+
   if (item.type === 'REPEATER') {
     const rows = (value as Extract<AnswerValue, { rows: unknown }>).rows || []
+
     return (
-      <div className="repeater">
+      <div className="space-y-3">
         {rows.map((row, index) => (
-          <fieldset key={row.rowId} disabled={disabled}>
-            <legend>Entry {index + 1}</legend>
+          <fieldset
+            key={row.rowId}
+            disabled={disabled}
+            className="space-y-4 rounded-lg border border-slate-200 bg-slate-50/50 p-3 sm:p-4"
+          >
+            <legend className="px-1 text-[13px] font-semibold text-slate-800">
+              Entry {index + 1}
+            </legend>
+
             {rules.columns?.map((column) => {
               const cell = row.values[column.key]
-              const update = (v: typeof cell) =>
+
+              const update = (nextValue: typeof cell) =>
                 onChange({
-                  rows: rows.map((r) =>
-                    r.rowId === row.rowId
-                      ? { ...r, values: { ...r.values, [column.key]: v } }
-                      : r,
+                  rows: rows.map((currentRow) =>
+                    currentRow.rowId === row.rowId
+                      ? {
+                          ...currentRow,
+                          values: {
+                            ...currentRow.values,
+                            [column.key]: nextValue,
+                          },
+                        }
+                      : currentRow,
                   ),
                 })
-              if (column.type === 'IMAGE')
-                return preview || uploadsUnavailable ? (
-                  <p key={column.key}>
-                    {column.label}:{' '}
-                    {preview
-                      ? 'image upload unavailable in preview.'
-                      : 'image uploads are currently unavailable for this project. Contact your agency for help.'}
-                  </p>
-                ) : (
-                  <div key={column.key}>
-                    <h3>{column.label}</h3>
+
+              if (column.type === 'IMAGE') {
+                if (preview || uploadsUnavailable) {
+                  return (
+                    <p
+                      key={column.key}
+                      className="text-[13px] leading-5 text-slate-600"
+                    >
+                      {column.label}: uploads are{' '}
+                      {preview
+                        ? 'unavailable in preview.'
+                        : 'currently unavailable for this project. Contact your agency for help.'}
+                    </p>
+                  )
+                }
+
+                return (
+                  <div key={column.key} className="space-y-2">
+                    <h3 className="text-[13px] font-semibold text-slate-800">
+                      {column.label}
+                    </h3>
+
                     <UploadQueue
                       root={root}
                       itemId={item.id}
@@ -204,19 +320,20 @@ export function TypedValue({
                                 AnswerValue,
                                 { rows: unknown }
                               >
+
                               onChange({
-                                rows: (latest.rows || []).map((r) =>
-                                  r.rowId === row.rowId
+                                rows: (latest.rows || []).map((currentRow) =>
+                                  currentRow.rowId === row.rowId
                                     ? {
-                                        ...r,
+                                        ...currentRow,
                                         values: {
-                                          ...r.values,
+                                          ...currentRow.values,
                                           [column.key]: [
                                             ...new Set([
                                               ...(Array.isArray(
-                                                r.values[column.key],
+                                                currentRow.values[column.key],
                                               )
-                                                ? (r.values[
+                                                ? (currentRow.values[
                                                     column.key
                                                   ] as string[])
                                                 : []),
@@ -225,7 +342,7 @@ export function TypedValue({
                                           ],
                                         },
                                       }
-                                    : r,
+                                    : currentRow,
                                 ),
                               })
                             }
@@ -238,84 +355,104 @@ export function TypedValue({
                     />
                   </div>
                 )
+              }
+
               return (
-                <Field
-                  key={column.key}
-                  label={`${column.label}${column.required ? ' *' : ''}`}
-                >
-                  {column.type === 'SINGLE_SELECT' ? (
-                    <select
-                      value={String(cell || '')}
-                      onChange={(e) => update(e.target.value)}
-                    >
-                      <option value="">Choose</option>
-                      {column.options?.map((o) => (
-                        <option key={o.key} value={o.key}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : column.type === 'LONG_TEXT' ? (
-                    <textarea
-                      rows={4}
-                      value={String(cell || '')}
-                      maxLength={10000}
-                      onChange={(e) => update(e.target.value)}
-                    />
-                  ) : (
-                    <input
-                      type={
-                        column.type === 'NUMBER'
-                          ? 'number'
-                          : column.type === 'URL'
-                            ? 'url'
-                            : 'text'
-                      }
-                      value={String(cell ?? '')}
-                      onChange={(e) =>
-                        update(
-                          column.type === 'NUMBER' && e.target.value !== ''
-                            ? Number(e.target.value)
-                            : e.target.value,
-                        )
-                      }
-                    />
-                  )}
-                </Field>
+                <div key={column.key} className="space-y-1.5">
+                  <Field
+                    label={`${column.label}${column.required ? ' *' : ''}`}
+                  >
+                    {column.type === 'SINGLE_SELECT' ? (
+                      <select
+                        disabled={disabled}
+                        value={String(cell || '')}
+                        onChange={(event) => update(event.target.value)}
+                        className={`${inputClass} min-h-11`}
+                      >
+                        <option value="">Choose</option>
+
+                        {column.options?.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : column.type === 'LONG_TEXT' ? (
+                      <textarea
+                        rows={4}
+                        disabled={disabled}
+                        value={String(cell || '')}
+                        maxLength={10000}
+                        onChange={(event) => update(event.target.value)}
+                        className={`${inputClass} min-h-28 max-h-60 resize-y`}
+                      />
+                    ) : (
+                      <input
+                        disabled={disabled}
+                        type={
+                          column.type === 'NUMBER'
+                            ? 'number'
+                            : column.type === 'URL'
+                              ? 'url'
+                              : 'text'
+                        }
+                        value={String(cell ?? '')}
+                        onChange={(event) =>
+                          update(
+                            column.type === 'NUMBER' &&
+                              event.target.value !== ''
+                              ? Number(event.target.value)
+                              : event.target.value,
+                          )
+                        }
+                        className={`${inputClass} min-h-11`}
+                      />
+                    )}
+                  </Field>
+                </div>
               )
             })}
-            <div className="actions">
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3">
               <button
                 type="button"
-                className="secondary-button"
                 disabled={!index}
                 onClick={() => {
                   const next = [...rows]
+
                   ;[next[index - 1], next[index]] = [
                     next[index],
                     next[index - 1],
                   ]
+
                   onChange({ rows: next })
                 }}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Move up
               </button>
+
               <button
                 type="button"
-                className="danger-link"
+                disabled={disabled}
                 onClick={() =>
-                  onChange({ rows: rows.filter((r) => r.rowId !== row.rowId) })
+                  onChange({
+                    rows: rows.filter(
+                      (currentRow) => currentRow.rowId !== row.rowId,
+                    ),
+                  })
                 }
+                className="rounded-lg px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Remove entry
               </button>
             </div>
           </fieldset>
         ))}
+
         <button
           type="button"
           disabled={disabled || rows.length >= (rules.maxRows || 20)}
-          className="secondary-button"
           onClick={() =>
             onChange({
               rows: [
@@ -323,20 +460,22 @@ export function TypedValue({
                 {
                   rowId: crypto.randomUUID(),
                   values: Object.fromEntries(
-                    (rules.columns || []).map((c) => [
-                      c.key,
-                      c.type === 'IMAGE' ? [] : '',
+                    (rules.columns || []).map((column) => [
+                      column.key,
+                      column.type === 'IMAGE' ? [] : '',
                     ]),
                   ),
                 },
               ],
             })
           }
+          className="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-3.5 text-[13px] font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          ＋ Add entry ({rows.length}/{rules.maxRows || 20})
+          + Add entry ({rows.length}/{rules.maxRows || 20})
         </button>
       </div>
     )
   }
+
   return null
 }

@@ -9,18 +9,20 @@ import { AuthForm } from '@/features/auth/components/AuthForm'
 import { resetSchema } from '@/features/auth/schemas/accountSchemas'
 import { captureToken, tokenVault } from '@/features/auth/utils/actionToken'
 import { Notice } from '@/shared/components/Feedback'
+import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
+
 export function ResetPasswordPage() {
   const [initialToken] = useState(() => captureToken('reset'))
   const [reset, result] = authApi.useResetPasswordMutation()
   const [complete, setComplete] = useState(false)
+
   return (
     <AuthCard>
       <AuthHeading
-        eyebrow="A fresh start"
         title="Choose a new password"
-        description="Choose a strong password you don’t use elsewhere. Reset links last 30 minutes."
+        description="Use a password you don't use elsewhere. Reset links expire after 30 minutes."
       />
       {complete ? (
         <Notice>
@@ -44,9 +46,12 @@ export function ResetPasswordPage() {
           }}
         />
       )}
-      <p className="auth-switch">
-        <Link to="/sign-in">Back to sign in</Link>
-      </p>
+      <Link
+        to="/sign-in"
+        className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-blue-700 hover:underline"
+      >
+        <ArrowLeft size={15} aria-hidden="true" /> Back to sign in
+      </Link>
     </AuthCard>
   )
 }
