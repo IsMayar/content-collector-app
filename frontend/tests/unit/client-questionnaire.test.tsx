@@ -96,7 +96,7 @@ it('uses a compact long answer and preserves its character limit', () => {
       root="client/projects/test"
     />,
   )
-  expect(screen.getByRole('textbox')).toHaveAttribute('rows', '5')
+  expect(screen.getByRole('textbox')).toHaveAttribute('rows', '4')
   expect(screen.getByRole('textbox')).toHaveAttribute('maxlength', '500')
 })
 it('keeps denied live uploads disabled without mislabelling the project as preview', () => {
@@ -140,7 +140,7 @@ it('does not request history until a relevant history disclosure is opened', asy
     />,
   )
   expect(mocks.read).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByText('History'))
+  fireEvent.click(screen.getByText('Version history'))
   await waitFor(() =>
     expect(mocks.read).toHaveBeenCalledWith(
       { projectId: 'p', itemId: 'i' },
@@ -168,6 +168,6 @@ it('protects clear with cancellation and defers conversation requests', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Confirm clear' }))
   expect(screen.getByRole('textbox')).toHaveValue('')
   expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes')
-  fireEvent.click(screen.getByText('Conversation'))
+  fireEvent.click(screen.getByText('Comments'))
   await waitFor(() => expect(mocks.comments).toHaveBeenCalled())
 })

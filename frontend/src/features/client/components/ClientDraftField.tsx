@@ -15,10 +15,7 @@ import { AiAssistant } from '@/features/ai/components/AiAssistant'
 import { ClientComments } from '@/features/review/components/ClientComments'
 import { initialValue } from '@/shared/utils/domain'
 import { useInteraction } from '../hooks/useInteraction'
-import {
-  useSaveDraftMutation,
-  useLazyReadDraftQuery,
-} from '../api/clientAnswersApi'
+import { useSaveDraftMutation } from '../api/clientAnswersApi'
 import { DraftAutosave, pendingDrafts } from '../hooks/draftAutosave'
 import type { CollectionData } from '../schemas/collectionSchema'
 import type { AnswerValue } from '../types/client.types'
@@ -84,7 +81,6 @@ export function ClientDraftField({
   const [submitting, setSubmitting] = useState(false)
 
   const [save] = useSaveDraftMutation()
-  const [read] = useLazyReadDraftQuery()
 
   const [draft] = useState(() => {
     const key = projectId + '/' + item.id

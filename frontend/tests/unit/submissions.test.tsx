@@ -81,7 +81,7 @@ async function confirm() {
     screen.getByRole('button', { name: 'Review and submit' }),
   )
   await userEvent.click(
-    screen.getByRole('button', { name: 'Submit for review' }),
+    screen.getByRole('button', { name: 'Confirm submission' }),
   )
 }
 it('requires explicit confirmation without submitting automatically', async () => {
@@ -115,7 +115,9 @@ it('does not submit unresolved saves', async () => {
   pendingDrafts.set(id + '/other', d)
   mount()
   await confirm()
-  expect(await screen.findByText(/Save or reconcile/)).toBeVisible()
+  expect(
+    await screen.findByText(/Some answers are not saved yet/),
+  ).toBeVisible()
   expect(mocks.run).not.toHaveBeenCalled()
 })
 it('prevents duplicate clicks while the server is processing', async () => {
@@ -132,7 +134,7 @@ it('prevents duplicate clicks while the server is processing', async () => {
   finish(undefined)
   await waitFor(() =>
     expect(
-      screen.getByRole('button', { name: 'Submit for review' }),
+      screen.getByRole('button', { name: 'Confirm submission' }),
     ).toBeEnabled(),
   )
 })
@@ -157,7 +159,7 @@ it('does not claim success for malformed confirmation', async () => {
   const p = mount()
   await confirm()
   expect(
-    await screen.findByText(/confirmation could not be verified/),
+    await screen.findByText(/Submission could not be verified/),
   ).toBeVisible()
   expect(p.onRefresh).not.toHaveBeenCalled()
 })
@@ -166,7 +168,7 @@ it('does not confirm network failure and retains the retry key', async () => {
   mount()
   await confirm()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Submit for review' }),
+    screen.getByRole('button', { name: 'Confirm submission' }),
   )
   expect(mocks.run.mock.calls[0][3]).toEqual(mocks.run.mock.calls[1][3])
   expect(screen.queryByText(/Submitted successfully/)).not.toBeInTheDocument()

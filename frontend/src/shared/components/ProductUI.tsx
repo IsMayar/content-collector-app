@@ -5,6 +5,7 @@ import { percent } from '@/shared/utils/domain'
 import type { ReactElement, ReactNode } from 'react'
 import { cloneElement, useId } from 'react'
 import { Link } from 'react-router'
+import { FolderOpen } from 'lucide-react'
 
 export function Heading({
   eyebrow,
@@ -154,17 +155,27 @@ export function Empty({
   label?: string
 }) {
   return (
-    <div className="product-empty">
-      <span className="empty-symbol" aria-hidden="true">
-        ◇
+    <section className="rounded-xl border border-slate-200 bg-white px-5 py-9 text-center shadow-sm sm:px-8">
+      <span
+        className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600"
+        aria-hidden="true"
+      >
+        <FolderOpen size={24} />
       </span>
-      <h2>{title}</h2>
-      <p>{description}</p>
+      <h2 className="mt-4 text-lg font-semibold tracking-tight text-[#0A1A2F]">
+        {title}
+      </h2>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+        {description}
+      </p>
       {to && (
-        <Link className="primary-button" to={to}>
-          {label}
+        <Link
+          className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-[#2563EB] px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+          to={to}
+        >
+          {label || 'Continue'}
         </Link>
       )}
-    </div>
+    </section>
   )
 }

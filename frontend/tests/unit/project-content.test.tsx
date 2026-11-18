@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
@@ -133,7 +133,7 @@ it('counts only visible enabled required questions and updates from 0 to 3 and b
   }
 })
 
-it('copies the complete immutable answer without expanding and reports clipboard failures', async () => {
+it('copies the complete immutable answer in the expanded view and reports clipboard failures', async () => {
   const user = userEvent.setup()
   const copy = vi
     .spyOn(navigator.clipboard, 'writeText')
@@ -145,19 +145,17 @@ it('copies the complete immutable answer without expanding and reports clipboard
   render(
     <ProjectContent
       {...props}
+      itemId={submitted.id}
       data={data([submitted, item('Draft', 'DRAFT')])}
     />,
   )
   const row = within(screen.getByRole('article', { name: 'Headline' }))
-  expect(row.getByRole('button', { name: 'View answer' })).toHaveAttribute(
-    'aria-expanded',
-    'false',
-  )
-  await user.click(row.getByRole('button', { name: 'Copy answer' }))
+  const button = row.getByRole('button', { name: 'Copy submitted answer' })
+  await user.click(button)
   expect(copy).toHaveBeenCalledWith(answer)
-  expect(row.getByRole('status')).toHaveTextContent('Copied')
-  await user.click(row.getByRole('button', { name: 'Copy answer' }))
-  expect(row.getByRole('status')).toHaveTextContent('Could not copy')
+  await waitFor(() => expect(button).toHaveTextContent('Copied'))
+  await user.click(button)
+  expect(await row.findByRole('status')).toHaveTextContent('Unable to copy')
   expect(
     mocked.detail.mock.calls.every(([path]) => !path.includes('/Draft/')),
   ).toBe(true)
@@ -173,7 +171,7 @@ it('does not display or copy stale revision data and does not offer reviewer dec
     <ProjectContent {...props} data={data([submitted])} />,
   )
   expect(
-    screen.queryByRole('button', { name: 'Copy answer' }),
+    screen.queryByRole('button', { name: 'Copy submitted answer' }),
   ).not.toBeInTheDocument()
   mocked.detail.mockImplementation((path: string) =>
     path.endsWith('/revisions') || path.endsWith('/comments')
@@ -187,11 +185,11 @@ it('does not display or copy stale revision data and does not offer reviewer dec
       data={data([submitted])}
     />,
   )
+  expect(screen.getByText(/First paragraph/)).toBeVisible()
   expect(
-    screen.getByRole('heading', { name: 'Submitted revision 1' }),
+    screen.getByRole('button', { name: 'Copy submitted answer' }),
   ).toBeVisible()
-  expect(screen.getByRole('button', { name: 'Copy answer' })).toBeVisible()
   expect(
-    screen.queryByRole('button', { name: 'Approve revision' }),
+    screen.queryByRole('button', { name: 'Approve' }),
   ).not.toBeInTheDocument()
 })

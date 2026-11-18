@@ -10,7 +10,6 @@ import {
   Heading,
   Panel,
 } from '@/shared/components/ProductUI'
-import { Notice } from '@/shared/components/Feedback'
 import { initialValue } from '@/shared/utils/domain'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -43,18 +42,21 @@ export function PortalFoundation({ data }: { data: PortalData }) {
         </button>
       </Heading>
       <ErrorNotice error={command.error} />
-      <Notice>
-        This is your read-only content request. Review the instructions and
-        questions below. Responses, uploads and submission are not available
-        yet.
-      </Notice>
+      <div
+        role="status"
+        className="mb-5 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-6 text-blue-900"
+      >
+        This is a read-only content request. You can review the sections and
+        questions below, but responses, uploads, and submissions aren't
+        available in this view.
+      </div>
       {!section ? (
         <Empty
           title="No content requested yet"
           description="Your agency will add the sections and questions for this project."
         />
       ) : (
-        <div className="client-workspace">
+        <div className="client-workspace mt-5">
           <nav className="client-checklist" aria-label="Requested sections">
             <h2>Content request</h2>
             {data.sections.map((s) => (
