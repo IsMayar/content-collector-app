@@ -53,7 +53,7 @@ describe('safe return destinations', () => {
     const { store } = mount('/client/access')
     expect(
       await screen.findByRole('heading', {
-        name: "You're invited to a project",
+        name: 'Request a project link',
       }),
     ).toBeVisible()
     expect(store.getState().auth.status).not.toBe('authenticated')
