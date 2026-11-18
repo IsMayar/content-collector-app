@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { LiveRevisionReview } from '@/features/review/components/LiveReviewPanel'
@@ -92,10 +92,10 @@ it('requires explicit confirmation and server acknowledgment for an exact approv
   mount()
   expect(screen.getByText('Exact immutable submission')).toBeVisible()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve revision' }),
+    screen.getByRole('button', { name: 'Approve', exact: true }),
   )
   expect(mocks.run).not.toHaveBeenCalled()
-  await userEvent.click(screen.getByRole('button', { name: /^Approve$/ }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
   expect(
     screen.queryByText('Exact submitted revision approved.'),
   ).not.toBeInTheDocument()
@@ -133,7 +133,7 @@ it('requires client-visible feedback and retains the same key on uncertain retri
 it('does not permit decisions on a historical revision or an approved item', () => {
   const view = mount({ currentRevisionId: id })
   expect(
-    screen.getByRole('button', { name: 'Approve revision' }),
+    screen.getByRole('button', { name: 'Approve', exact: true }),
   ).toBeDisabled()
   view.unmount()
   mount({ state: 'APPROVED' as typeof item.state })
@@ -149,9 +149,9 @@ it('rejects incompatible decision responses rather than claiming success', async
   })
   mount()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve revision' }),
+    screen.getByRole('button', { name: 'Approve', exact: true }),
   )
-  await userEvent.click(screen.getByRole('button', { name: /^Approve$/ }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
   await waitFor(() =>
     expect(
       screen.getAllByText(/response could not be verified/).length,
@@ -194,9 +194,9 @@ it('rejects a response whose item state contradicts the confirmed decision', asy
   })
   mount()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve revision' }),
+    screen.getByRole('button', { name: 'Approve', exact: true }),
   )
-  await userEvent.click(screen.getByRole('button', { name: /^Approve$/ }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
   await waitFor(() =>
     expect(
       screen.getAllByText(/response could not be verified/).length,
