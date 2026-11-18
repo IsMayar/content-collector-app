@@ -14,6 +14,7 @@ import { useInteraction } from '../hooks/useInteraction'
 import { useNavigate } from 'react-router'
 import type { CollectionData } from '../schemas/collectionSchema'
 import { ClientDraftField } from './ClientDraftField'
+import { SubmissionValidationSummary } from './SubmissionValidationSummary'
 import { pendingDrafts, clearPendingDrafts } from '../hooks/draftAutosave'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { Heading, ErrorNotice } from '@/shared/components/ProductUI'
@@ -113,6 +114,17 @@ export function CollectionPortal({
           This project is read-only. Your saved drafts remain available.
         </p>
       )}
+
+      <SubmissionValidationSummary
+        data={data}
+        onSelect={(sectionId, itemId) => {
+          setSelected(sectionId)
+          setExpanded(itemId)
+          requestAnimationFrame(() => {
+            document.getElementById('question-' + itemId)?.focus()
+          })
+        }}
+      />
 
       <div className="client-workspace">
         <nav className="client-checklist" aria-label="Requested sections">
