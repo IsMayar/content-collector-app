@@ -435,7 +435,7 @@ describe('T15 persisted collection portal', () => {
     expect(screen.getByRole('textbox', { name: 'Business introduction' })).toHaveValue('A real draft')
     clearPendingDrafts()
   })
-  it('keeps read-only lifecycle fields disabled', () => {
+  it('keeps read-only lifecycle fields disabled', async () => {
     clearPendingDrafts()
     const data = collection(true)
     data.capabilities.canRespond = false
