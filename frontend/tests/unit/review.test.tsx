@@ -92,7 +92,7 @@ it('requires explicit confirmation and server acknowledgment for an exact approv
   mount()
   expect(screen.getByText('Exact immutable submission')).toBeVisible()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve', exact: true }),
+    screen.getByRole('button', { name: 'Approve' }),
   )
   expect(mocks.run).not.toHaveBeenCalled()
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
@@ -133,7 +133,7 @@ it('requires client-visible feedback and retains the same key on uncertain retri
 it('does not permit decisions on a historical revision or an approved item', () => {
   const view = mount({ currentRevisionId: id })
   expect(
-    screen.getByRole('button', { name: 'Approve', exact: true }),
+    screen.getByRole('button', { name: 'Approve' }),
   ).toBeDisabled()
   view.unmount()
   mount({ state: 'APPROVED' as typeof item.state })
@@ -149,7 +149,7 @@ it('rejects incompatible decision responses rather than claiming success', async
   })
   mount()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve', exact: true }),
+    screen.getByRole('button', { name: 'Approve' }),
   )
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
   await waitFor(() =>
@@ -194,7 +194,7 @@ it('rejects a response whose item state contradicts the confirmed decision', asy
   })
   mount()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve', exact: true }),
+    screen.getByRole('button', { name: 'Approve' }),
   )
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
   await waitFor(() =>
