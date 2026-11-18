@@ -66,7 +66,10 @@ export function NotFoundPage() {
         <p className="mt-6 text-xs font-semibold uppercase tracking-widest text-blue-700">
           Page unavailable
         </p>
-        <h1 id="not-found-title" className="mt-2 text-[28px] font-bold tracking-tight text-[#0A1A2F] sm:text-[34px]">
+        <h1
+          id="not-found-title"
+          className="mt-2 text-[28px] font-bold tracking-tight text-[#0A1A2F] sm:text-[34px]"
+        >
           Page not found
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">

@@ -115,7 +115,9 @@ it('does not submit unresolved saves', async () => {
   pendingDrafts.set(id + '/other', d)
   mount()
   await confirm()
-  expect(await screen.findByText(/Some answers are not saved yet/)).toBeVisible()
+  expect(
+    await screen.findByText(/Some answers are not saved yet/),
+  ).toBeVisible()
   expect(mocks.run).not.toHaveBeenCalled()
 })
 it('prevents duplicate clicks while the server is processing', async () => {

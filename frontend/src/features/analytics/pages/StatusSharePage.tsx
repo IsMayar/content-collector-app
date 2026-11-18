@@ -75,7 +75,9 @@ export function StatusSharePage() {
         <button
           type="button"
           className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          disabled={exchangeState.isLoading || countsState.isFetching || !shareId}
+          disabled={
+            exchangeState.isLoading || countsState.isFetching || !shareId
+          }
           onClick={() => void open()}
         >
           <RefreshCw size={16} aria-hidden="true" />
@@ -87,7 +89,10 @@ export function StatusSharePage() {
         </button>
 
         {message && (
-          <div role="alert" className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          <div
+            role="alert"
+            className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900"
+          >
             {message}
           </div>
         )}

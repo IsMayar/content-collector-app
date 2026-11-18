@@ -37,7 +37,10 @@ export function SubmissionValidationSummary({
     }))
     .filter((section) => section.items.length > 0)
 
-  const count = missing.reduce((total, section) => total + section.items.length, 0)
+  const count = missing.reduce(
+    (total, section) => total + section.items.length,
+    0,
+  )
   if (count === 0) return null
 
   return (
@@ -53,10 +56,12 @@ export function SubmissionValidationSummary({
         />
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-slate-900">
-            {count} required {count === 1 ? 'answer' : 'answers'} without saved content
+            {count} required {count === 1 ? 'answer' : 'answers'} without saved
+            content
           </h2>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            Add the missing content before submitting those questions for review.
+            Add the missing content before submitting those questions for
+            review.
           </p>
         </div>
       </div>
@@ -71,7 +76,11 @@ export function SubmissionValidationSummary({
         View required questions without saved answers
         <ChevronDown
           size={15}
-          className={expanded ? 'rotate-180 transition-transform' : 'transition-transform'}
+          className={
+            expanded
+              ? 'rotate-180 transition-transform'
+              : 'transition-transform'
+          }
           aria-hidden="true"
         />
       </button>
@@ -79,8 +88,13 @@ export function SubmissionValidationSummary({
       {expanded && (
         <div id="missing-required-answers" className="mt-3 space-y-3">
           {missing.map((section) => (
-            <div key={section.id} className="rounded-lg border border-amber-200/80 bg-white p-3">
-              <h3 className="text-sm font-semibold text-slate-900">{section.title}</h3>
+            <div
+              key={section.id}
+              className="rounded-lg border border-amber-200/80 bg-white p-3"
+            >
+              <h3 className="text-sm font-semibold text-slate-900">
+                {section.title}
+              </h3>
               <ul className="mt-2 space-y-1">
                 {section.items.map((item) => (
                   <li key={item.id}>

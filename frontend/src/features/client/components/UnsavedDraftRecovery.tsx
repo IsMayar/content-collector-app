@@ -39,7 +39,11 @@ export function UnsavedDraftRecovery({ projectId }: { projectId: string }) {
             className="group overflow-hidden rounded-lg border border-amber-200/80 bg-white"
           >
             <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-3 text-sm font-medium text-slate-800 focus-visible:outline-2 focus-visible:outline-blue-600 [&::-webkit-details-marker]:hidden">
-              <FileText size={16} className="shrink-0 text-amber-700" aria-hidden="true" />
+              <FileText
+                size={16}
+                className="shrink-0 text-amber-700"
+                aria-hidden="true"
+              />
               <span className="flex-1">Unsaved answer {index + 1}</span>
               <ChevronDown
                 size={16}
@@ -66,7 +70,10 @@ export function UnsavedDraftRecovery({ projectId }: { projectId: string }) {
                   Copy answer
                 </button>
                 {copyState === key && (
-                  <span role="status" className="text-xs font-medium text-emerald-700">
+                  <span
+                    role="status"
+                    className="text-xs font-medium text-emerald-700"
+                  >
                     Copied to clipboard
                   </span>
                 )}

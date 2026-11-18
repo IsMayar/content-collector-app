@@ -48,7 +48,10 @@ export function StatePanel({
       role={kind === 'error' ? 'alert' : 'status'}
     >
       <div
-        className={'mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl ' + tone}
+        className={
+          'mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl ' +
+          tone
+        }
         aria-hidden="true"
       >
         {kind === 'loading' ? (
@@ -70,7 +73,10 @@ export function StatePanel({
         </p>
       )}
       {kind === 'loading' && (
-        <div className="mx-auto mt-6 flex max-w-xs flex-col gap-2" aria-hidden="true">
+        <div
+          className="mx-auto mt-6 flex max-w-xs flex-col gap-2"
+          aria-hidden="true"
+        >
           <span className="h-2 animate-pulse rounded-full bg-slate-100" />
           <span className="mx-auto h-2 w-2/3 animate-pulse rounded-full bg-slate-100" />
         </div>

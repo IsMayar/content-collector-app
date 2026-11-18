@@ -18,7 +18,13 @@ import {
 } from '@/shared/components/ProductUI'
 import { useAppDispatch } from '@/shared/hooks/useAppStore'
 import { useCommand } from '@/shared/hooks/useCommand'
-import { ArrowRight, Check, FileText, LockKeyhole, RefreshCw } from 'lucide-react'
+import {
+  ArrowRight,
+  Check,
+  FileText,
+  LockKeyhole,
+  RefreshCw,
+} from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 export function ClientProjectPage() {
@@ -80,7 +86,10 @@ export function ClientProjectPage() {
             )}
             <Link
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 text-center text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-              to={'/client/access?projectId=' + encodeURIComponent(projectId || '')}
+              to={
+                '/client/access?projectId=' +
+                encodeURIComponent(projectId || '')
+              }
             >
               Request a new link
               <ArrowRight size={16} aria-hidden="true" />
@@ -88,7 +97,8 @@ export function ClientProjectPage() {
           </div>
           <p className="mt-5 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">
             A new link must be requested through your agency's invitation flow.
-            If your access has changed, contact your agency project representative.
+            If your access has changed, contact your agency project
+            representative.
           </p>
         </section>
       </div>

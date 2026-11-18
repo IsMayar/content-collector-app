@@ -147,13 +147,20 @@ export function SubmissionControls({
       className="flex min-w-0 flex-col items-end gap-1"
     >
       {item.state === 'APPROVED' && (
-        <p role="status" className="max-w-sm text-right text-xs leading-5 text-emerald-700">
-          Approved. This revision is read-only until your agency explicitly reopens it.
+        <p
+          role="status"
+          className="max-w-sm text-right text-xs leading-5 text-emerald-700"
+        >
+          Approved. This revision is read-only until your agency explicitly
+          reopens it.
         </p>
       )}
 
       {item.state === 'CHANGES_REQUESTED' && (
-        <p role="status" className="max-w-sm text-right text-xs leading-5 text-amber-700">
+        <p
+          role="status"
+          className="max-w-sm text-right text-xs leading-5 text-amber-700"
+        >
           Update your draft before submitting a new revision.
         </p>
       )}

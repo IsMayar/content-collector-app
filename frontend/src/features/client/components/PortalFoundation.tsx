@@ -47,8 +47,8 @@ export function PortalFoundation({ data }: { data: PortalData }) {
         className="mb-5 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-6 text-blue-900"
       >
         This is a read-only content request. You can review the sections and
-        questions below, but responses, uploads, and submissions aren't available
-        in this view.
+        questions below, but responses, uploads, and submissions aren't
+        available in this view.
       </div>
       {!section ? (
         <Empty
