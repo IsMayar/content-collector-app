@@ -34,36 +34,52 @@ export function StatePanel({
   description?: string
   action?: ReactNode
 }) {
+  const tone =
+    kind === 'error'
+      ? 'bg-amber-50 text-amber-700'
+      : kind === 'success'
+        ? 'bg-emerald-50 text-emerald-700'
+        : 'bg-blue-50 text-blue-600'
+
   return (
     <section
-      className={`state-panel state-${kind}`}
+      className="mx-auto my-8 w-full max-w-xl rounded-2xl border border-slate-200 bg-white px-5 py-9 text-center shadow-sm sm:px-9 sm:py-11"
       aria-busy={kind === 'loading'}
+      role={kind === 'error' ? 'alert' : 'status'}
     >
-      <div className="state-symbol" aria-hidden="true">
+      <div
+        className={'mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl ' + tone}
+        aria-hidden="true"
+      >
         {kind === 'loading' ? (
-          <LoaderCircle className="state-spinner" size={42} />
+          <LoaderCircle className="animate-spin" size={27} />
         ) : kind === 'success' ? (
-          <CircleCheck size={42} />
+          <CircleCheck size={27} />
         ) : kind === 'error' ? (
-          <TriangleAlert size={42} />
+          <TriangleAlert size={27} />
         ) : (
-          <FolderOpen size={42} />
+          <FolderOpen size={27} />
         )}
       </div>
+      <h2 className="text-xl font-semibold tracking-tight text-[#0A1A2F]">
+        {title}
+      </h2>
+      {description && (
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+          {description}
+        </p>
+      )}
       {kind === 'loading' && (
-        <div className="loading-skeleton" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
+        <div className="mx-auto mt-6 flex max-w-xs flex-col gap-2" aria-hidden="true">
+          <span className="h-2 animate-pulse rounded-full bg-slate-100" />
+          <span className="mx-auto h-2 w-2/3 animate-pulse rounded-full bg-slate-100" />
         </div>
       )}
-      <h2>{title}</h2>
-      {description && <p>{description}</p>}
-      {action && <div className="mt-6">{action}</div>}
+      {action && <div className="mt-6 flex justify-center">{action}</div>}
     </section>
   )
 }
+
 export function Notice({
   children,
   error = false,
