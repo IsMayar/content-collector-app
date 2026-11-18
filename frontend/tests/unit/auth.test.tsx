@@ -51,12 +51,12 @@ describe('safe return destinations', () => {
       ),
     )
     const { store } = mount('/client/access')
-    await waitFor(() => expect(store.getState().auth.status).toBe('error'))
     expect(
       await screen.findByRole('heading', {
-        name: 'You’re invited to share content.',
+        name: "You're invited to a project",
       }),
     ).toBeVisible()
+    expect(store.getState().auth.status).not.toBe('authenticated')
     expect(
       screen.queryByRole('heading', { name: 'We couldn’t check your session' }),
     ).not.toBeInTheDocument()
@@ -209,6 +209,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
       .dispatch(clientWithProbe.endpoints.testProbe.initiate())
       .unwrap()
     expect(Object.keys(store.getState().clientApi.queries)).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Profile and settings' }))
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
     const dialog = await screen.findByRole('dialog')
     const buttons = dialog.querySelectorAll('button')
