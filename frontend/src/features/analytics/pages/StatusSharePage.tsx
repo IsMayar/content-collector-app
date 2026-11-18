@@ -84,7 +84,7 @@ export function StatusSharePage() {
           {exchangeState.isLoading || countsState.isFetching
             ? 'Loading progress…'
             : readToken
-              ? 'Refresh progress'
+              ? 'Refresh counts'
               : 'View shared status'}
         </button>
 
