@@ -190,6 +190,6 @@ it('does not display or copy stale revision data and does not offer reviewer dec
     screen.getByRole('button', { name: 'Copy submitted answer' }),
   ).toBeVisible()
   expect(
-    screen.queryByRole('button', { name: 'Approve', exact: true }),
+    screen.queryByRole('button', { name: 'Approve' }),
   ).not.toBeInTheDocument()
 })
