@@ -139,12 +139,7 @@ describe('T14 client portal foundation', () => {
       screen.getByText('Describe your business in a few sentences.'),
     ).toBeVisible()
     expect(screen.getByText('Required', { exact: true })).toBeVisible()
-    await userEvent.click(
-      screen.getByRole('button', { name: /Business introduction/ }),
-    )
-    expect(
-      screen.getByRole('textbox', { name: 'Business introduction' }),
-    ).toBeDisabled()
+    expect(screen.getByLabelText('Your response')).toBeDisabled()
     expect(
       screen.queryByRole('button', { name: /save|submit|upload/i }),
     ).not.toBeInTheDocument()
@@ -377,7 +372,7 @@ describe('T15 persisted collection portal', () => {
       collectionSchema.parse(data).sections[0].items[0].comments[0].body,
     ).toBe('Please clarify your services.')
   })
-  it('renders acknowledged persisted answers and no future submit action', () => {
+  it('renders acknowledged persisted answers and no future submit action', async () => {
     clearPendingDrafts()
     const data = collection(true)
     render(
