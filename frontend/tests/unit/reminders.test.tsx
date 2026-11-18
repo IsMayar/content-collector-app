@@ -120,7 +120,7 @@ it('live email preferences never expose unimplemented SMS controls', async () =>
   expect(
     screen.queryByRole('button', { name: 'Opt out of SMS' }),
   ).not.toBeInTheDocument()
-  await userEvent.click(screen.getByLabelText('Email reminders'))
+  await userEvent.click(screen.getByRole('switch', { name: /Email reminders/ }))
   await userEvent.click(
     screen.getByRole('button', { name: 'Save preferences' }),
   )
@@ -152,7 +152,11 @@ it('uses recipient consent and catalog confirmation route without showing a synt
     .mockResolvedValueOnce({ verificationId: 'verification' })
     .mockResolvedValueOnce({ smsStatus: 'VERIFIED_OPTED_IN' })
   render(<ClientPreferences root="client/projects/p" />)
-  expect(screen.getByText(/2 used, 1 reserved of 25/)).toBeInTheDocument()
+  await userEvent.click(screen.getByText('Text message allowance'))
+  expect(screen.getByText('Used')).toBeVisible()
+  expect(screen.getByText('Reserved')).toBeVisible()
+  expect(screen.getByText('Allowance')).toBeVisible()
+  expect(screen.getByText('25')).toBeVisible()
   await userEvent.type(
     screen.getByLabelText('US mobile number'),
     '+12025550123',
@@ -173,7 +177,7 @@ it('uses recipient consent and catalog confirmation route without showing a synt
     await screen.findByLabelText('Verification code'),
     '654321',
   )
-  await userEvent.click(screen.getByRole('button', { name: /^Verify$/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Verify number' }))
   expect(mocks.run).toHaveBeenLastCalledWith(
     'client/projects/p/sms/verification/confirm',
     { verificationId: 'verification', code: '654321' },
@@ -202,7 +206,7 @@ it('does not report SMS consent success when the server rejects confirmation', a
     await screen.findByLabelText('Verification code'),
     '000000',
   )
-  await userEvent.click(screen.getByRole('button', { name: /^Verify$/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Verify number' }))
   expect(
     screen.queryByText('Your phone is verified and SMS reminders are enabled.'),
   ).not.toBeInTheDocument()
@@ -215,7 +219,7 @@ it('email opt-out remains independent of SMS timezone enrollment', async () => {
     preferences: { emailEnabled: false, timezone: null },
   })
   render(<ClientPreferences root="client/projects/p" />)
-  await userEvent.click(screen.getByLabelText('Email reminders'))
+  await userEvent.click(screen.getByRole('switch', { name: /Email reminders/ }))
   await userEvent.click(
     screen.getByRole('button', { name: 'Save preferences' }),
   )
