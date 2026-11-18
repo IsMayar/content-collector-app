@@ -209,7 +209,9 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
       .dispatch(clientWithProbe.endpoints.testProbe.initiate())
       .unwrap()
     expect(Object.keys(store.getState().clientApi.queries)).toHaveLength(1)
-    await user.click(screen.getByRole('button', { name: 'Profile and settings' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Profile and settings' }),
+    )
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
     const dialog = await screen.findByRole('dialog')
     const buttons = dialog.querySelectorAll('button')

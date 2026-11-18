@@ -185,10 +185,10 @@ it('does not display or copy stale revision data and does not offer reviewer dec
       data={data([submitted])}
     />,
   )
+  expect(screen.getByText(/First paragraph/)).toBeVisible()
   expect(
-    screen.getByText(/First paragraph/),
+    screen.getByRole('button', { name: 'Copy submitted answer' }),
   ).toBeVisible()
-  expect(screen.getByRole('button', { name: 'Copy submitted answer' })).toBeVisible()
   expect(
     screen.queryByRole('button', { name: 'Approve', exact: true }),
   ).not.toBeInTheDocument()

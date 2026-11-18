@@ -91,11 +91,11 @@ it('requires explicit confirmation and server acknowledgment for an exact approv
   )
   mount()
   expect(screen.getByText('Exact immutable submission')).toBeVisible()
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Approve' }),
-  )
+  await userEvent.click(screen.getByRole('button', { name: 'Approve' }))
   expect(mocks.run).not.toHaveBeenCalled()
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
+  await userEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }),
+  )
   expect(
     screen.queryByText('Exact submitted revision approved.'),
   ).not.toBeInTheDocument()
@@ -132,9 +132,7 @@ it('requires client-visible feedback and retains the same key on uncertain retri
 })
 it('does not permit decisions on a historical revision or an approved item', () => {
   const view = mount({ currentRevisionId: id })
-  expect(
-    screen.getByRole('button', { name: 'Approve' }),
-  ).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
   view.unmount()
   mount({ state: 'APPROVED' as typeof item.state })
   expect(screen.getByRole('button', { name: 'Request changes' })).toBeDisabled()
@@ -148,10 +146,10 @@ it('rejects incompatible decision responses rather than claiming success', async
     decision: { ...result.decision, revisionId: id },
   })
   mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Approve' }))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve' }),
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }),
   )
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
   await waitFor(() =>
     expect(
       screen.getAllByText(/response could not be verified/).length,
@@ -193,10 +191,10 @@ it('rejects a response whose item state contradicts the confirmed decision', asy
     item: { ...result.item, state: 'CHANGES_REQUESTED' },
   })
   mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Approve' }))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Approve' }),
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }),
   )
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approve' }))
   await waitFor(() =>
     expect(
       screen.getAllByText(/response could not be verified/).length,
