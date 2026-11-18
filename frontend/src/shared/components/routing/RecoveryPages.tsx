@@ -1,4 +1,5 @@
 import { Button } from '@heroui/react'
+import { ArrowLeft, FileQuestion } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 
 export function WelcomePage() {
@@ -54,12 +55,32 @@ export function AboutPage() {
 }
 export function NotFoundPage() {
   return (
-    <section className="welcome-panel">
-      <h1>Page not found</h1>
-      <p className="intro">This address does not have a page.</p>
-      <Link className="text-link mt-8 inline-block" to="/">
-        Back to welcome
-      </Link>
-    </section>
+    <div className="mx-auto flex w-full max-w-2xl items-center justify-center px-5 py-14 sm:px-8 sm:py-20">
+      <section
+        aria-labelledby="not-found-title"
+        className="w-full rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm sm:p-12"
+      >
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <FileQuestion size={27} aria-hidden="true" />
+        </div>
+        <p className="mt-6 text-xs font-semibold uppercase tracking-widest text-blue-700">
+          Page unavailable
+        </p>
+        <h1 id="not-found-title" className="mt-2 text-[28px] font-bold tracking-tight text-[#0A1A2F] sm:text-[34px]">
+          Page not found
+        </h1>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
+          This address doesn't match an available page. Check the link or return
+          to the homepage.
+        </p>
+        <Link
+          to="/"
+          className="mt-7 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        >
+          <ArrowLeft size={16} aria-hidden="true" />
+          Back to homepage
+        </Link>
+      </section>
+    </div>
   )
 }
