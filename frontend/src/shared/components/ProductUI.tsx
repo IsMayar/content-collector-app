@@ -178,24 +178,4 @@ export function Empty({
       )}
     </section>
   )
-}: {
-  title: string
-  description: string
-  to?: string
-  label?: string
-}) {
-  return (
-    <div className="product-empty">
-      <span className="empty-symbol" aria-hidden="true">
-        ◇
-      </span>
-      <h2>{title}</h2>
-      <p>{description}</p>
-      {to && (
-        <Link className="primary-button" to={to}>
-          {label}
-        </Link>
-      )}
-    </div>
-  )
 }
