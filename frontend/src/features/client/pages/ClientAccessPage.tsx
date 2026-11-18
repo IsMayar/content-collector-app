@@ -116,7 +116,7 @@ export function ClientAccessPage() {
   }
 
   return (
-    <main className="w-full bg-[#F8FAFC] px-4 py-6 sm:py-10">
+    <div className="w-full py-1 sm:py-4">
       <section
         aria-labelledby="client-access-heading"
         className="mx-auto w-full max-w-[420px] rounded-xl border border-slate-200 bg-white px-5 py-6 shadow-sm sm:px-7 sm:py-7"
@@ -287,6 +287,6 @@ export function ClientAccessPage() {
           <span>Private project access</span>
         </div>
       </section>
-    </main>
+    </div>
   )
 }
