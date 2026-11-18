@@ -15,7 +15,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    // Frontend smoke and integration scripts run under Node.js.
+    // Frontend integration tests and smoke scripts use Node.js globals.
     files: ['tests/integration/**/*.mjs', 'scripts/**/*.mjs'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
