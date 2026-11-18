@@ -139,7 +139,8 @@ describe('T14 client portal foundation', () => {
       screen.getByText('Describe your business in a few sentences.'),
     ).toBeVisible()
     expect(screen.getByText('Required', { exact: true })).toBeVisible()
-    expect(screen.getByLabelText('Your response')).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: /Business introduction/ }))
+    expect(screen.getByRole('textbox', { name: 'Business introduction' })).toBeDisabled()
     expect(
       screen.queryByRole('button', { name: /save|submit|upload/i }),
     ).not.toBeInTheDocument()
@@ -259,7 +260,8 @@ describe('T14 client portal foundation', () => {
         name: 'Open my project',
       }),
     ).toBeVisible()
-    expect(screen.getByLabelText('Project ID')).toHaveValue(projectId)
+    expect(screen.queryByLabelText('Project ID')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open my project' })).toBeVisible()
   })
   it('offers client-specific expiry recovery without an agency sign-in redirect or raw server detail', () => {
     const message = errorMessage({
@@ -328,7 +330,7 @@ describe('T14 client portal foundation', () => {
       release()
     }
     await screen.findByRole('heading', {
-      name: 'Let’s reconnect to your project',
+      name: 'Reconnect to your project',
     })
   })
 })
@@ -379,10 +381,11 @@ describe('T15 persisted collection portal', () => {
         </MemoryRouter>
       </Provider>,
     )
-    expect(screen.getByLabelText('Your response')).toHaveValue(
+    await userEvent.click(screen.getByRole('button', { name: /Business introduction/ }))
+    expect(screen.getByRole('textbox', { name: 'Business introduction' })).toHaveValue(
       'Restored from PostgreSQL',
     )
-    expect(screen.getByRole('status')).toHaveTextContent('Saved')
+    expect(screen.getByText('Saved')).toBeVisible()
     expect(
       screen.queryByRole('button', { name: /Submit for review/ }),
     ).not.toBeInTheDocument()
@@ -422,13 +425,14 @@ describe('T15 persisted collection portal', () => {
       </Provider>,
     )
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText('Your response'), 'A real draft')
-    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await user.click(screen.getByRole('button', { name: /Business introduction/ }))
+    await user.type(screen.getByRole('textbox', { name: 'Business introduction' }), 'A real draft')
+    await user.tab()
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent('Saved at'),
+      expect(screen.getByText(/Saved at/)).toBeVisible(),
     )
     expect(writes).toBe(1)
-    expect(screen.getByLabelText('Your response')).toHaveValue('A real draft')
+    expect(screen.getByRole('textbox', { name: 'Business introduction' })).toHaveValue('A real draft')
     clearPendingDrafts()
   })
   it('keeps read-only lifecycle fields disabled', () => {
@@ -443,9 +447,10 @@ describe('T15 persisted collection portal', () => {
         </MemoryRouter>
       </Provider>,
     )
-    expect(screen.getByLabelText('Your response')).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: /Business introduction/ }))
+    expect(screen.getByRole('textbox', { name: 'Business introduction' })).toBeDisabled()
     expect(
-      screen.queryByRole('button', { name: 'Save draft' }),
+      screen.queryByRole('button', { name: 'Review and submit' }),
     ).not.toBeInTheDocument()
     clearPendingDrafts()
   })
