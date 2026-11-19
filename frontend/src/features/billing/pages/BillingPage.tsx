@@ -184,8 +184,8 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
           until{' '}
           {current.readOnlyEndsAt
             ? new Date(current.readOnlyEndsAt).toLocaleDateString()
-            : 'the end of the access period'}.
-          {' '}Manage billing to restore access.
+            : 'the end of the access period'}
+          . Manage billing to restore access.
         </Notice>
       ) : (
         <SubscriptionNotice subscription={current} />
@@ -306,9 +306,8 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
                 {},
                 'POST',
                 {
-                  'Idempotency-Key': (checkoutKeys.current[
-                    `${id}:portal`
-                  ] ??= crypto.randomUUID()),
+                  'Idempotency-Key': (checkoutKeys.current[`${id}:portal`] ??=
+                    crypto.randomUUID()),
                 },
               )
               if (result) hosted(result.url)

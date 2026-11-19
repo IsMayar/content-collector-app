@@ -260,9 +260,7 @@ export function ContactsPanel({
               icon={Info}
               title="Publish this project before inviting clients."
             >
-              {missing.length > 0 && (
-                <>Still needed: {missing.join(', ')}. </>
-              )}
+              {missing.length > 0 && <>Still needed: {missing.join(', ')}. </>}
               You can save a contact now and send the invitation after
               publishing.
             </Callout>
