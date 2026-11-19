@@ -172,6 +172,7 @@ function buildDefinition({
   }
 
   if (type === 'REPEATER') {
+    // Keep React-only IDs out of the persisted repeater schema.
     validation.columns = columns.map(({ uid, ...column }) => {
       void uid
       return column
