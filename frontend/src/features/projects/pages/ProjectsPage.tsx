@@ -125,7 +125,11 @@ export function ProjectsPage() {
         ) : (
           <Empty
             title="No projects found"
-            description="Try another filter, or start a fresh collection."
+            description={
+              owner
+                ? 'Try another filter, or start a fresh collection.'
+                : 'Try another filter. If no projects are assigned to you yet, ask your workspace owner for access.'
+            }
             to={owner ? `${base}/projects/new` : undefined}
             label="New project"
           />

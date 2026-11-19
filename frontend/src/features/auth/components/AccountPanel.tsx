@@ -1,20 +1,30 @@
 import { env } from '@/config/env'
-import { ArrowUpRight } from 'lucide-react'
 import { authApi } from '@/features/auth/api/authApi'
 import { identityReceived } from '@/features/auth/store/authSlice'
 import { Notice } from '@/shared/components/Feedback'
-import { Badge, ErrorNotice, Field, Panel } from '@/shared/components/ProductUI'
+import { ErrorNotice } from '@/shared/components/ProductUI'
 import { useAppDispatch } from '@/shared/hooks/useAppStore'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
+import { ArrowUpRight, LockKeyhole, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
+
+const inputClass =
+  'mt-1.5 h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15'
+
+const buttonClass =
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
+
+const primaryClass =
+  'inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50'
 
 export function AccountPanel() {
   const { user } = useWorkspace()
   const command = useCommand()
   const dispatch = useAppDispatch()
   const [message, setMessage] = useState('')
+
   const initials =
     user?.displayName
       ?.trim()
@@ -24,174 +34,177 @@ export function AccountPanel() {
       .join('')
       .toUpperCase() || 'U'
 
-  if (!env.mocksEnabled) {
-    return (
-      <div className="space-y-5">
-        <Panel title="Profile">
-          <div className="space-y-5">
-            <div className="flex min-w-0 items-center gap-3">
-              <span
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700"
-                aria-hidden="true"
-              >
-                {initials}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-semibold text-slate-950">
-                  {user?.displayName}
-                </p>
-                <p className="mt-0.5 break-all text-sm text-slate-500">
-                  {user?.email}
-                </p>
-              </div>
-              <Badge>{user?.verified ? 'VERIFIED' : 'UNVERIFIED'}</Badge>
-            </div>
-            <p className="border-t border-slate-100 pt-4 text-xs text-slate-500">
-              Your profile details are currently managed through your account.
-            </p>
-          </div>
-        </Panel>
-
-        <Panel title="Password">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-900">
-                Change your password
-              </p>
-              <p className="mt-1 text-sm leading-5 text-slate-500">
-                Use the secure reset flow to set a new password.
-              </p>
-            </div>
-            <Link
-              to="/forgot-password"
-              className="secondary-button inline-flex shrink-0 items-center justify-center gap-2"
-            >
-              Reset password <ArrowUpRight size={15} aria-hidden="true" />
-            </Link>
-          </div>
-        </Panel>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-5">
-      <Panel title="Profile">
-        <div className="space-y-5">
-          <div className="flex min-w-0 items-center gap-3 border-b border-slate-100 pb-5">
-            <span
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700"
-              aria-hidden="true"
-            >
-              {initials}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-semibold text-slate-950">
-                {user?.displayName}
-              </p>
-              <p className="mt-0.5 break-all text-sm text-slate-500">
-                {user?.email}
-              </p>
-            </div>
-            <Badge>{user?.verified ? 'VERIFIED' : 'UNVERIFIED'}</Badge>
-          </div>
+    <section
+      aria-labelledby="account-profile-security"
+      className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <UserRound size={20} aria-hidden="true" />
+        </span>
 
-          <form
-            className="space-y-5"
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const f = new FormData(e.currentTarget)
-              if (
-                await command.run(
-                  'me/profile',
-                  { displayName: f.get('name') },
-                  'PATCH',
-                )
-              ) {
-                dispatch(
-                  identityReceived(
-                    await dispatch(
-                      authApi.endpoints.me.initiate(undefined, {
-                        forceRefetch: true,
-                      }),
-                    ).unwrap(),
-                  ),
-                )
-                setMessage('Profile saved.')
-              }
-            }}
+        <div>
+          <h2
+            id="account-profile-security"
+            className="text-lg font-semibold text-[#0A1A2F]"
           >
-            <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-              <div className="min-w-0">
-                <Field label="Full name">
-                  <input
-                    name="name"
-                    defaultValue={user?.displayName}
-                    required
-                    maxLength={100}
-                    className="!h-11 !w-full !rounded-lg !border !border-slate-300 !bg-white !px-3 !text-sm focus:!border-blue-600 focus:!outline-none focus:!ring-2 focus:!ring-blue-600/15"
-                  />
-                </Field>
-              </div>
-              <div className="min-w-0">
-                <Field label="Email address">
-                  <input
-                    type="email"
-                    value={user?.email || ''}
-                    readOnly
-                    className="!h-11 !w-full !rounded-lg !border !border-slate-200 !bg-slate-50 !px-3 !text-sm !text-slate-600"
-                  />
-                </Field>
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="primary-button"
-                disabled={command.pending}
-              >
-                Save profile
-              </button>
-            </div>
-          </form>
-        </div>
-      </Panel>
+            Profile &amp; security
+          </h2>
 
-      <Panel title="Password">
+          <p className="mt-1 text-sm text-slate-500">
+            Your account details and password settings.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex min-w-0 flex-wrap items-center gap-3">
+        <span
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-base font-semibold text-blue-700"
+          aria-hidden="true"
+        >
+          {initials}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-semibold text-slate-900">
+            {user?.displayName}
+          </p>
+          <p className="mt-0.5 break-all text-sm text-slate-500">
+            {user?.email}
+          </p>
+        </div>
+
+        <span
+          className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+            user?.verified
+              ? 'bg-emerald-50 text-emerald-700'
+              : 'bg-amber-50 text-amber-700'
+          }`}
+        >
+          {user?.verified ? 'Verified' : 'Unverified'}
+        </span>
+      </div>
+
+      {env.mocksEnabled && (
         <form
-          className="space-y-5"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            const form = e.currentTarget,
-              f = new FormData(form)
+          className="mt-5 border-t border-slate-200 pt-5"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            const fields = new FormData(event.currentTarget)
+
             if (
-              await command.run('me/password', {
-                currentPassword: f.get('current'),
-                newPassword: f.get('next'),
-              })
+              await command.run(
+                'me/profile',
+                { displayName: fields.get('name') },
+                'PATCH',
+              )
             ) {
-              form.reset()
-              setMessage('Password updated.')
+              const result = await dispatch(
+                authApi.endpoints.me.initiate(undefined, {
+                  forceRefetch: true,
+                }),
+              ).unwrap()
+
+              dispatch(identityReceived(result))
+              setMessage('Profile saved.')
             }
           }}
         >
-          <p className="text-sm leading-5 text-slate-500">
-            Choose a new password to keep your account secure.
-          </p>
-          <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-            <div className="min-w-0">
-              <Field label="Current password">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-800">
+              Full name
+              <input
+                name="name"
+                required
+                maxLength={100}
+                defaultValue={user?.displayName}
+                className={inputClass}
+              />
+            </label>
+
+            <label className="text-sm font-medium text-slate-800">
+              Email address
+              <input
+                type="email"
+                value={user?.email || ''}
+                readOnly
+                className={`${inputClass} bg-slate-50 text-slate-500`}
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 flex justify-end">
+            <button
+              type="submit"
+              className={primaryClass}
+              disabled={command.pending}
+            >
+              Save profile
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="mt-5 border-t border-slate-200 pt-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+              <LockKeyhole size={17} aria-hidden="true" />
+            </span>
+
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Password</h3>
+
+              <p className="mt-1 text-sm leading-5 text-slate-500">
+                {env.mocksEnabled
+                  ? 'Update your password using the fields below.'
+                  : 'Set a new password through the secure reset process.'}
+              </p>
+            </div>
+          </div>
+
+          {!env.mocksEnabled && (
+            <Link to="/forgot-password" className={`${buttonClass} shrink-0`}>
+              Reset password
+              <ArrowUpRight size={15} aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+
+        {env.mocksEnabled && (
+          <form
+            className="mt-4"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              const form = event.currentTarget
+              const fields = new FormData(form)
+
+              if (
+                await command.run('me/password', {
+                  currentPassword: fields.get('current'),
+                  newPassword: fields.get('next'),
+                })
+              ) {
+                form.reset()
+                setMessage('Password updated.')
+              }
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-medium text-slate-800">
+                Current password
                 <input
                   required
                   name="current"
                   type="password"
                   autoComplete="current-password"
-                  className="!h-11 !w-full !rounded-lg !border !border-slate-300 !bg-white !px-3 !text-sm focus:!border-blue-600 focus:!outline-none focus:!ring-2 focus:!ring-blue-600/15"
+                  className={inputClass}
                 />
-              </Field>
-            </div>
-            <div className="min-w-0">
-              <Field label="New password">
+              </label>
+
+              <label className="text-sm font-medium text-slate-800">
+                New password
                 <input
                   required
                   name="next"
@@ -199,25 +212,32 @@ export function AccountPanel() {
                   minLength={12}
                   maxLength={128}
                   autoComplete="new-password"
-                  className="!h-11 !w-full !rounded-lg !border !border-slate-300 !bg-white !px-3 !text-sm focus:!border-blue-600 focus:!outline-none focus:!ring-2 focus:!ring-blue-600/15"
+                  className={inputClass}
                 />
-              </Field>
+              </label>
             </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">12–128 characters</p>
-            <button
-              type="submit"
-              className="primary-button"
-              disabled={command.pending}
-            >
-              Update password
-            </button>
-          </div>
-        </form>
-      </Panel>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">12–128 characters</span>
+
+              <button
+                type="submit"
+                className={primaryClass}
+                disabled={command.pending}
+              >
+                Update password
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
       <ErrorNotice error={command.error} />
-      {message && <Notice>{message}</Notice>}
-    </div>
+      {message && (
+        <div className="mt-4">
+          <Notice>{message}</Notice>
+        </div>
+      )}
+    </section>
   )
 }

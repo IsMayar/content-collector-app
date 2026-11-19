@@ -41,16 +41,24 @@ export function TeamInvitationPage() {
       ) : auth.status !== 'authenticated' ? (
         <>
           <Notice>
-            Sign in to your verified agency account before accepting this
-            invitation. The invitation will remain available in this tab.
+            Sign in with the email address that received this invitation. The
+            invitation will remain available in this tab.
           </Notice>
           <Link className={actionClass} to="/sign-in?returnTo=%2Fteam-invite">
             Sign in to accept
           </Link>
+          <p className="mt-3 text-sm text-slate-600">
+            New here?{' '}
+            <Link to="/sign-up" className="font-medium text-blue-700">
+              Create an account
+            </Link>
+            , verify your email, then return to this invitation in this tab.
+          </p>
         </>
       ) : !auth.user?.verified ? (
         <Notice error>
-          Verify your email before accepting this invitation.
+          Verify your email before accepting this invitation.{' '}
+          <Link to="/verify-email">Verify email</Link>
         </Notice>
       ) : (
         <>
@@ -59,6 +67,10 @@ export function TeamInvitationPage() {
             <span className="font-medium text-slate-900">
               {auth.user.email}
             </span>
+          </p>
+          <p className="mb-3 text-xs text-slate-500">
+            If this invitation has expired, was revoked, or has already been
+            used, ask the workspace owner for a new invitation.
           </p>
           <AuthForm
             schema={tokenInputSchema}

@@ -7,8 +7,10 @@ export interface FieldDefinition {
   label: string
   type?: 'email' | 'password' | 'text'
   autoComplete?: string
+  placeholder?: string
   hint?: string
 }
+
 export function FormField({
   field,
   registration,
@@ -20,19 +22,24 @@ export function FormField({
 }) {
   const [visible, setVisible] = useState(false)
   const id = useId()
-  const { label, type = 'text', hint } = field
+
+  const { label, type = 'text', hint, placeholder } = field
+
   return (
     <div className="form-field">
       <label htmlFor={id}>{label}</label>
+
       <div className={`input-wrap ${type === 'email' ? 'has-input-icon' : ''}`}>
         {type === 'email' && (
           <Mail className="input-icon" size={17} aria-hidden="true" />
         )}
+
         <input
           {...registration}
           id={id}
           type={type === 'password' && visible ? 'text' : type}
           autoComplete={field.autoComplete}
+          placeholder={placeholder}
           aria-invalid={!!error}
           aria-describedby={
             [hint && `${id}-hint`, error && `${id}-error`]
@@ -40,6 +47,7 @@ export function FormField({
               .join(' ') || undefined
           }
         />
+
         {type === 'password' && (
           <button
             type="button"
@@ -48,15 +56,21 @@ export function FormField({
             aria-controls={id}
             onClick={() => setVisible(!visible)}
           >
-            {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+            {visible ? (
+              <EyeOff size={18} aria-hidden="true" />
+            ) : (
+              <Eye size={18} aria-hidden="true" />
+            )}
           </button>
         )}
       </div>
+
       {hint && (
         <p id={`${id}-hint`} className="field-hint">
           {hint}
         </p>
       )}
+
       {error && (
         <p id={`${id}-error`} className="form-field-error">
           {error}

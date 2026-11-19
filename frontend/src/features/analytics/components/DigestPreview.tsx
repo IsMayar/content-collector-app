@@ -1,9 +1,9 @@
 import { useData } from '@/services/api/resourceApi'
 import { Notice } from '@/shared/components/Feedback'
-import { ErrorNotice, Panel, QueryState } from '@/shared/components/ProductUI'
+import { ErrorNotice, QueryState } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
+import { Bell, CalendarDays, ExternalLink, Info, Mail } from 'lucide-react'
 import { useState } from 'react'
-import { ExternalLink, Info } from 'lucide-react'
 
 type Preference = {
   enabled: boolean
@@ -25,192 +25,212 @@ type Preview = {
 
 export function DigestPreview({ workspaceId }: { workspaceId: string }) {
   const root = `workspaces/${workspaceId}`
-
   const settings = useData<Preference>(`${root}/digest-preferences`)
-
-  const q = useData<Preview>(`${root}/digest-preview`)
-
+  const preview = useData<Preview>(`${root}/digest-preview`)
   const command = useCommand()
   const [message, setMessage] = useState('')
 
   return (
-    <Panel title="Daily digest">
-      <div className="space-y-5">
-        {/* Description */}
-        <p className="max-w-2xl text-sm leading-6 text-slate-500">
-          A daily summary of updates across your assigned projects.
-        </p>
+    <section
+      aria-labelledby="daily-digest-heading"
+      className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+    >
+      <header className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          <Bell size={19} aria-hidden="true" />
+        </span>
 
-        {/* Preferences */}
-        <QueryState query={settings}>
-          {settings.data && (
-            <form
-              key={settings.data.version}
-              className="space-y-5"
-              onSubmit={async (e) => {
-                e.preventDefault()
+        <div className="min-w-0">
+          <h2
+            id="daily-digest-heading"
+            className="text-lg font-semibold text-[#0A1A2F]"
+          >
+            Daily digest
+          </h2>
 
-                const form = new FormData(e.currentTarget)
+          <p className="mt-1 text-sm leading-5 text-slate-500">
+            One email with updates from your assigned projects.
+          </p>
+        </div>
+      </header>
 
-                if (
-                  await command.run(
-                    `${root}/digest-preferences`,
-                    {
-                      enabled: form.has('enabled'),
-                      expectedVersion: settings.data!.version,
-                    },
-                    'PUT',
-                  )
-                ) {
-                  setMessage('Daily digest preference saved.')
-                }
-              }}
-            >
-              <div className="border-t border-slate-200" />
+      <QueryState query={settings}>
+        {settings.data && (
+          <form
+            key={settings.data.version}
+            className="mt-5"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              const fields = new FormData(event.currentTarget)
 
-              {/* Daily digest toggle */}
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="min-w-0 flex-1">
+              if (
+                await command.run(
+                  `${root}/digest-preferences`,
+                  {
+                    enabled: fields.has('enabled'),
+                    expectedVersion: settings.data!.version,
+                  },
+                  'PUT',
+                )
+              ) {
+                setMessage('Daily digest preference saved.')
+                void settings.refetch()
+              }
+            }}
+          >
+            <div className="grid items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto]">
+              <div className="flex min-w-0 items-center justify-between gap-4">
+                <div className="min-w-0">
                   <label
                     htmlFor="daily-digest-enabled"
-                    className="block text-sm font-semibold text-slate-900"
+                    className="text-sm font-semibold text-slate-900"
                   >
                     Daily email summary
                   </label>
 
-                  <p className="mt-1 text-sm leading-5 text-slate-500">
-                    Receive one email with updates from projects assigned to
-                    you.
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Turn your daily update on or off.
                   </p>
                 </div>
 
                 <input
                   id="daily-digest-enabled"
+                  name="enabled"
                   type="checkbox"
                   role="switch"
-                  name="enabled"
                   defaultChecked={settings.data.enabled}
-                  className="peer relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-300 outline-none transition-colors checked:bg-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 before:absolute before:left-0.5 before:top-0.5 before:h-5 before:w-5 before:rounded-full before:bg-white before:shadow-sm before:transition-transform checked:before:translate-x-5"
+                  className="relative h-7 w-12 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-300 shadow-inner outline-none transition-colors before:absolute before:left-1 before:top-1 before:h-5 before:w-5 before:rounded-full before:bg-white before:shadow-sm before:transition-transform checked:bg-blue-600 checked:before:translate-x-5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 />
               </div>
 
-              {/* Delivery schedule + Save */}
-              <div className="flex flex-col gap-4 border-t border-slate-100 pt-5 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-500">
-                    Delivery schedule
-                  </p>
+              <div className="flex min-w-0 items-center gap-3 border-slate-200 md:border-l md:pl-4">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600">
+                  <CalendarDays size={18} aria-hidden="true" />
+                </span>
 
-                  <p className="mt-1.5 text-sm font-medium text-slate-900">
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-500">Scheduled delivery</p>
+                  <p className="mt-1 break-words text-sm font-semibold text-slate-900">
                     {settings.data.sendTime}
-                    <span className="mx-2 text-slate-300">·</span>
-                    <span className="break-words">
-                      {settings.data.timezone}
-                    </span>
+                    <span className="px-1 text-slate-300">·</span>
+                    {settings.data.timezone}
                   </p>
                 </div>
-
-                <button
-                  type="submit"
-                  className="primary-button shrink-0"
-                  disabled={command.pending}
-                >
-                  Save preferences
-                </button>
               </div>
-            </form>
-          )}
-        </QueryState>
 
-        {/* Upcoming digest */}
-        <section
-          aria-labelledby="digest-preview-heading"
-          className="space-y-3 border-t border-slate-200 pt-5"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3
-                id="digest-preview-heading"
-                className="text-sm font-semibold text-slate-900"
+              <button
+                type="submit"
+                disabled={command.pending}
+                className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Upcoming digest
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                What your next email will include.
-              </p>
+                {command.pending ? 'Saving…' : 'Save preferences'}
+              </button>
             </div>
+          </form>
+        )}
+      </QueryState>
 
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              Preview
-            </span>
+      <section aria-labelledby="digest-preview-heading" className="mt-6">
+        <div className="mb-3 flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <Mail size={18} aria-hidden="true" />
+          </span>
+
+          <div>
+            <h3
+              id="digest-preview-heading"
+              className="text-sm font-semibold text-slate-900"
+            >
+              Upcoming digest preview
+            </h3>
+
+            <p className="mt-1 text-xs text-slate-500">
+              A preview of the project updates that may appear in your next
+              email.
+            </p>
           </div>
-
-          <QueryState query={q}>
-            {q.data && (
-              <div>
-                {q.data.projects.length > 0 ? (
-                  <div className="divide-y divide-slate-100">
-                    {q.data.projects.map((project, index) => (
-                      <article
-                        key={index}
-                        className="flex flex-col gap-2 py-3 first:pt-1 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <h4 className="break-words text-sm font-medium text-slate-900">
-                            {project.alias}
-                          </h4>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            {project.awaitingReview} awaiting review
-                            <span className="mx-2 text-slate-300">·</span>
-                            {project.clientAction} client actions
-                          </p>
-                        </div>
-
-                        <a
-                          href={project.url}
-                          className="inline-flex shrink-0 items-center gap-1.5 self-start text-xs font-medium text-blue-600 hover:underline sm:self-auto"
-                        >
-                          Open project
-                          <ExternalLink size={13} aria-hidden="true" />
-                        </a>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="py-5 text-sm text-slate-500">
-                    No eligible assigned projects.
-                  </p>
-                )}
-
-                <p className="mt-3 text-xs text-slate-400">
-                  Preview only. No email is sent.
-                </p>
-              </div>
-            )}
-          </QueryState>
-        </section>
-
-        {/* Delivery information */}
-        <div className="flex items-start gap-2 border-t border-slate-100 pt-4">
-          <Info
-            size={15}
-            className="mt-0.5 shrink-0 text-slate-400"
-            aria-hidden="true"
-          />
-
-          <p className="text-xs leading-5 text-slate-500">
-            The digest uses your workspace timezone and replaces duplicate
-            agency item-level notifications. Client reminders remain separate.
-            Delivery requires a configured email service; saving this preference
-            does not enable an email provider.
-          </p>
         </div>
 
-        {/* Existing feedback */}
-        <ErrorNotice error={command.error} />
-        {message && <Notice>{message}</Notice>}
-      </div>
-    </Panel>
+        <QueryState query={preview}>
+          {preview.data && (
+            <>
+              {preview.data.projects.length > 0 ? (
+                <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+                  {preview.data.projects.map((project, index) => (
+                    <article
+                      key={`${project.url}-${index}`}
+                      className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 sm:flex-nowrap"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-semibold text-slate-900">
+                          {project.alias}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-500">
+                          {project.awaitingReview} awaiting review
+                          <span className="mx-2 text-slate-300">·</span>
+                          {project.clientAction} client actions
+                        </p>
+                      </div>
+
+                      <a
+                        href={project.url}
+                        className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-blue-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                      >
+                        Open project
+                        <ExternalLink size={14} aria-hidden="true" />
+                      </a>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  No eligible assigned projects.
+                </p>
+              )}
+
+              <p className="mt-2 text-xs text-slate-500">
+                Preview only. No email is sent.
+              </p>
+            </>
+          )}
+        </QueryState>
+      </section>
+
+      <section
+        aria-labelledby="digest-delivery-heading"
+        className="mt-5 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4"
+      >
+        <Info
+          size={18}
+          className="mt-0.5 shrink-0 text-blue-600"
+          aria-hidden="true"
+        />
+
+        <div className="min-w-0">
+          <h3
+            id="digest-delivery-heading"
+            className="text-sm font-semibold text-slate-900"
+          >
+            About email delivery
+          </h3>
+
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            Uses your workspace timezone and replaces duplicate agency
+            item-level notifications. Client reminders are separate. Email
+            delivery needs a configured provider; this setting does not
+            configure one.
+          </p>
+        </div>
+      </section>
+
+      <ErrorNotice error={command.error} />
+
+      {message && (
+        <div className="mt-4">
+          <Notice>{message}</Notice>
+        </div>
+      )}
+    </section>
   )
 }

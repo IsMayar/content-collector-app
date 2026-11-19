@@ -8,6 +8,15 @@ import type { Client } from '../types/client.types'
 import { ErrorNotice, QueryState } from '@/shared/components/ProductUI'
 import { Notice } from '@/shared/components/Feedback'
 import { z } from 'zod'
+import {
+  AccessCard,
+  Button,
+  CardBody,
+  CardHeader,
+  Field,
+  Skeleton,
+  TextInput,
+} from '@/shared/components/AccessUI'
 
 export function CustomerPanel({
   workspaceId,
@@ -16,158 +25,148 @@ export function CustomerPanel({
   workspaceId: string
   clientId: string
 }) {
-  const [page, setPage] = useState(0),
-    [editing, setEditing] = useState<Client | null>(null),
-    [message, setMessage] = useState('')
-  const query = useCustomers(workspaceId, page),
-    command = useClientCommands()
+  const [page, setPage] = useState(0)
+  const [editing, setEditing] = useState<Client | null>(null)
+  const [message, setMessage] = useState('')
+
+  const query = useCustomers(workspaceId, page)
+  const command = useClientCommands()
   const rename = useForm<z.infer<typeof customerRenameSchema>>({
     resolver: zodResolver(customerRenameSchema),
   })
   const [assigned, setAssigned] = useState<Client | null>(null)
+
   useEffect(() => {
     const customer = query.data?.data.find((c) => c.id === clientId)
-    if (customer) setAssigned(customer)
-    else if (
+    if (customer) {
+      setAssigned(customer)
+    } else if (
       !assigned &&
       query.data &&
       (page + 1) * 12 < query.data.page.totalElements
-    )
+    ) {
       setPage(page + 1)
+    }
   }, [query.data, assigned, page, clientId])
+
+  const startEdit = () => {
+    if (!assigned) return
+    setEditing(assigned)
+    rename.reset({ businessName: assigned.businessName })
+  }
+
+  const onSubmit = rename.handleSubmit(async (values) => {
+    if (!editing) return
+    const ok = await command.renameCustomer(workspaceId, editing.id, {
+      ...values,
+      expectedVersion: editing.version,
+    })
+    if (!ok) return
+    if (editing.id === clientId) {
+      setAssigned({
+        ...editing,
+        businessName: values.businessName,
+        version: editing.version + 1,
+      })
+    }
+    setEditing(null)
+    setMessage('Customer updated.')
+  })
+
+  const businessNameError = rename.formState.errors.businessName?.message
+
   return (
-    <section className="product-panel client-access-customer">
-      <div className="space-y-5">
-        {/* Customer information and inline editing */}
+    <AccessCard aria-label="Customer">
+      <CardHeader
+        icon={Building2}
+        title="Customer"
+        subtitle="The organization this project belongs to."
+        action={
+          assigned && !editing ? (
+            <Button variant="secondary" icon={Pencil} onClick={startEdit}>
+              Edit
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <CardBody>
         {assigned ? (
-          <form
-            onSubmit={rename.handleSubmit(async (values) => {
-              if (!editing) return
+          <form onSubmit={onSubmit} noValidate>
+            <div className="au-customer">
+              <span className="au-customer-emblem" aria-hidden="true">
+                <Building2 size={24} />
+              </span>
 
-              if (
-                await command.renameCustomer(workspaceId, editing.id, {
-                  ...values,
-                  expectedVersion: editing.version,
-                })
-              ) {
-                if (editing.id === clientId) {
-                  setAssigned({
-                    ...editing,
-                    businessName: values.businessName,
-                    version: editing.version + 1,
-                  })
-                }
-
-                setEditing(null)
-                setMessage('Customer updated.')
-              }
-            })}
-          >
-            <dl className="client-access-customer-row">
-              <div className="client-access-customer-icon" aria-hidden="true">
-                <Building2 size={30} />
-              </div>
-              {/* Customer */}
-              <div className="min-w-0">
-                <dt className="mb-2 text-sm font-medium text-slate-500">
-                  Customer
-                </dt>
-
-                <dd className="m-0">
+              <div className="au-customer-fields">
+                <Field
+                  label="Business name"
+                  error={editing ? businessNameError : undefined}
+                >
                   {editing ? (
-                    <div className="space-y-1">
-                      <input
-                        type="text"
-                        aria-label="Business name"
-                        {...rename.register('businessName')}
-                        className="!box-border !h-10 !w-full !rounded-lg !border !border-slate-300 !bg-white !px-3 text-sm font-medium text-slate-900 focus:!border-blue-500 focus:!outline-none focus:!ring-2 focus:!ring-blue-500/20"
-                      />
-
-                      {rename.formState.errors.businessName?.message && (
-                        <p role="alert" className="text-xs text-red-600">
-                          {rename.formState.errors.businessName.message}
-                        </p>
-                      )}
-                    </div>
+                    <TextInput
+                      aria-label="Business name"
+                      autoComplete="organization"
+                      invalid={!!businessNameError}
+                      {...rename.register('businessName')}
+                    />
                   ) : (
-                    <span className="break-words text-sm font-semibold text-slate-900">
-                      {assigned.businessName}
-                    </span>
+                    <p className="au-value-strong">{assigned.businessName}</p>
                   )}
-                </dd>
-              </div>
+                </Field>
 
-              {/* Contact person */}
-              <div className="min-w-0">
-                <dt className="mb-2 text-sm font-medium text-slate-500">
-                  <span className="sr-only">Contact person</span>
-                  <UserRound size={20} aria-hidden="true" />
-                </dt>
-                <dd className="m-0 break-words text-sm font-medium text-slate-900">
-                  {assigned.contactName || 'Not provided'}
-                </dd>
-              </div>
+                <div className="au-grid au-grid--2">
+                  <Field label="Contact person">
+                    <p className="au-value">
+                      <UserRound size={15} aria-hidden="true" />
+                      {assigned.contactName || 'Not provided'}
+                    </p>
+                  </Field>
 
-              {/* Email */}
-              <div className="min-w-0">
-                <dt className="mb-2 text-sm font-medium text-slate-500">
-                  <span className="sr-only">Email address</span>
-                  <Mail size={20} aria-hidden="true" />
-                </dt>
-                <dd className="m-0 break-all text-sm font-medium text-slate-900">
-                  {assigned.email || 'Not provided'}
-                </dd>
-              </div>
-              {!editing && (
-                <div className="client-access-edit">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => {
-                      setEditing(assigned)
-                      rename.reset({ businessName: assigned.businessName })
-                    }}
-                  >
-                    <Pencil size={17} aria-hidden="true" />
-                    Edit
-                  </button>
+                  <Field label="Email address">
+                    <p className="au-value au-value-break">
+                      <Mail size={15} aria-hidden="true" />
+                      {assigned.email || 'Not provided'}
+                    </p>
+                  </Field>
                 </div>
-              )}
-            </dl>
+              </div>
+            </div>
 
-            {/* Inline edit actions */}
             {editing && (
-              <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
-                <button
-                  type="button"
-                  className="secondary-button"
+              <div className="au-actions au-actions--end au-actions--divided">
+                <Button
+                  variant="secondary"
                   disabled={command.pending}
                   onClick={() => setEditing(null)}
                 >
                   Cancel
-                </button>
-
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="primary-button"
+                  variant="primary"
                   disabled={command.pending}
                 >
                   Save changes
-                </button>
+                </Button>
               </div>
             )}
           </form>
         ) : (
           <QueryState query={query}>
-            <p className="py-4 text-sm text-slate-500">
-              Loading the assigned customer…
-            </p>
+            <div className="au-customer au-customer--loading">
+              <Skeleton className="au-skeleton--emblem" />
+              <div className="au-customer-fields">
+                <Skeleton className="au-skeleton--line" />
+                <Skeleton className="au-skeleton--line au-skeleton--short" />
+              </div>
+            </div>
           </QueryState>
         )}
 
         <ErrorNotice error={command.error} />
         {message && <Notice>{message}</Notice>}
-      </div>
-    </section>
+      </CardBody>
+    </AccessCard>
   )
 }

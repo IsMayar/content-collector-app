@@ -29,7 +29,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 10px);
-  width: 310px;
+  width: 270px;
   max-width: calc(100vw - 32px);
   max-height: calc(100dvh - 110px);
   overflow-y: auto;
@@ -42,9 +42,10 @@
   z-index: 80;
 }
 .profile-identity {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
   border-bottom: 1px solid #e2e8f0;
   margin-bottom: 6px;
   overflow-wrap: anywhere;
@@ -65,7 +66,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-radius: 7px;
   text-decoration: none;
   color: inherit;
@@ -73,6 +74,7 @@
   border: 0;
   text-align: left;
 }
+.profile-popover nav a[aria-current='page'],
 .profile-popover nav a:hover,
 .profile-logout:hover {
   background: #edf4ff;
@@ -118,4 +120,10 @@
   .agency-top .workspace-picker select {
     max-width: 78px;
   }
+}
+
+.profile-popover nav a.profile-group-start {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 4px;
+  border-radius: 0 0 7px 7px;
 }

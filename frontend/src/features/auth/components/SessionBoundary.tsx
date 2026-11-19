@@ -15,41 +15,55 @@ export function SessionBoundary() {
   const dispatch = useAppDispatch()
   const status = useAppSelector((s) => s.auth.status)
   const { pathname } = useLocation()
+
+  // Public pages and client access should remain available
+  // independently of agency session initialization.
   const independent =
     pathname === '/' ||
+    pathname === '/how-it-works' ||
     pathname === '/about' ||
     pathname === '/privacy' ||
     pathname === '/terms' ||
     pathname === '/pricing' ||
     pathname.startsWith('/client/') ||
     pathname.startsWith('/status/')
+
   useEffect(() => {
     void dispatch(bootstrapSession())
   }, [dispatch])
+
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return
+
     const channel = new BroadcastChannel('collector-session')
+
     channel.onmessage = (event) => {
       if (event.data === 'logout') {
         dispatch(signedOut())
         dispatch(clearPrivateCaches())
       }
     }
+
     return () => channel.close()
   }, [dispatch])
+
   useEffect(() => {
     if (status !== 'authenticated') return
+
     const refresh = () => {
       void dispatch(refreshIdentity())
     }
+
     window.addEventListener('focus', refresh)
     window.addEventListener('online', refresh)
+
     return () => {
       window.removeEventListener('focus', refresh)
       window.removeEventListener('online', refresh)
     }
   }, [dispatch, status])
-  if (status === 'loading' && !independent)
+
+  if (status === 'loading' && !independent) {
     return (
       <StatePanel
         kind="loading"
@@ -57,7 +71,9 @@ export function SessionBoundary() {
         description="Checking your access securely…"
       />
     )
-  if (status === 'error' && !independent)
+  }
+
+  if (status === 'error' && !independent) {
     return (
       <StatePanel
         kind="error"
@@ -65,6 +81,7 @@ export function SessionBoundary() {
         description="Check your connection, then try again."
         action={
           <button
+            type="button"
             className="secondary-button"
             onClick={() => void dispatch(bootstrapSession())}
           >
@@ -73,6 +90,8 @@ export function SessionBoundary() {
         }
       />
     )
+  }
+
   return (
     <>
       <RouteFocus />
@@ -80,15 +99,19 @@ export function SessionBoundary() {
     </>
   )
 }
+
 export function RequireAgency() {
   const status = useAppSelector((s) => s.auth.status)
   const location = useLocation()
+
   return status === 'authenticated' ? (
     <Outlet />
   ) : (
     <Navigate
       replace
-      to={`/sign-in?returnTo=${encodeURIComponent(safeReturnDestination(location.pathname + location.search))}`}
+      to={`/sign-in?returnTo=${encodeURIComponent(
+        safeReturnDestination(location.pathname + location.search),
+      )}`}
     />
   )
 }

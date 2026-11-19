@@ -3,76 +3,96 @@ import { identityReceived } from '@/features/auth/store/authSlice'
 import type { Member } from '@/features/workspace/types/workspace.types'
 import { useData } from '@/services/api/resourceApi'
 import { ConfirmDialog } from '@/shared/components/Feedback'
-import { ErrorNotice, Field, Panel } from '@/shared/components/ProductUI'
+import { ErrorNotice } from '@/shared/components/ProductUI'
 import { useAppDispatch } from '@/shared/hooks/useAppStore'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
 import { useState } from 'react'
 
+const fieldClass =
+  'mt-1.5 block h-10 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15'
+
 export function OwnershipPanel() {
-  const { id } = useWorkspace(),
-    q = useData<{ data: Member[] }>(`workspaces/${id}/members`),
-    command = useCommand(),
-    dispatch = useAppDispatch()
+  const { id, user } = useWorkspace()
+  const q = useData<{ data: Member[] }>(`workspaces/${id}/members`)
+  const command = useCommand()
+  const dispatch = useAppDispatch()
+
   const [requestKey] = useState(() => crypto.randomUUID())
-  const [member, setMember] = useState(''),
-    [password, setPassword] = useState(''),
-    [confirm, setConfirm] = useState(false)
+  const [member, setMember] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState(false)
+
+  const currentOwner = q.data?.data.find((m) => m.role === 'OWNER')
+
+  const activeMembers =
+    q.data?.data.filter((m) => m.role === 'MEMBER' && m.state === 'ACTIVE') ??
+    []
+
   return (
-    <Panel title="Workspace ownership">
-      <p>
-        Transfer ownership of this workspace. The new owner will manage members,
-        client access, projects and settings.
-      </p>
+    <section aria-label="Workspace ownership" className="min-w-0">
       <form
-        className="stack-form"
-        onSubmit={(e) => {
-          e.preventDefault()
-          setConfirm(true)
+        className="max-w-xl space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (member && password) setConfirm(true)
         }}
       >
-        <div className="form-grid">
-          <Field label="Current owner">
-            <input
-              readOnly
-              value={
-                q.data?.data.find((m) => m.role === 'OWNER')?.user
-                  .displayName || ''
-              }
-            />
-          </Field>
-          <Field label="New owner">
-            <select
-              required
-              value={member}
-              onChange={(e) => setMember(e.target.value)}
-            >
-              <option value="">Choose an active member</option>
-              {q.data?.data
-                .filter((m) => m.role === 'MEMBER' && m.state === 'ACTIVE')
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.user.displayName} ({m.user.email})
-                  </option>
-                ))}
-            </select>
-          </Field>
-        </div>
-        <Field label="Confirm your password">
+        <label className="block text-sm font-medium text-slate-800">
+          Current owner
+          <input
+            readOnly
+            value={currentOwner?.user.displayName || user?.displayName || ''}
+            className={`${fieldClass} cursor-default bg-slate-50 text-slate-700`}
+          />
+        </label>
+
+        <label className="block text-sm font-medium text-slate-800">
+          New owner
+          <select
+            required
+            value={member}
+            onChange={(event) => setMember(event.target.value)}
+            className={fieldClass}
+          >
+            <option value="">Choose an active member</option>
+
+            {activeMembers.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.user.displayName} ({candidate.user.email})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block text-sm font-medium text-slate-800">
+          Confirm your password
           <input
             type="password"
             required
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
+            className={fieldClass}
           />
-        </Field>
-        <div className="modal-actions">
-          <button className="primary-button" disabled={command.pending}>
-            Transfer workspace ownership
-          </button>
-        </div>
+        </label>
+
+        <p className="text-xs leading-5 text-slate-500">
+          The new owner will manage members, client access, projects, and
+          settings. You will become a workspace member after the transfer.
+        </p>
+
+        <ErrorNotice error={command.error} />
+
+        <button
+          type="submit"
+          disabled={command.pending || !member || !password}
+          className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Transfer workspace ownership
+        </button>
       </form>
+
       <ConfirmDialog
         open={confirm}
         title="Transfer workspace ownership?"
@@ -103,17 +123,19 @@ export function OwnershipPanel() {
             ) {
               setPassword('')
               setConfirm(false)
+
               const result = await dispatch(
                 authApi.endpoints.me.initiate(undefined, {
                   forceRefetch: true,
                   subscribe: false,
                 }),
               ).unwrap()
+
               dispatch(identityReceived(result))
             }
           })()
         }
       />
-    </Panel>
+    </section>
   )
 }
