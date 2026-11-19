@@ -12,6 +12,7 @@ import type {
 } from '@/features/structure-editor/types/structure.types'
 
 const mocked = vi.hoisted(() => ({ detail: vi.fn() }))
+
 vi.mock('@/services/api/resourceApi', () => ({
   useData: (path: string, options?: { skip?: boolean }) => ({
     data: !path || options?.skip ? undefined : mocked.detail(path),
@@ -21,6 +22,7 @@ vi.mock('@/services/api/resourceApi', () => ({
     refetch: vi.fn(),
   }),
 }))
+
 vi.mock('@/shared/hooks/useCommand', () => ({
   useCommand: () => ({ run: vi.fn(), pending: false }),
 }))
@@ -51,6 +53,7 @@ const item = (
     : null,
   ...overrides,
 })
+
 const section = (items: Item[]): Section => ({
   id: 'section',
   key: 'section',
@@ -59,6 +62,7 @@ const section = (items: Item[]): Section => ({
   sortOrder: 0,
   items,
 })
+
 const data = (items: Item[]) =>
   ({
     structure: [section(items)],
@@ -67,6 +71,7 @@ const data = (items: Item[]) =>
       permissions: { canReview: false, canManageAccess: false },
     },
   }) as ProjectDetail
+
 const props = {
   root: 'workspaces/workspace/projects/project',
   sectionId: null,
@@ -75,8 +80,10 @@ const props = {
   onSelectSection: vi.fn(),
   onSelectItem: vi.fn(),
 }
+
 const answer =
   '  First paragraph\n\n' + 'Long answer '.repeat(40) + '\n  Last line  '
+
 const submitted = item('Headline', 'SUBMITTED')
 
 function revision(current = submitted.currentRevisionId) {
@@ -104,6 +111,7 @@ it('counts only visible enabled required questions and updates from 0 to 3 and b
     item('hidden', 'SUBMITTED', { visible: false }),
     item('disabled', 'APPROVED', { enabled: false }),
   ]
+
   const states: Item['state'][][] = [
     ['DRAFT', 'NOT_STARTED', 'CHANGES_REQUESTED'],
     ['SUBMITTED', 'NOT_STARTED', 'DRAFT'],
@@ -111,22 +119,33 @@ it('counts only visible enabled required questions and updates from 0 to 3 and b
     ['APPROVED', 'SUBMITTED', 'APPROVED'],
     ['APPROVED', 'CHANGES_REQUESTED', 'DRAFT'],
   ]
+
   const { rerender } = render(<ProjectContent {...props} data={data([])} />)
+
   for (const [index, status] of states.entries()) {
     const items = status
       .map((state, index) => item('Question ' + index, state))
       .concat(fixed)
+
     const count = index === 4 ? 1 : index
+
     expect(sectionSubmissionProgress(section(items))).toEqual({
       total: 3,
       submitted: count,
     })
+
     rerender(<ProjectContent {...props} data={data(items)} />)
+
     const progress = within(
       screen.getByRole('region', { name: 'Product summary' }),
     ).getByText(count + ' of 3 submitted')
-    if (count === 3) expect(progress).toHaveClass('complete')
-    else expect(progress).not.toHaveClass('complete')
+
+    if (count === 3) {
+      expect(progress).toHaveClass('complete')
+    } else {
+      expect(progress).not.toHaveClass('complete')
+    }
+
     expect(
       screen.queryByRole('article', { name: /hidden|disabled/ }),
     ).not.toBeInTheDocument()
@@ -135,13 +154,16 @@ it('counts only visible enabled required questions and updates from 0 to 3 and b
 
 it('copies the complete immutable answer in the expanded view and reports clipboard failures', async () => {
   const user = userEvent.setup()
+
   const copy = vi
     .spyOn(navigator.clipboard, 'writeText')
     .mockResolvedValueOnce()
     .mockRejectedValueOnce(new Error())
+
   mocked.detail.mockImplementation((path: string) =>
     path.endsWith('/rev-Headline') ? revision() : undefined,
   )
+
   render(
     <ProjectContent
       {...props}
@@ -149,13 +171,20 @@ it('copies the complete immutable answer in the expanded view and reports clipbo
       data={data([submitted, item('Draft', 'DRAFT')])}
     />,
   )
+
   const row = within(screen.getByRole('article', { name: 'Headline' }))
   const button = row.getByRole('button', { name: 'Copy submitted answer' })
+
   await user.click(button)
+
   expect(copy).toHaveBeenCalledWith(answer)
+
   await waitFor(() => expect(button).toHaveTextContent('Copied'))
+
   await user.click(button)
+
   expect(await row.findByRole('status')).toHaveTextContent('Unable to copy')
+
   expect(
     mocked.detail.mock.calls.every(([path]) => !path.includes('/Draft/')),
   ).toBe(true)
@@ -167,17 +196,21 @@ it('does not display or copy stale revision data and does not offer reviewer dec
       ? { data: [] }
       : revision('stale'),
   )
+
   const { rerender } = render(
     <ProjectContent {...props} data={data([submitted])} />,
   )
+
   expect(
     screen.queryByRole('button', { name: 'Copy submitted answer' }),
   ).not.toBeInTheDocument()
+
   mocked.detail.mockImplementation((path: string) =>
     path.endsWith('/revisions') || path.endsWith('/comments')
       ? { data: [] }
       : revision(),
   )
+
   rerender(
     <ProjectContent
       {...props}
@@ -185,11 +218,56 @@ it('does not display or copy stale revision data and does not offer reviewer dec
       data={data([submitted])}
     />,
   )
+
   expect(screen.getByText(/First paragraph/)).toBeVisible()
+
   expect(
     screen.getByRole('button', { name: 'Copy submitted answer' }),
   ).toBeVisible()
+
   expect(
     screen.queryByRole('button', { name: 'Approve' }),
   ).not.toBeInTheDocument()
+})
+
+it('keeps the selected section and mounted review panel when editing is toggled', () => {
+  mocked.detail.mockImplementation((path: string) =>
+    path.endsWith('/rev-Headline') ? revision() : undefined,
+  )
+
+  const propsWithReview = {
+    ...props,
+    data: data([submitted]),
+    itemId: submitted.id,
+    onEdit: vi.fn(),
+  }
+
+  const { rerender } = render(<ProjectContent {...propsWithReview} />)
+
+  const answerNode = screen.getByRole('button', {
+    name: 'Copy submitted answer',
+  })
+
+  expect(screen.getByRole('button', { name: 'Edit request' })).toBeVisible()
+
+  rerender(<ProjectContent {...propsWithReview} editing />)
+
+  expect(screen.getByRole('button', { name: 'Done editing' })).toBeVisible()
+
+  expect(screen.getByRole('button', { name: 'Edit Headline' })).toBeVisible()
+
+  expect(answerNode).toBeInTheDocument()
+  expect(answerNode).not.toBeVisible()
+
+  rerender(<ProjectContent {...propsWithReview} />)
+
+  expect(screen.getByRole('button', { name: 'Copy submitted answer' })).toBe(
+    answerNode,
+  )
+
+  expect(answerNode).toBeVisible()
+
+  expect(
+    screen.getByRole('button', { name: /Product summary/ }),
+  ).toHaveAttribute('aria-current', 'page')
 })

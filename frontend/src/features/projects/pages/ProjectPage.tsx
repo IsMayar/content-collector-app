@@ -1,6 +1,15 @@
-import { AppWindow, CalendarDays, Eye, Layers, UsersRound } from 'lucide-react'
+import {
+  AppWindow,
+  CalendarDays,
+  ChevronRight,
+  Eye,
+  Info,
+  Layers,
+  UsersRound,
+} from 'lucide-react'
 import { StatusShareSettings } from '@/features/analytics/components/StatusShareSettings'
 import { ProjectContent } from '../components/ProjectContent'
+import { ProjectTeamAccess } from '../../workspace/components/ProjectTeamAccess'
 import { useRef } from 'react'
 import { LiveCompletionPanel } from '../components/LiveCompletionPanel'
 import { env } from '@/config/env'
@@ -17,7 +26,6 @@ import {
   ActivityPanel,
   ExportPanel,
 } from '@/features/review/components/ReviewPanels'
-import { StructureEditor } from '@/features/structure-editor/components/StructureEditor'
 import type { TemplateDefinition } from '@/features/templates/types/template.types'
 import { ConfirmDialog, useNotify } from '@/shared/components/Feedback'
 import {
@@ -29,10 +37,18 @@ import {
   Panel,
   QueryState,
 } from '@/shared/components/ProductUI'
+import { Button, Callout, IconTile } from '@/shared/components/AccessUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
 import { useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router'
+
+const PROJECT_TYPE_LABEL: Record<string, string> = {
+  WEBSITE: 'Website',
+  WEB_APP: 'Web app',
+  MOBILE_APP: 'Mobile app',
+}
+
 export function ProjectPage() {
   const { id, base, owner } = useWorkspace()
   const { projectId } = useParams()
@@ -88,12 +104,7 @@ export function ProjectPage() {
             : []
   const secondary = [
     ['activity', 'Activity'],
-    ...(owner
-      ? [
-          ['assignments', 'Assignments'],
-          ['reminders', 'Reminders'],
-        ]
-      : []),
+    ...(owner ? [['reminders', 'Reminders']] : []),
     ['files', 'Files'],
     ...(p?.permissions.canExport ? [['exports', 'Exports']] : []),
     ...(owner
@@ -103,6 +114,7 @@ export function ProjectPage() {
         ]
       : []),
   ]
+
   async function lifecycle() {
     if (!p || lifecycleBusy.current) return
     if (action === 'reopen' && !reason.trim()) {
@@ -153,6 +165,7 @@ export function ProjectPage() {
       lifecycleBusy.current = false
     }
   }
+
   if (
     ['review', 'responses', 'submissions', 'analytics', 'preview'].includes(tab)
   ) {
@@ -168,56 +181,55 @@ export function ProjectPage() {
     return <Navigate replace to={'?' + target.toString()} />
   }
   if (tab === 'assignments' && owner)
-    return (
-      <Navigate
-        replace
-        to={base + '/team?projectId=' + encodeURIComponent(projectId || '')}
-      />
-    )
+    return <Navigate replace to={'?tab=access#team-access'} />
+
   return (
     <QueryState query={{ ...query, isLoading: query.isFetching && !data }}>
       {p && data && (
         <>
           {tab === 'access' ? (
-            <div className="client-access-project-header">
-              <div className="client-access-breadcrumb">
-                <Link to={base + '/projects'}>Projects</Link>
-                <span aria-hidden="true">›</span>
-                <span>{p.title}</span>
-              </div>
-              <div className="client-access-project-summary">
-                <span className="client-access-project-icon" aria-hidden="true">
-                  <AppWindow size={32} />
-                </span>
-                <div className="client-access-project-info">
-                  <div className="client-access-title">
-                    <h1>{p.title}</h1>
+            <div className="au-page-head">
+              <nav className="au-breadcrumb" aria-label="Breadcrumb">
+                <Link to={base + '/projects'} className="au-breadcrumb-link">
+                  Projects
+                </Link>
+                <ChevronRight
+                  size={14}
+                  className="au-breadcrumb-sep"
+                  aria-hidden="true"
+                />
+                <span className="au-breadcrumb-current">{p.title}</span>
+              </nav>
+
+              <div className="au-summary">
+                <IconTile icon={AppWindow} size={22} large />
+                <div className="au-summary-main">
+                  <div className="au-summary-title-row">
+                    <h1 className="au-summary-title">{p.title}</h1>
                     <Badge>{p.state}</Badge>
                   </div>
-                  <div className="client-access-project-meta">
-                    <span>
-                      <CalendarDays size={18} aria-hidden="true" />
+                  <div className="au-summary-meta">
+                    <span className="au-meta-item">
+                      <CalendarDays size={15} aria-hidden="true" />
                       {p.dueDate
                         ? 'Due ' +
                           new Date(p.dueDate + 'T12:00:00').toLocaleDateString(
                             undefined,
-                            { month: 'short', day: 'numeric', year: 'numeric' },
+                            {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            },
                           )
                         : 'No due date'}
                     </span>
-                    <span>
-                      <Layers size={18} aria-hidden="true" />
-                      {
-                        {
-                          WEBSITE: 'Website',
-                          WEB_APP: 'Web app',
-                          MOBILE_APP: 'Mobile app',
-                        }[p.projectType]
-                      }
+                    <span className="au-meta-item">
+                      <Layers size={15} aria-hidden="true" />
+                      {PROJECT_TYPE_LABEL[p.projectType]}
                     </span>
                     {contacts.data && (
-                      <span>
-                        <UsersRound size={18} aria-hidden="true" />
+                      <span className="au-meta-item">
+                        <UsersRound size={15} aria-hidden="true" />
                         {contacts.data.data.length}{' '}
                         {contacts.data.data.length === 1
                           ? 'contact'
@@ -226,16 +238,19 @@ export function ProjectPage() {
                     )}
                   </div>
                 </div>
-                <div className="client-access-header-actions">
-                  <Link className="secondary-button" to="?tab=checklist">
-                    <Eye size={18} aria-hidden="true" />
+                <div className="au-summary-actions">
+                  <Link
+                    className="au-btn au-btn--secondary"
+                    to="?tab=checklist"
+                  >
+                    <Eye size={15} aria-hidden="true" />
                     View project
                   </Link>
                   {owner &&
                     p.permissions.canManageAccess &&
                     p.state === 'DRAFT' && (
-                      <button
-                        className="primary-button"
+                      <Button
+                        variant="primary"
                         disabled={
                           command.pending ||
                           !contacts.data ||
@@ -248,7 +263,7 @@ export function ProjectPage() {
                         }}
                       >
                         Publish project
-                      </button>
+                      </Button>
                     )}
                 </div>
               </div>
@@ -332,9 +347,7 @@ export function ProjectPage() {
             >
               {[
                 ['checklist', 'Content', tab === 'checklist'],
-                ...(owner
-                  ? [['access', 'Client access', tab === 'access']]
-                  : []),
+                ...(owner ? [['access', 'Access', tab === 'access']] : []),
               ].map(([key, label, active]) => (
                 <Link
                   key={String(key)}
@@ -390,16 +403,24 @@ export function ProjectPage() {
               label="Back to content"
             />
           )}
-          {tab === 'checklist' && !editingRequest && (
+          {tab === 'checklist' && (
             <ProjectContent
               key={root}
               data={data}
               root={root}
+              editing={editingRequest}
               sectionId={search.get('section')}
               itemId={search.get('item')}
               revisionId={search.get('revision')}
               onSelectSection={(section) =>
-                setSearch({ tab: 'checklist', section }, { replace: true })
+                setSearch(
+                  {
+                    tab: 'checklist',
+                    section,
+                    ...(editingRequest ? { edit: 'request' } : {}),
+                  },
+                  { replace: true },
+                )
               }
               onSelectItem={(item) => {
                 const section = data.structure.find((s) =>
@@ -416,26 +437,13 @@ export function ProjectPage() {
               }}
               onEdit={
                 canEditRequest
-                  ? () => setSearch({ tab: 'checklist', edit: 'request' })
+                  ? () => {
+                      const next = new URLSearchParams(search)
+                      if (editingRequest) next.delete('edit')
+                      else next.set('edit', 'request')
+                      setSearch(next, { replace: true })
+                    }
                   : undefined
-              }
-            />
-          )}
-          {tab === 'checklist' && editingRequest && (
-            <StructureEditor
-              key={p.id}
-              data={data}
-              root={root}
-              editMode={search.get('edit') === 'request'}
-              onEditMode={(enabled) =>
-                setSearch({
-                  tab: 'checklist',
-                  ...(enabled ? { edit: 'request' } : {}),
-                })
-              }
-              editable={
-                p.permissions.canEditStructure &&
-                ['DRAFT', 'ACTIVE', 'PAUSED'].includes(p.state)
               }
             />
           )}
@@ -454,14 +462,18 @@ export function ProjectPage() {
               />
             ))}
           {tab === 'access' && owner && (
-            <>
-              <div className="project-customer-card">
-                <CustomerPanel
-                  key={p.clientId}
-                  workspaceId={id}
-                  clientId={p.clientId}
-                />
-              </div>
+            <section
+              aria-label="Project access and permissions"
+              className="au-stack"
+            >
+              <Callout icon={Info} title="Access and permissions">
+                Manage who can access this project — clients and team members.
+              </Callout>
+              <CustomerPanel
+                key={p.clientId}
+                workspaceId={id}
+                clientId={p.clientId}
+              />
               <ContactsPanel
                 key={root}
                 unpublished={p.state === 'DRAFT'}
@@ -471,7 +483,10 @@ export function ProjectPage() {
                 canManage={p.permissions.canManageAccess}
                 canInvite={['ACTIVE', 'PAUSED', 'COMPLETED'].includes(p.state)}
               />
-            </>
+              {p.permissions.canManageAccess && (
+                <ProjectTeamAccess root={root} />
+              )}
+            </section>
           )}
           {tab === 'reminders' && owner && <RemindersPanel root={root} />}
           {tab === 'activity' && <ActivityPanel root={root} />}

@@ -136,29 +136,6 @@ export function HelpPage() {
           </p>
         )}
       </div>
-
-      <aside className="mt-8 flex flex-col items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-            <LockKeyhole size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <h2 className="text-[15px] font-semibold text-slate-900">
-              Still need help?
-            </h2>
-            <p className="mt-1 max-w-lg text-[13px] leading-5 text-slate-600">
-              Contact your workspace owner or agency project contact for account
-              and project access assistance.
-            </p>
-          </div>
-        </div>
-        <Link
-          to="/sign-in"
-          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-[13px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-        >
-          Go to sign in
-        </Link>
-      </aside>
     </section>
   )
 }

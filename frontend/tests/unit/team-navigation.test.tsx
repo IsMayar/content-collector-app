@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { OwnershipPanel } from '@/features/workspace/components/OwnershipPanel'
 import { TeamPage } from '@/features/workspace/pages/TeamPage'
 const fake = vi.hoisted(() => ({
   owner: true,
@@ -57,13 +58,12 @@ function show() {
     </MemoryRouter>,
   )
 }
-it('places ownership once below members and retains password and confirmation before mutation', async () => {
+it('retains ownership password and confirmation before mutation', async () => {
   const user = userEvent.setup()
-  show()
+  render(<OwnershipPanel />)
   expect(
-    screen.getAllByRole('heading', { name: 'Workspace ownership' }),
-  ).toHaveLength(1)
-  expect(screen.getByText('Sam')).toBeInTheDocument()
+    screen.getByRole('region', { name: 'Workspace ownership' }),
+  ).toBeVisible()
   await user.selectOptions(screen.getByLabelText('New owner'), 'member')
   await user.type(
     screen.getByLabelText('Confirm your password'),
@@ -90,7 +90,7 @@ it('preserves the invitation form and member removal confirmation', async () => 
   const user = userEvent.setup()
   show()
   await user.click(screen.getByRole('button', { name: /Invite member/ }))
-  const invite = screen.getByRole('dialog', { name: 'Invite a team member' })
+  const invite = screen.getByRole('dialog', { name: 'Invite team member' })
   expect(within(invite).getByLabelText('Teammate email')).toBeInTheDocument()
   await user.click(within(invite).getByRole('button', { name: 'Cancel' }))
   await user.click(screen.getByRole('button', { name: 'Remove access' }))

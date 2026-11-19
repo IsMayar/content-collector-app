@@ -939,37 +939,6 @@
     max-width: 100%;
   }
 }
-.agency-layout:has(
-    .file-gallery,
-    .revision-layout,
-    .export-history,
-    .completion-callout
-  )
-  .agency-sidebar {
-  background: linear-gradient(145deg, #0b2b43, #081b31);
-  border-color: #15344c;
-}
-.agency-layout:has(
-    .file-gallery,
-    .revision-layout,
-    .export-history,
-    .completion-callout
-  )
-  .sidebar-nav
-  a {
-  color: #dbe7f5;
-}
-.agency-layout:has(
-    .file-gallery,
-    .revision-layout,
-    .export-history,
-    .completion-callout
-  )
-  .sidebar-nav
-  a.active {
-  background: #0062ff;
-  color: #fff;
-}
 .file-art img,
 .file-detail-art img {
   width: 100%;

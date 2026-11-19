@@ -104,6 +104,13 @@ const LandingPage = lazy(() =>
     default: m.LandingPage,
   })),
 )
+
+const HowItWorksPage = lazy(() =>
+  import('@/features/public/pages/HowItWorksPage').then((m) => ({
+    default: m.HowItWorksPage,
+  })),
+)
+
 const deferred = (element: React.ReactNode) => (
   <Suspense
     fallback={<StatePanel kind="loading" title="Opening your workspace" />}
@@ -155,6 +162,12 @@ export const routes = [
         element: <PublicLayout />,
         children: [
           { path: '/', element: deferred(<LandingPage />) },
+
+          {
+            path: '/how-it-works',
+            element: deferred(<HowItWorksPage />),
+          },
+
           { path: '/pricing', element: deferred(<PricingPage />) },
           { path: '/status/:shareId', element: deferred(<StatusSharePage />) },
           { path: '/about', element: <HelpPage /> },
@@ -164,6 +177,7 @@ export const routes = [
           { path: '*', element: <NotFoundPage /> },
         ],
       },
+
       {
         element: <DemoLayout />,
         children: [

@@ -12,7 +12,7 @@ import type {
   Item,
   Section,
 } from '@/features/structure-editor/types/structure.types'
-import { Field } from '@/shared/components/ProductUI'
+import { StructureEditor } from '@/features/structure-editor/components/StructureEditor'
 import type { ProjectDetail } from '../types/project.types'
 import './ProjectContent.css'
 
@@ -32,7 +32,7 @@ export function sectionSubmissionProgress(section: Section) {
 
 const statusText = {
   NOT_STARTED: 'Not submitted',
-  DRAFT: 'Not submitted',
+  DRAFT: 'Draft',
   SUBMITTED: 'Submitted',
   APPROVED: 'Approved',
   CHANGES_REQUESTED: 'Changes requested',
@@ -47,6 +47,7 @@ export function ProjectContent({
   onSelectSection,
   onSelectItem,
   onEdit,
+  editing = false,
 }: {
   data: ProjectDetail
   root: string
@@ -55,9 +56,12 @@ export function ProjectContent({
   revisionId: string | null
   onSelectSection: (id: string) => void
   onSelectItem: (id: string | null) => void
+  editing?: boolean
   onEdit?: () => void
 }) {
-  const sections = data.structure.filter((section) => section.enabled)
+  const sections = data.structure.filter(
+    (section) => editing || section.enabled,
+  )
   const selectedSection =
     sections.find((section) =>
       section.items.some(
@@ -85,114 +89,60 @@ export function ProjectContent({
       ? contacts.data?.data.map((contact) => [contact.id, contact.name])
       : [],
   )
+
   return (
-    <div className="project-content">
-      <div className="content-intro">
+    <StructureEditor
+      data={data}
+      root={root}
+      editable={!!onEdit}
+      editMode={editing}
+      onEditMode={() => onEdit?.()}
+      sectionId={selectedSection?.id}
+      onSelectSection={onSelectSection}
+      sectionSummary={(section) => {
+        const p = sectionSubmissionProgress(section)
+        return (
+          <span
+            className={
+              p.total > 0 && p.total === p.submitted
+                ? 'content-progress complete'
+                : 'content-progress'
+            }
+          >
+            {p.submitted} of {p.total} submitted
+          </span>
+        )
+      }}
+      progress={
         <div
-          className="content-overall-progress"
+          className="flex items-center gap-3 text-xs text-slate-500"
           aria-label="Required content progress"
         >
           <span>
             {progress.submitted} of {progress.total} submitted
           </span>
-          <div>
-            <progress
-              max={Math.max(progress.total, 1)}
-              value={progress.submitted}
-              aria-label="Submitted or approved required questions"
-            />
-            <strong>{percent}%</strong>
-          </div>
+          <progress
+            className="h-1.5 w-32"
+            max={Math.max(progress.total, 1)}
+            value={progress.submitted}
+            aria-label="Submitted or approved required questions"
+          />
+          <strong>{percent}%</strong>
         </div>
-        {onEdit && (
-          <button type="button" className="secondary-button" onClick={onEdit}>
-            Edit request
-          </button>
-        )}
-      </div>
-      {selectedSection ? (
-        <div className="content-workbench">
-          <nav aria-label="Content sections" className="content-section-nav">
-            {sections.map((section) => (
-              <button
-                type="button"
-                key={section.id}
-                aria-current={
-                  selectedSection.id === section.id ? 'true' : undefined
-                }
-                onClick={() => onSelectSection(section.id)}
-              >
-                <span>{section.title}</span>
-                <SectionProgress section={section} />
-                <ChevronRight size={18} aria-hidden="true" />
-              </button>
-            ))}
-          </nav>
-          <div className="content-mobile-nav">
-            <Field label="Content section">
-              <select
-                value={selectedSection.id}
-                onChange={(e) => onSelectSection(e.target.value)}
-              >
-                {sections.map((section) => {
-                  const { submitted, total } =
-                    sectionSubmissionProgress(section)
-                  return (
-                    <option key={section.id} value={section.id}>
-                      {section.title} · {submitted} of {total} submitted
-                    </option>
-                  )
-                })}
-              </select>
-            </Field>
-          </div>
-          <section
-            className="content-questions"
-            aria-label={selectedSection.title}
-          >
-            <header>
-              <h2>{selectedSection.title}</h2>
-              <SectionProgress section={selectedSection} />
-            </header>
-            {selectedSection.items
-              .filter((item) => item.visible && item.enabled !== false)
-              .map((item) => (
-                <Question
-                  key={item.id}
-                  root={root}
-                  item={item}
-                  expanded={item.id === itemId}
-                  revisionId={item.id === itemId ? revisionId : null}
-                  onToggle={() =>
-                    onSelectItem(item.id === itemId ? null : item.id)
-                  }
-                  canReview={permissions.canReview}
-                  canMutate={state === 'ACTIVE' || state === 'PAUSED'}
-                  contacts={contactNames}
-                />
-              ))}
-            {!selectedSection.items.some(
-              (item) => item.visible && item.enabled !== false,
-            ) && <p>No visible questions in this section.</p>}
-          </section>
-        </div>
-      ) : (
-        <p>No enabled sections yet.</p>
+      }
+      renderQuestion={(item) => (
+        <Question
+          root={root}
+          item={item}
+          expanded={item.id === itemId}
+          revisionId={item.id === itemId ? revisionId : null}
+          onToggle={() => onSelectItem(item.id === itemId ? null : item.id)}
+          canReview={permissions.canReview}
+          canMutate={state === 'ACTIVE' || state === 'PAUSED'}
+          contacts={contactNames}
+        />
       )}
-    </div>
-  )
-}
-
-function SectionProgress({ section }: { section: Section }) {
-  const { submitted, total } = sectionSubmissionProgress(section)
-  const complete = total > 0 && submitted === total
-  return (
-    <span
-      className={complete ? 'content-progress complete' : 'content-progress'}
-    >
-      {complete && <Check size={14} aria-hidden="true" />}
-      {submitted} of {total} submitted
-    </span>
+    />
   )
 }
 

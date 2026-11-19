@@ -150,9 +150,9 @@ export function DashboardPage() {
               <FolderKanban size={90} />
               <div>
                 <h2>
-                  Your workspace is ready.
-                  <br />
-                  Create your first project
+                  {owner
+                    ? 'Your workspace is ready. Create your first project'
+                    : 'No assigned projects yet'}
                 </h2>
                 <p>
                   Collect client content, keep projects organised, and move

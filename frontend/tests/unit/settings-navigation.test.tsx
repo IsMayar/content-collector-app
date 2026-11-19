@@ -16,6 +16,7 @@ vi.mock('@/shared/hooks/useWorkspace', () => ({
 vi.mock('@/services/api/resourceApi', () => ({
   useData: () => ({ isLoading: false, data: undefined }),
 }))
+vi.mock('@/shared/hooks/useAppStore', () => ({ useAppDispatch: () => vi.fn() }))
 vi.mock('@/shared/hooks/useCommand', () => ({
   useCommand: () => ({ run: vi.fn(), pending: false }),
 }))
@@ -43,6 +44,7 @@ function dropdown(onSignOut = vi.fn()) {
         name="Alex Morgan"
         email="alex@example.test"
         base="/app/w/w"
+        owner
         onSignOut={onSignOut}
       />
       <button>Outside</button>
@@ -54,13 +56,13 @@ it('provides workspace-aware links and closes after Notifications navigation', a
   const user = userEvent.setup()
   dropdown()
   await user.click(screen.getByRole('button', { name: 'Profile and settings' }))
-  expect(screen.getByText('AM')).toBeInTheDocument()
+  expect(screen.getAllByText('AM')).toHaveLength(2)
   expect(screen.getByText('alex@example.test')).toBeInTheDocument()
   expect(screen.getAllByRole('link')).toHaveLength(5)
   expect(screen.queryByRole('link', { name: /team/i })).not.toBeInTheDocument()
   await user.click(screen.getByRole('link', { name: /Notifications/ }))
   expect(screen.getByLabelText('Location')).toHaveTextContent(
-    '/app/w/w/settings?view=account#daily-digest',
+    '/app/w/w/settings?view=notifications',
   )
   expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
 })
@@ -132,6 +134,32 @@ it('focuses the existing Daily digest section from Notifications', () => {
       <SettingsPage />
     </MemoryRouter>,
   )
-  expect(screen.getByRole('region', { name: 'Daily digest' })).toHaveFocus()
-  expect(scroll).toHaveBeenCalled()
+  expect(screen.getByText('Digest controls')).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Notifications' })).toBeVisible()
+})
+
+it('omits owner-only settings destinations for a member', async () => {
+  render(
+    <MemoryRouter>
+      <ProfileDropdown
+        name="Member"
+        email="member@example.test"
+        base="/app/w/w"
+        onSignOut={vi.fn()}
+      />
+    </MemoryRouter>,
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Profile and settings' }),
+  )
+  expect(
+    screen.queryByRole('link', { name: 'Workspace settings' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'Billing & usage' }),
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'My account' })).toHaveAttribute(
+    'href',
+    '/app/w/w/settings?view=account',
+  )
 })

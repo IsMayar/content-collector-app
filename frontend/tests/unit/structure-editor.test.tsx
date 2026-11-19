@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { ItemEditor } from '@/features/structure-editor/components/ItemEditor'
 import type {
@@ -58,6 +58,7 @@ it('uses current section data for newly created conditional controls while the e
       onClose={() => {}}
     />,
   )
+  fireEvent.click(screen.getByText('Advanced settings'))
   expect(
     screen.getByRole('option', { name: 'Newly created control' }),
   ).toHaveValue('new_control')

@@ -19,10 +19,12 @@ function AuthInput({
 }) {
   const id = useId()
   const [showPassword, setShowPassword] = useState(false)
+
   const password = field.type === 'password'
   const mail = field.type === 'email'
   const token = field.name === 'token'
   const leftIcon = mail || token
+
   const inputType = password
     ? showPassword
       ? 'text'
@@ -37,6 +39,7 @@ function AuthInput({
       >
         {field.label}
       </label>
+
       <div className="relative">
         {leftIcon && (
           <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-slate-400">
@@ -47,20 +50,23 @@ function AuthInput({
             )}
           </span>
         )}
+
         <input
           {...registration}
           id={id}
           type={inputType}
           autoComplete={field.autoComplete}
+          placeholder={field.placeholder}
           aria-invalid={Boolean(error)}
           aria-describedby={
             error ? `${id}-error` : field.hint ? `${id}-hint` : undefined
           }
           spellCheck={false}
-          className={`block h-11! w-full min-w-0 rounded-lg border bg-white! py-2.5 text-[14px]! leading-5 text-[#0A1A2F]! shadow-none! placeholder:text-slate-400 focus:border-blue-600! focus:outline-none focus:ring-2 focus:ring-blue-600/15 disabled:bg-slate-50! disabled:text-slate-500 ${
+          className={`block h-11! w-full min-w-0 rounded-lg border bg-white! py-2.5 text-[14px]! leading-5 text-[#0A1A2F]! shadow-none! placeholder:text-slate-400 focus:border-blue-600! focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-600/15 disabled:bg-slate-50! disabled:text-slate-500 ${
             error ? 'border-red-400!' : 'border-slate-300!'
           } ${leftIcon ? 'pl-10' : 'pl-3.5'} ${password ? 'pr-11' : 'pr-3.5'}`}
         />
+
         {password && (
           <button
             type="button"
@@ -71,6 +77,7 @@ function AuthInput({
                 ? `Hide ${field.label.toLowerCase()}`
                 : `Show ${field.label.toLowerCase()}`
             }
+            aria-controls={id}
             aria-pressed={showPassword}
           >
             {showPassword ? (
@@ -81,6 +88,7 @@ function AuthInput({
           </button>
         )}
       </div>
+
       {field.hint && !error && (
         <p
           id={`${id}-hint`}
@@ -89,6 +97,7 @@ function AuthInput({
           {field.hint}
         </p>
       )}
+
       {error && (
         <p
           id={`${id}-error`}
@@ -116,6 +125,7 @@ export function AuthForm({
   onSubmit: (values: Record<string, string>) => Promise<void>
 }) {
   const [problem, setProblem] = useState('')
+
   const {
     register,
     handleSubmit,
@@ -135,11 +145,13 @@ export function AuthForm({
       aria-busy={isSubmitting}
       onSubmit={handleSubmit(async (values) => {
         setProblem('')
+
         try {
           await onSubmit(values)
           reset()
         } catch (error) {
           const detail = apiProblem(error)
+
           setProblem(
             detail.code?.startsWith('TOKEN_')
               ? {
@@ -152,6 +164,7 @@ export function AuthForm({
                 }[detail.code] || 'This link is no longer available.'
               : errorMessage(error),
           )
+
           detail.errors?.forEach((field) => {
             if (
               fields.some((candidate) => candidate.name === field.fieldPath)
@@ -170,6 +183,7 @@ export function AuthForm({
           <Notice error>{problem}</Notice>
         </div>
       )}
+
       <fieldset disabled={isSubmitting} className="min-w-0 space-y-3.5">
         {fields.map((field) => (
           <AuthInput
@@ -179,6 +193,7 @@ export function AuthForm({
             error={errors[field.name]?.message}
           />
         ))}
+
         <button
           type="submit"
           disabled={isSubmitting}

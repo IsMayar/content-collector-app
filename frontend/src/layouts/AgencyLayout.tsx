@@ -137,6 +137,7 @@ export function AgencyLayout() {
             name={state.user?.displayName || 'Your account'}
             email={state.user?.email || ''}
             base={membership ? '/app/w/' + membership.workspaceId : undefined}
+            owner={membership?.role === 'OWNER'}
             onSignOut={() => setConfirm(true)}
           />
         </div>
