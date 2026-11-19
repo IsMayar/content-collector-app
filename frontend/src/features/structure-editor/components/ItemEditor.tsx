@@ -172,7 +172,10 @@ function buildDefinition({
   }
 
   if (type === 'REPEATER') {
-    validation.columns = columns.map(({ uid: _uid, ...column }) => column)
+    validation.columns = columns.map(({ uid, ...column }) => {
+      void uid
+      return column
+    })
     validation.maxRows = Math.min(
       LIMITS.rows,
       Number(values.maxRows) || LIMITS.rows,
