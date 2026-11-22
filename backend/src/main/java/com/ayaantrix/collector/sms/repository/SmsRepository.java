@@ -10,9 +10,12 @@ import java.util.*;
 @Repository
 public class SmsRepository {
     private final JdbcTemplate jdbc;
+    private final com.ayaantrix.collector.workspace.repository.WorkspaceSubscriptionRepository plans;
+    private final Clock clock;
 
-    public SmsRepository(JdbcTemplate jdbc) {
+    public SmsRepository(JdbcTemplate jdbc,com.ayaantrix.collector.workspace.repository.WorkspaceSubscriptionRepository plans,Clock clock) {
         this.jdbc = jdbc;
+        this.plans=plans;this.clock=clock;
     }
 
     public record Consent(
@@ -198,17 +201,18 @@ public class SmsRepository {
     public record Budget(LocalDate period, int allowance, long limit) {}
 
     public Budget budget(UUID w, int trial, long limit) {
+        var subscription=plans.lockedForWorkspace(w).orElseThrow();
+        int allowance=subscription.effectivePlan(clock.instant()).smsSegments();
+        if(!subscription.writable(clock.instant()))allowance=0;
+        else if(subscription.trial(clock.instant()))allowance=Math.min(trial,allowance);
+        final int allowed=allowance;
         return jdbc.queryForObject(
                 "select current_period_start,plan_key,state from collector.subscriptions where"
                         + " workspace_id=?",
                 (r, n) ->
                         new Budget(
                                 r.getTimestamp(1).toInstant().atZone(ZoneOffset.UTC).toLocalDate(),
-                                r.getString(3).equals("TRIALING")
-                                        ? trial
-                                        : com.ayaantrix.collector.workspace.entity.PlanKey.valueOf(
-                                                        r.getString(2))
-                                                .smsSegments(),
+                                allowed,
                                 limit),
                 w);
     }

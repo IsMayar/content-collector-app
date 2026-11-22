@@ -55,9 +55,32 @@ class StripeBillingProviderTests {
         "metadata":{"collector_workspace":"%s","collector_checkout":"%s"},
         "latest_invoice":{"status":"paid"},"items":{"has_more":false,"data":[{"quantity":1,
         "current_period_start":1793750400,"current_period_end":1796342400,
-        "price":{"id":"%s","currency":"usd","recurring":{"interval":"month","interval_count":1}}}]}}]}
+        "price":%s}]}}]}
         """
-                .formatted(workspace, operation, price);
+                .formatted(workspace, operation, price(price, price.contains("agency") ? 1900 : 700));
+    }
+
+    String price(String id, int amount) {
+        return """
+                {"id":"%s","active":true,"livemode":false,"type":"recurring",
+                "billing_scheme":"per_unit","currency":"usd","unit_amount":%d,
+                "recurring":{"interval":"month","interval_count":1,"usage_type":"licensed"}}
+                """.formatted(id, amount);
+    }
+
+    @SuppressWarnings("unchecked")
+    HttpClient checkoutHttp(String price, String url) throws Exception {
+        HttpClient http = mock(HttpClient.class);
+        when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenAnswer(invocation -> {
+                    HttpRequest request = invocation.getArgument(0);
+                    HttpResponse<InputStream> response = mock(HttpResponse.class);
+                    when(response.statusCode()).thenReturn(200);
+                    String body = request.method().equals("GET") ? price : "{\"url\":\"" + url + "\"}";
+                    when(response.body()).thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+                    return response;
+                });
+        return http;
     }
 
     @Test
@@ -98,19 +121,66 @@ class StripeBillingProviderTests {
 
     @Test
     void hostedCheckoutUsesStableProviderKeyAndRejectsUntrustedRedirects() throws Exception {
-        var http = http("{\"url\":\"https://checkout.stripe.com/c/pay/synthetic\"}");
+        var http = checkoutHttp(price("price_solo", 700), "https://checkout.stripe.com/c/pay/synthetic");
         assertThat(provider(http).checkout(workspace, operation, "cus_synthetic", PlanKey.SOLO))
                 .startsWith("https://checkout.stripe.com/");
         var request = ArgumentCaptor.forClass(HttpRequest.class);
-        verify(http).send(request.capture(), any(HttpResponse.BodyHandler.class));
+        verify(http, times(2)).send(request.capture(), any(HttpResponse.BodyHandler.class));
+        assertThat(request.getAllValues().get(0).method()).isEqualTo("GET");
+        assertThat(request.getAllValues().get(0).uri().getPath()).endsWith("/prices/price_solo");
         assertThat(request.getValue().headers().firstValue("Idempotency-Key"))
                 .contains("collector-checkout-" + operation);
         assertThat(request.getValue().uri().toString())
                 .isEqualTo("https://api.stripe.com/v1/checkout/sessions");
-        var unsafe = provider(http("{\"url\":\"https://checkout.stripe.com.evil.test/\"}"));
+        var unsafe = provider(checkoutHttp(price("price_solo", 700), "https://checkout.stripe.com.evil.test/"));
         assertThatThrownBy(
                         () -> unsafe.checkout(workspace, operation, "cus_synthetic", PlanKey.SOLO))
                 .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void rejectsIncorrectPriceBeforeCreatingCheckout() throws Exception {
+        String valid = price("price_solo", 700);
+        for (String invalid : List.of(
+                price("price_solo", 1900), price("price_other", 700),
+                valid.replace("\"livemode\":false", "\"livemode\":true"),
+                valid.replace("\"active\":true", "\"active\":false"),
+                valid.replace("\"usd\"", "\"eur\""),
+                valid.replace("\"month\"", "\"year\""),
+                valid.replace("\"interval_count\":1", "\"interval_count\":2"),
+                valid.replace("\"licensed\"", "\"metered\""),
+                valid.replace("\"per_unit\"", "\"tiered\""),
+                valid.replace("\"unit_amount\":700", "\"unit_amount\":null"),
+                valid.replace("\"livemode\":false,", ""))) {
+            var http = http(invalid);
+            assertThatThrownBy(() -> provider(http).checkout(workspace, operation, "cus_synthetic", PlanKey.SOLO))
+                    .isInstanceOf(ApiException.class);
+            var request = ArgumentCaptor.forClass(HttpRequest.class);
+            verify(http).send(request.capture(), any(HttpResponse.BodyHandler.class));
+            assertThat(request.getValue().method()).isEqualTo("GET");
+        }
+        var http = checkoutHttp(price("price_agency", 1900), "https://checkout.stripe.com/c/pay/synthetic");
+        assertThat(provider(http).checkout(workspace, operation, "cus_synthetic", PlanKey.AGENCY))
+                .startsWith("https://checkout.stripe.com/");
+    }
+
+    @Test
+    void reconcilesExplicitLegacyPricesButNeverPurchasesThem() throws Exception {
+        for (var entry : Map.of("price_legacySolo", PlanKey.SOLO, "price_legacyAgency", PlanKey.AGENCY).entrySet()) {
+            boolean solo = entry.getValue() == PlanKey.SOLO;
+            String body = snapshot(entry.getKey()).replace(
+                    price(entry.getKey(), entry.getKey().contains("agency") ? 1900 : 700),
+                    price(entry.getKey(), solo ? 1900 : 4900).replace("\"active\":true", "\"active\":false"));
+            var provider = provider(http(body));
+            ReflectionTestUtils.setField(provider, solo ? "legacySolo" : "legacyAgency", entry.getKey());
+            assertThat(provider.current("cus_synthetic").plan()).isEqualTo(entry.getValue());
+        }
+        var http = checkoutHttp(price("price_solo", 700), "https://checkout.stripe.com/c/pay/synthetic");
+        var provider = provider(http);
+        ReflectionTestUtils.setField(provider, "legacySolo", "price_oldSolo");
+        assertThat(provider.checkout(workspace, operation, "cus_synthetic", PlanKey.SOLO)).contains("checkout.stripe.com");
+        ReflectionTestUtils.setField(provider, "legacySolo", "price_agency");
+        assertThatThrownBy(() -> provider.current("cus_synthetic")).isInstanceOf(ApiException.class);
     }
 
     @Test
@@ -145,5 +215,38 @@ class StripeBillingProviderTests {
         var tooLarge = provider(http(" ".repeat(1_048_577)));
         assertThatThrownBy(() -> tooLarge.current("cus_synthetic"))
                 .isInstanceOf(ApiException.class);
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    void schedulesExactlyAtRenewalWithStableProviderKeysAndValidatedOwnership() throws Exception {
+        var requests=new ArrayList<HttpRequest>();
+        HttpClient http=mock(HttpClient.class);
+        var source=new BillingProvider.Snapshot("sub_test",workspace,UUID.randomUUID(),PlanKey.AGENCY,"active",
+                java.time.Instant.ofEpochSecond(100),java.time.Instant.ofEpochSecond(200),false,true);
+        String old="{\"start_date\":100,\"end_date\":200,\"items\":[{\"price\":\"price_agency\",\"quantity\":1}]}";
+        String next="{\"start_date\":200,\"items\":[{\"price\":\"price_solo\",\"quantity\":1}],\"metadata\":{\"collector_workspace\":\""+workspace+"\",\"collector_checkout\":\""+operation+"\"}}";
+        when(http.send(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenAnswer(invocation->{
+            HttpRequest req=invocation.getArgument(0);requests.add(req);
+            String body=req.method().equals("GET")?price("price_solo",700):
+                "{\"id\":\"sub_sched_test\",\"customer\":\"cus_test\",\"subscription\":\"sub_test\",\"livemode\":false,\"status\":\"active\",\"end_behavior\":\"release\",\"phases\":["+old+(req.uri().getPath().endsWith("sub_sched_test")?","+next:"")+"]}";
+            HttpResponse<InputStream> response=mock(HttpResponse.class);
+            when(response.statusCode()).thenReturn(200);
+            when(response.body()).thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+            return response;
+        });
+        assertThat(provider(http).schedule(workspace,operation,"cus_test",source,PlanKey.SOLO)).isEqualTo("sub_sched_test");
+        assertThat(requests).hasSize(3);
+        assertThat(requests.get(1).headers().firstValue("Idempotency-Key")).contains("collector-plan-create-"+operation);
+        assertThat(requests.get(2).headers().firstValue("Idempotency-Key")).contains("collector-plan-update-"+operation);
+        var bytes=HttpResponse.BodySubscribers.ofByteArray();
+        requests.get(2).bodyPublisher().orElseThrow().subscribe(new java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer>() {
+            public void onSubscribe(java.util.concurrent.Flow.Subscription s){bytes.onSubscribe(s);}
+            public void onNext(java.nio.ByteBuffer b){bytes.onNext(List.of(b));}
+            public void onError(Throwable e){bytes.onError(e);}
+            public void onComplete(){bytes.onComplete();}
+        });
+        String sent=java.net.URLDecoder.decode(new String(bytes.getBody().toCompletableFuture().join(),StandardCharsets.UTF_8),StandardCharsets.UTF_8);
+        assertThat(sent).contains("phases[0][items][0][price]=price_agency","phases[1][items][0][price]=price_solo","phases[1][start_date]=200","proration_behavior=none");
+        assertThatThrownBy(()->provider(http).schedule(UUID.randomUUID(),operation,"cus_test",source,PlanKey.SOLO)).isInstanceOf(ApiException.class);
     }
 }

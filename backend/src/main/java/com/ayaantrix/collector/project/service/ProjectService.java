@@ -38,8 +38,10 @@ public class ProjectService {
         String hash=hash(json.writeValueAsString(normalized));var now=clock.instant();
         var previous=requests.replay(workspace,access.member().userId(),key,hash,now);
         if(previous.isPresent())return json.readValue(previous.get(),View.class);
+        authorization.entitlements().project(workspace);
         var customer=customers.findByWorkspaceIdAndId(workspace,input.clientId()).orElseThrow(ProjectAuthorization::missing);
         var template=catalog.definition(workspace,input.templateVersionId()).orElseThrow(ProjectAuthorization::missing);
+        if(!template.template().builtin())authorization.entitlements().require(authorization.entitlements().current(workspace).customTemplates(),"custom templates");
         if(template.template().projectType()!=input.projectType())throw new ApiException(HttpStatus.BAD_REQUEST,"TEMPLATE_TYPE","Choose a template for this project type.");
         var definition=schema.validate(template.definition());
         if(!definition.get("projectType").asText().equals(input.projectType().name()))throw new ApiException(HttpStatus.BAD_REQUEST,"TEMPLATE_TYPE","Choose a template for this project type.");

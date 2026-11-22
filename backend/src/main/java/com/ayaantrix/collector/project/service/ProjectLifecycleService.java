@@ -113,6 +113,9 @@ public class ProjectLifecycleService {
                     }
                     default -> throw ProjectAuthorization.missing();
                 };
+        if (!Set.of(ProjectState.DRAFT,ProjectState.ACTIVE,ProjectState.PAUSED).contains(state)
+                && Set.of(ProjectState.DRAFT,ProjectState.ACTIVE,ProjectState.PAUSED).contains(next))
+            auth.entitlements().project(w);
         project.transition(next, now);
         projects.saveAndFlush(project);
         lifecycle.transition(

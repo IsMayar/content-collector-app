@@ -61,3 +61,8 @@ T33 is Complete for local acceptance. M6 remains In progress; actual Stripe-acco
 - `frontend/src/mocks/commercial.ts`
 - `frontend/tests/integration/real-auth/browser-check.mjs`
 - `frontend/tests/unit/billing.test.tsx`
+# Pricing V2 continuation (21 November 2026)
+
+Permanent Free replaces automatic trials for new workspaces. Legacy trial expiry and verified paid cancellation at period end resolve to writable Free within its limits; failed-payment recovery and administrative suspension remain distinct. Usage includes active-project and distinct-contact admissions, storage reservations and seats. Pending downgrades reserve the lower target limits under the existing workspace lock without deleting existing data or removing members.
+
+Feature entitlements cover template writes/sharing, review assignments, analytics, reminder cadence, AI/SMS and export formats. New template draft/version endpoints reuse existing persistence and schema validation. V27 extends plan/state constraints without rewriting historical subscriptions. See [pricing V2](PRICING_AND_ENTITLEMENTS_V2.md) for the authoritative limits and final verification; prior T33 evidence below remains historical.

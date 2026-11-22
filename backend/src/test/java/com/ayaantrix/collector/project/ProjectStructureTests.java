@@ -249,7 +249,7 @@ class ProjectStructureTests {
             case "DISABLED_USER"->{jdbc.update("update collector.users set state='DISABLED' where id=?",t.actor().id());expected=401;}
             case "LOGOUT"->{context.getBean(AgencySessions.class).logoutAll(t.actor().jwt());expected=401;}
             case "READ_ONLY"->jdbc.update("update collector.workspaces set state='READ_ONLY' where id=?",t.workspace());
-            case "EXPIRED_PLAN"->jdbc.update("update collector.subscriptions set current_period_start=?,current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.minusSeconds(86400)),java.sql.Timestamp.from(NOW),t.workspace());
+            case "EXPIRED_PLAN"->jdbc.update("update collector.subscriptions set plan_key='SOLO',state='ACTIVE',current_period_start=?,current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.minusSeconds(86400)),java.sql.Timestamp.from(NOW),t.workspace());
             case "MISSING_PLAN"->jdbc.update("delete from collector.subscriptions where workspace_id=?",t.workspace());
         }
         final String header=authorization;
@@ -299,7 +299,7 @@ class ProjectStructureTests {
         as(t.actor(),()->editor().patchSection(t.workspace(),p.id(),id(first),new SectionPatch("Project-only",false,1L)));var after=detail(t,p);
         context.close();open();assertThat(detail(t,p)).isEqualTo(after);assertThat(detail(t,other)).isEqualTo(untouched);
         assertThat(jdbc.queryForObject("select definition::text from collector.project_snapshots where workspace_id=? and project_id=?",String.class,t.workspace(),p.id())).isEqualTo(snapshot);assertThat(jdbc.queryForList("select definition::text from collector.template_versions order by id",String.class)).isEqualTo(catalog);
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(26);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(29);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
     }
 
     @ParameterizedTest @ValueSource(strings={"NOT_STARTED","DRAFT","SUBMITTED","APPROVED","CHANGES_REQUESTED"})

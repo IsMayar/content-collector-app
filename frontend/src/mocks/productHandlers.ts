@@ -260,15 +260,32 @@ function foundation(
     base.usage.smsSegmentsUsed = 0
     base.logo = ''
     base.digestEnabled = true
-    base.entitlements.canWrite = true
+    base.entitlements = {
+      planKey: 'FREE',
+      seats: 1,
+      storageLimitBytes: 500e6,
+      unlimitedActiveProjects: false,
+      aiDraftAllowance: 0,
+      smsSegmentAllowance: 0,
+      canWrite: true,
+      aiEnabled: false,
+      smsEnabled: false,
+    }
+    Object.assign(base.usage, {
+      seatsLimit: 1,
+      storageLimitBytes: 500e6,
+      aiDraftAllowance: 0,
+      smsSegmentAllowance: 0,
+    })
     base.subscription = {
       ...base.subscription,
-      state: 'TRIALING',
+      planKey: 'FREE',
+      state: 'FREE',
       cancelAtPeriodEnd: false,
       graceEndsAt: null,
       readOnlyEndsAt: null,
-      currentPeriodStart: new Date().toISOString(),
-      currentPeriodEnd: new Date(Date.now() + 14 * 864e5).toISOString(),
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
     }
     productDb.workspaces[id] = base
     user.memberships.push({

@@ -17,6 +17,11 @@ public interface BillingProvider {
 
     Snapshot current(String customer);
 
+    /** Schedules a paid change at the verified renewal boundary; never grants local access. */
+    default String schedule(UUID workspace, UUID operation, String customer, Snapshot source, PlanKey target) {
+        throw StripeBillingProvider.unavailable();
+    }
+
     record Snapshot(
             String id,
             UUID workspace,

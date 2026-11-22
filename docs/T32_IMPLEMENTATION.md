@@ -78,3 +78,8 @@ Real Stripe sandbox checkout/payment, production providers, unrelated responsive
 - `frontend/src/mocks/commercial.ts`
 - `frontend/tests/integration/real-auth/browser-check.mjs`
 - `frontend/tests/unit/billing.test.tsx`
+# Pricing V2 continuation (21 November 2026)
+
+The original hosted-billing implementation remains intact. Approved pricing V2 adds permanent Free onboarding, $7 Solo/$19 Agency validation and owner-only, next-renewal paid plan changes. `POST /api/v1/workspaces/{workspace}/billing/plan-change` takes an idempotency key and `{planKey, effectiveAt}`; `/plan-change/retry` reuses the durable actor-bound intent. Subscription reads include nullable `pendingChange`. Provider-confirmed reconciliation alone activates paid entitlements; browser returns never do. V28/V29 persist scheduled/cancelled changes, leases and uniqueness constraints. Unknown outcomes remain reserved for safe retry or operator reconciliation.
+
+Final local evidence: 1,108 backend tests passed, 262 frontend tests passed, final billing/settings checks 22 passed and one real HTTPS billing journey passed with MSW disabled and a local provider fixture. Real Stripe sandbox acceptance remains pending. See [pricing policy, contracts and complete evidence](PRICING_AND_ENTITLEMENTS_V2.md); historical evidence below is retained.

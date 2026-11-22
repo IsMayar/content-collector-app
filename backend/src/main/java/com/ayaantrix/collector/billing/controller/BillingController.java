@@ -46,6 +46,21 @@ public class BillingController {
                 .body(Map.of("usage", billing.usage(workspace)));
     }
 
+    @PostMapping(value="/workspaces/{workspace}/billing/plan-change", consumes=MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<Map<String,Object>> changePlan(@PathVariable UUID workspace,
+            @RequestHeader("Idempotency-Key") String key,
+            @Valid @RequestBody com.ayaantrix.collector.billing.dto.BillingDtos.PlanChange request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(billing.changePlan(workspace,request.planKey(),request.effectiveAt(),key));
+    }
+
+    @PostMapping(value = "/workspaces/{workspace}/billing/plan-change/retry",
+            consumes = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<Map<String, Object>> retryPlanChange(@PathVariable UUID workspace) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(billing.retryPlanChange(workspace));
+    }
+
     @PostMapping(
             value = "/workspaces/{workspace}/billing/portal",
             consumes = MediaType.APPLICATION_JSON_VALUE)

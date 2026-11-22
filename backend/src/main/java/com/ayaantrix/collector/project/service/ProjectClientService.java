@@ -60,6 +60,7 @@ public class ProjectClientService {
         if(email.chars().anyMatch(Character::isWhitespace))throw invalid();
         if(contacts.existsByWorkspaceIdAndProjectIdAndEmail(workspace,projectId,email))
             throw new ApiException(HttpStatus.CONFLICT,"CONTACT_EXISTS","This project already has a contact with that email address.");
+        authorization.entitlements().contact(workspace,email);
         return contact(contacts.saveAndFlush(new ProjectContact(workspace,projectId,input.clientId(),input.name().strip(),email,input.accessExpiresAt(),now)));
     }
     public Preview preview(UUID workspace,UUID id) {

@@ -437,3 +437,11 @@ Billing owns controller/dto/repository/security/service/worker packages and reus
 ## T33 usage and clock-bound access
 
 The existing billing controller/service/repository/DTO packages expose the owner-only usage read, projecting workspace counters, existing reservation ledgers and authoritative entitlements. No new accounting table or migration. WorkspaceSubscription owns effective state and read-only deadlines; project authorization guards content and list reads, and client authorization applies the same clock policy to checklist/draft access. Manual draft saves recheck writability under the workspace lock. Attachment and approved-export capabilities are bounded by the remaining read window. Existing notification preferences and consent withdrawal retain a narrowly scoped live client identity path after content access ends; ordinary content endpoints cannot use it. [Exact behavior and evidence](../docs/T33_IMPLEMENTATION.md).
+
+## Approved pricing V2
+
+PlanKey defines the Free/Solo/Agency matrix; WorkspaceSubscription resolves permanent Free, preserved legacy trials and verified paid cancellation independently from failed-payment recovery and administrative suspension. PlanEntitlements reuses workspace locking for quota admission and pending-downgrade reservations. Feature services and queued workers enforce capabilities in addition to live authorization.
+
+Billing PlanChangeRepository owns durable actor-bound schedule intents, leases, replay keys and one pending operation per workspace. BillingService validates current provider state, quota eligibility and live owner access around provider I/O; StripeBillingProvider validates both schedule phases and uses stable idempotency keys. Reconciliation applies only verified paid transitions and cancels obsolete intents. Unknown outcomes fail closed rather than creating replacement subscriptions. V27 extends plan/state constraints; V28/V29 add scheduled/cancelled operation persistence. Applied earlier migrations are unchanged.
+
+Template controller/service/repository/dto subpackages add authorized custom draft/version writes using existing template entities and validation, with optimistic draft versions and immutable published snapshots. No duplicate storage or HTTP transport is introduced. [Contracts, limits, verification and provider gates](../docs/PRICING_AND_ENTITLEMENTS_V2.md).

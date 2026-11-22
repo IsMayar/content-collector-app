@@ -27,6 +27,7 @@ public class ClientAccessService {
   if(!Set.of("ACTIVE","PAUSED","COMPLETED").contains(p.state().name()))throw new ApiException(HttpStatus.CONFLICT,"PROJECT_NOT_PUBLISHED","Publish the project before sending invitations. Archived/deleted projects cannot issue links.");
   var g=grants.contact(workspace,project,contact).orElseThrow(ProjectAuthorization::missing);var now=clock.instant();if(!now.isBefore(g.expires()))throw new ApiException(HttpStatus.CONFLICT,"GRANT_EXPIRED","Create a contact with a valid access expiry before inviting.");
   String route="/api/v1/workspaces/"+workspace+"/projects/"+project+"/contacts/"+contact+"/invite",hash=IdempotencyRepository.hash(contact.toString());var replay=requests.replay(workspace,access.member().userId(),route,key,hash,now);if(replay.isPresent())return json.readValue(replay.get(),Invitation.class);
+  agency.entitlements().contact(workspace,g.email());
   grants.initialize(g,now);var invitation=issue(g,trace);audit.write(workspace,project,access.member().userId(),"CLIENT_INVITATION_CREATED","CONTACT",contact,Map.of(),now);requests.remember(workspace,access.member().userId(),route,key,hash,json.writeValueAsString(invitation),202,now);return invitation;
  }
     public record ReminderInvitation(AccountToken token, String raw) {

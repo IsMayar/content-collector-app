@@ -1,7 +1,7 @@
 import type { UserSummary } from '@/features/auth/types/auth.types'
 import type { Instant, Timezone, UUID } from '@/shared/types/common.types'
 export type WorkspaceRole = 'OWNER' | 'MEMBER'
-export type PlanKey = 'SOLO' | 'AGENCY'
+export type PlanKey = 'FREE' | 'SOLO' | 'AGENCY'
 export interface Workspace {
   id: UUID
   name: string
@@ -31,6 +31,16 @@ export interface Entitlements {
   canWrite: boolean
   aiEnabled: boolean
   smsEnabled: boolean
+  activeProjectLimit?: number | null
+  clientContactLimit?: number | null
+  reminderTier?: 'NONE' | 'BASIC' | 'ADVANCED'
+  analyticsTier?: 'BASIC' | 'PROJECT' | 'WORKSPACE'
+  customTemplates?: boolean
+  sharedTemplates?: boolean
+  teamAssignments?: boolean
+  delegatedReview?: boolean
+  zipExport?: boolean
+  branding?: boolean
 }
 export interface NotificationPreferences {
   smsAvailable?: boolean

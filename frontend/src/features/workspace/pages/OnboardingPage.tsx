@@ -1,5 +1,4 @@
 import { bootstrapSession } from '@/features/auth/store/session'
-import { useNotify } from '@/shared/components/Feedback'
 import {
   ErrorNotice,
   Field,
@@ -8,16 +7,12 @@ import {
 } from '@/shared/components/ProductUI'
 import { useAppDispatch } from '@/shared/hooks/useAppStore'
 import { useCommand } from '@/shared/hooks/useCommand'
-import { ImagePlus, UserRound, Users } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
 export function OnboardingPage() {
-  const [logo, setLogo] = useState('')
-  const [logoError, setLogoError] = useState('')
   const [saving, setSaving] = useState(false)
-  const notify = useNotify()
   const command = useCommand()
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
@@ -30,22 +25,6 @@ export function OnboardingPage() {
       workspace: { id: string; version: number }
     }>('workspaces', values)
     if (result) {
-      if (
-        logo &&
-        !(await command.run(
-          `workspaces/${result.workspace.id}`,
-          {
-            name: values.name,
-            timezone: values.timezone,
-            logo,
-            expectedVersion: result.workspace.version,
-          },
-          'PATCH',
-        ))
-      )
-        notify(
-          'Workspace created. The logo could not be saved; add it in Settings.',
-        )
       await dispatch(bootstrapSession())
       navigate(`/app/w/${result.workspace.id}/overview`)
     }
@@ -69,85 +48,7 @@ export function OnboardingPage() {
               placeholder="e.g. Northstar Studio"
             />
           </Field>
-          <div className="onboarding-logo">
-            <strong>
-              Workspace logo <span>(optional)</span>
-            </strong>
-            <div>
-              {logo ? (
-                <img src={logo} alt="Workspace logo preview" />
-              ) : (
-                <span className="logo-placeholder">A</span>
-              )}
-              <label className="logo-upload">
-                <ImagePlus size={24} />
-                <span>Upload logo</span>
-                <small>PNG, JPG or WebP · Max 1 MB</small>
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  aria-label="Upload workspace logo"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    if (
-                      file.size > 1048576 ||
-                      !['image/png', 'image/jpeg', 'image/webp'].includes(
-                        file.type,
-                      )
-                    ) {
-                      setLogoError(
-                        'Choose a PNG, JPEG or WebP image smaller than 1 MB.',
-                      )
-                      return
-                    }
-                    setLogoError('')
-                    const reader = new FileReader()
-                    reader.onload = () => setLogo(String(reader.result))
-                    reader.onerror = () =>
-                      setLogoError(
-                        'Could not read this image. Try another file.',
-                      )
-                    reader.readAsDataURL(file)
-                  }}
-                />
-              </label>
-            </div>
-            {logo && (
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setLogo('')}
-              >
-                Remove logo
-              </button>
-            )}
-            <ErrorNotice error={logoError} />
-          </div>
-          <fieldset className="work-style">
-            <legend>How do you work?</legend>
-            <label>
-              <input
-                type="radio"
-                name="planKey"
-                value="AGENCY"
-                defaultChecked
-              />
-              <Users size={28} />
-              <span>
-                <strong>Agency</strong>
-                <small>Manage multiple clients and team members</small>
-              </span>
-            </label>
-            <label>
-              <input type="radio" name="planKey" value="SOLO" />
-              <UserRound size={28} />
-              <span>
-                <strong>Freelancer</strong>
-                <small>Work independently with your clients</small>
-              </span>
-            </label>
-          </fieldset>
+          <input type="hidden" name="planKey" value="FREE" />
           <Field label="Workspace timezone">
             <input
               name="timezone"
@@ -160,7 +61,8 @@ export function OnboardingPage() {
             {saving ? 'Creating…' : 'Create workspace'}
           </button>
           <p className="subtle">
-            14-day trial. Plans and prices are proposed for this preview.
+            Free forever. No credit card required. Includes 2 active projects, 1
+            seat and 500 MB storage. Upgrade whenever you need more.
           </p>
         </form>
       </Panel>

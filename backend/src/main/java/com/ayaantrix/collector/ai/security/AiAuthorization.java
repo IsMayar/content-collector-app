@@ -77,7 +77,11 @@ public class AiAuthorization {
                                                 "WORKSPACE_READ_ONLY",
                                                 "AI assistance is unavailable for this"
                                                         + " workspace."));
-        return plan.trial() ? settings.trial : plan.plan().aiDrafts();
+        int allowance=plan.effectivePlan(clock.instant()).aiDrafts();
+        if (allowance == 0)
+            throw new ApiException(HttpStatus.FORBIDDEN, "PLAN_FEATURE_UNAVAILABLE",
+                    "Your plan does not include AI assistance. You can keep writing manually.");
+        return plan.trial(clock.instant()) ? Math.min(settings.trial,allowance) : allowance;
     }
 
     public long version(ClientAccessAuthorization.Access a, UUID item) {

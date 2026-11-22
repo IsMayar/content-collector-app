@@ -35,7 +35,7 @@ public class WorkspaceService {
             throw new ApiException(HttpStatus.CONFLICT,"WORKSPACE_ALREADY_OWNED","An owned workspace already exists.");
         var now=clock.instant();var workspace=workspaces.saveAndFlush(new Workspace(name,timezone,now));
         members.saveAndFlush(new WorkspaceMember(workspace.id(),user,WorkspaceRole.OWNER,now));
-        subscriptions.saveAndFlush(new WorkspaceSubscription(workspace.id(),request.planKey()==null?PlanKey.SOLO:request.planKey(),now));
+        subscriptions.saveAndFlush(new WorkspaceSubscription(workspace.id(),PlanKey.FREE,now));
         return WorkspaceDtos.View.from(workspace);
     }
     public List<WorkspaceDtos.Membership> list(){return workspaces.memberships(authorization.actor());}
@@ -53,11 +53,11 @@ public class WorkspaceService {
     }
     private WorkspaceDtos.Entitlements entitlements(Workspace w){
         var subscription=subscriptions.findByWorkspaceId(w.id());
-        if(subscription.isEmpty())return new WorkspaceDtos.Entitlements(PlanKey.SOLO,0,0,false,0,0,false,false,false);
-        var s=subscription.get();var p=s.plan();boolean writable=w.state()==Workspace.State.ACTIVE && s.writable(clock.instant());
+        if(subscription.isEmpty())return new WorkspaceDtos.Entitlements(PlanKey.FREE,0,0,false,0,0,false,false,false);
+        var s=subscription.get();var p=s.effectivePlan(clock.instant());boolean writable=w.state()==Workspace.State.ACTIVE && s.writable(clock.instant());
         // No AI/SMS provider is activated by a plan selection, even with an allowance.
-        return new WorkspaceDtos.Entitlements(p,p.seats(),Math.min(w.storageLimit(),PlanKey.STORAGE_BYTES),true,
-            s.trial()?trialAi:p.aiDrafts(),s.trial()?trialSms:p.smsSegments(),writable,false,false);
+        return new WorkspaceDtos.Entitlements(p,p.seats(),Math.min(w.storageLimit(),p.storageBytes()),p.activeProjects()==null,
+            s.trial(clock.instant())?Math.min(trialAi,p.aiDrafts()):p.aiDrafts(),s.trial(clock.instant())?Math.min(trialSms,p.smsSegments()):p.smsSegments(),writable,false,false);
     }
     private static String name(String value){
         if(value==null || value.strip().isEmpty() || value.length()>150)throw invalid();return value.strip();

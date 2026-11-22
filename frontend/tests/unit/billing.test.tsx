@@ -48,6 +48,101 @@ beforeEach(() => {
     .mockReturnValue({ data: subscription, refetch: vi.fn() })
   fake.usage.mockReset().mockReturnValue({})
 })
+it('schedules a paid change only after confirmation and refreshes server state', async () => {
+  const refresh = vi.fn()
+  fake.read.mockReturnValue({
+    data: { ...subscription, state: 'ACTIVE' },
+    refetch: refresh,
+  })
+  fake.run.mockResolvedValue({ state: 'SCHEDULED' })
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  render(
+    <MemoryRouter>
+      <BillingPage />
+    </MemoryRouter>,
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Choose agency' }))
+  expect(fake.run).not.toHaveBeenCalled()
+  confirm.mockReturnValue(true)
+  await userEvent.click(screen.getByRole('button', { name: 'Choose agency' }))
+  expect(fake.run).toHaveBeenCalledWith(
+    'workspaces/workspace/billing/plan-change',
+    { planKey: 'AGENCY', effectiveAt: subscription.currentPeriodEnd },
+    'POST',
+    expect.any(Object),
+  )
+  expect(refresh).toHaveBeenCalledOnce()
+  confirm.mockRestore()
+})
+it('retries a pending provider confirmation without creating a new checkout', async () => {
+  const refresh = vi.fn()
+  fake.read.mockReturnValue({
+    data: {
+      ...subscription,
+      state: 'ACTIVE',
+      pendingChange: {
+        planKey: 'AGENCY',
+        effectiveAt: subscription.currentPeriodEnd,
+        state: 'REQUESTED',
+      },
+    },
+    refetch: refresh,
+  })
+  render(
+    <MemoryRouter>
+      <BillingPage />
+    </MemoryRouter>,
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Retry confirmation' }),
+  )
+  expect(fake.run).toHaveBeenCalledWith(
+    'workspaces/workspace/billing/plan-change/retry',
+    {},
+    'POST',
+  )
+  expect(refresh).not.toHaveBeenCalled()
+  fake.run.mockResolvedValue({ state: 'SCHEDULED' })
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Retry confirmation' }),
+  )
+  expect(refresh).toHaveBeenCalledOnce()
+})
+it('shows permanent Free without a paid portal or expiry', () => {
+  fake.read.mockReturnValue({
+    data: {
+      ...subscription,
+      planKey: 'FREE',
+      state: 'FREE',
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+    },
+    refetch: vi.fn(),
+  })
+  render(
+    <MemoryRouter>
+      <BillingPage />
+    </MemoryRouter>,
+  )
+  expect(
+    screen.getByText('Free forever · No credit card required'),
+  ).toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: /Manage in hosted billing portal/ }),
+  ).not.toBeInTheDocument()
+  expect(
+    subscriptionResponse.safeParse({
+      subscription: {
+        ...subscription,
+        planKey: 'FREE',
+        state: 'FREE',
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+      },
+      entitlements: { planKey: 'FREE', seats: 1 },
+    }).success,
+  ).toBe(true)
+})
 it('validates the original wrapped subscription contract', () => {
   expect(
     subscriptionResponse.safeParse({
@@ -185,7 +280,7 @@ it('discloses reservations, limits and zero allowances without an invalid progre
     screen.queryByRole('progressbar', { name: 'AI drafts usage' }),
   ).not.toBeInTheDocument()
   expect(
-    screen.getByText('No allowance is included in the current trial or plan.'),
+    screen.getByText('No allowance is included in your current plan.'),
   ).toBeInTheDocument()
   expect(screen.getByText(/1 active \+ 1 reserved/)).toBeInTheDocument()
   expect(screen.getByText(/2 used \+ 1 reserved/)).toBeInTheDocument()

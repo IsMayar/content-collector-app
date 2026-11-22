@@ -111,7 +111,7 @@ class TeamCollaborationTests {
         security.setAuthentication(new JwtAuthenticationToken(actor.jwt(),List.of()));SecurityContextHolder.setContext(security);
         try{return operation.get();}finally{SecurityContextHolder.setContext(previous);}
     }
-    Tenant tenant(){var a=actor();UUID w=as(a,()->context.getBean(WorkspaceService.class).create(new WorkspaceDtos.Create("Project studio","UTC",PlanKey.AGENCY))).id();UUID client=as(a,()->service().createCustomer(w,new CustomerCreate("Synthetic customer",null,null))).id();return new Tenant(a,w,client);}
+    Tenant tenant(){var a=actor();UUID w=as(a,()->context.getBean(WorkspaceService.class).create(new WorkspaceDtos.Create("Project studio","UTC",PlanKey.AGENCY))).id();jdbc.update("update collector.subscriptions set plan_key='AGENCY',state='ACTIVE',current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.plusSeconds(30*86400)),w);UUID client=as(a,()->service().createCustomer(w,new CustomerCreate("Synthetic customer",null,null))).id();return new Tenant(a,w,client);}
     BuiltInTemplateSeeder seed(){return context.getBean(BuiltInTemplateSeeder.class);}
     ProjectService service(){return context.getBean(ProjectService.class);}
     String bearer(Tenant t){return "Bearer "+t.actor().access();}
@@ -244,7 +244,7 @@ class TeamCollaborationTests {
     }
     @Test void restartAndMigrationValidationPreserveInvitationsAndAssignments(){
       var t=tenant();var actor=actor();var member=join(t,actor);var p=create(t,ProjectType.WEBSITE);as(t.actor(),()->assignments().put(t.workspace(),p.id(),member.memberId(),flags(true,false)));var invitation=invite(t,"restart@example.test");context.close();open();
-      assertThat(as(actor,()->service().read(t.workspace(),p.id())).project().id()).isEqualTo(p.id());assertThat(as(t.actor(),()->team().list(t.workspace())).pendingInvites()).extracting(com.ayaantrix.collector.workspace.dto.WorkspaceTeamDtos.Invitation::id).contains(invitation.id());assertThat(context.getBean(Flyway.class).info().applied()).hasSize(26);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+      assertThat(as(actor,()->service().read(t.workspace(),p.id())).project().id()).isEqualTo(p.id());assertThat(as(t.actor(),()->team().list(t.workspace())).pendingInvites()).extracting(com.ayaantrix.collector.workspace.dto.WorkspaceTeamDtos.Invitation::id).contains(invitation.id());assertThat(context.getBean(Flyway.class).info().applied()).hasSize(29);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
     }
     @ParameterizedTest @ValueSource(strings={"membership","assignment"})
     void concurrentRevocationAndMemberReadSerializeWithoutRestoringAccess(String mode) throws Exception {

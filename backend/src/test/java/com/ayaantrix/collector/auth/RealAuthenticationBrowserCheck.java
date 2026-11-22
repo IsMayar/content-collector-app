@@ -118,9 +118,9 @@ class RealAuthenticationBrowserCheck {
                     io.step(Map.of("action","signin-safe"));io.step(Map.of("action","workspace-create"));
                     var jdbc=app.getBean(JdbcTemplate.class);var actor=users.findByEmailNormalized(email).orElseThrow();
                     UUID workspace=jdbc.queryForObject("select workspace_id from collector.workspace_members where user_id=? and role='OWNER'",UUID.class,actor.getId());
-                    assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("TRIALING");
-                    assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("AGENCY");
-                    assertThat(jdbc.queryForObject("select current_period_end-current_period_start=interval '14 days' from collector.subscriptions where workspace_id=?",Boolean.class,workspace)).isTrue();
+                    assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("FREE");
+                    assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("FREE");
+                    assertThat(jdbc.queryForObject("select cancel_at_period_end from collector.subscriptions where workspace_id=?",Boolean.class,workspace)).isFalse();
                     if(billingOnly){
                         io.step(Map.of("action","billing-prepare"));
                         UUID operation=jdbc.queryForObject("select id from collector.billing_operations where workspace_id=? and kind='CHECKOUT'",UUID.class,workspace);
@@ -129,7 +129,7 @@ class RealAuthenticationBrowserCheck {
                         long timestamp=clock.instant().getEpochSecond();var mac=javax.crypto.Mac.getInstance("HmacSHA256");mac.init(new javax.crypto.spec.SecretKeySpec("whsec_browser_synthetic".getBytes(StandardCharsets.UTF_8),"HmacSHA256"));
                         String signature="t="+timestamp+",v1="+HexFormat.of().formatHex(mac.doFinal((timestamp+"."+body).getBytes(StandardCharsets.UTF_8)));
                         io.step(Map.of("action","billing-event","body",body,"signature",signature));
-                        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("TRIALING");
+                        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("FREE");
                         app.getBean(com.ayaantrix.collector.billing.service.BillingService.class).reconcile(workspace);
                         assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,workspace)).isEqualTo("ACTIVE");
                         io.step(Map.of("action","billing-confirm"));

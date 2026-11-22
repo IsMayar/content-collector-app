@@ -409,6 +409,9 @@ class SubmissionTests {
                                                                 "UTC",
                                                                 PlanKey.AGENCY)))
                         .id();
+        // Feature fixtures explicitly retain a legacy Agency trial. Onboarding itself now creates Free.
+        jdbc.update("update collector.subscriptions set plan_key='AGENCY',state='TRIALING',current_period_start=?,current_period_end=? where workspace_id=?",
+                java.sql.Timestamp.from(NOW),java.sql.Timestamp.from(NOW.plus(Duration.ofDays(14))),w);
         UUID client =
                 as(
                                 a,
@@ -2638,6 +2641,19 @@ class SubmissionTests {
         assertThat(context.getBean(AiFake.class).received.projectType()).isEqualTo(type.name());
     }
 
+    @Test
+    void aiQueuedBeforeFreeDowngradeNeverCallsProviderAndReleasesReservation() {
+        var f=aiFixture(ProjectType.WEBSITE);
+        var id=aiCreate(f,"queued-before-free");
+        jdbc.update("update collector.subscriptions set plan_key='FREE',state='FREE' where workspace_id=?",f.f().tenant().workspace());
+        assertThat(aiWorker().dispatchOne()).isTrue();
+        assertThat(context.getBean(AiFake.class).calls).isZero();
+        assertThat(jdbc.queryForObject("select state from collector.ai_draft_jobs where id=?",String.class,id)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select ai_drafts_reserved from collector.usage_periods where workspace_id=?",Integer.class,f.f().tenant().workspace())).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from collector.answers where project_id=?",Long.class,f.f().project().id())).isZero();
+        code(()->aiCreate(f,"new-free-request"),"PLAN_FEATURE_UNAVAILABLE");
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {
@@ -3233,6 +3249,25 @@ class SubmissionTests {
     }
 
     @Test
+    void exportQueuedZipCannotRunAfterFreeDowngrade() {
+        var r = reviewFixture();
+        decide(r, "APPROVE", "approve-before-downgrade");
+        var id = export(r, "APPROVED_ZIP", true, "queued-before-downgrade");
+        var before = exportJob(r, id).manifest().deepCopy();
+        jdbc.update("update collector.subscriptions set plan_key='FREE',state='FREE' where workspace_id=?",r.f().tenant().workspace());
+        assertThat(context.getBean(com.ayaantrix.collector.export.worker.ExportWorker.class).dispatchOne()).isTrue();
+        var job=exportJob(r,id);
+        assertThat(job.state()).isEqualTo("FAILED");
+        assertThat(job.failure()).isEqualTo("PLAN_FEATURE_UNAVAILABLE");
+        assertThat(job.key()).isNull();
+        assertThat(job.manifest()).isEqualTo(before);
+        assertThatThrownBy(()->export(r,"APPROVED_ZIP",true,"new-free-zip")).isInstanceOf(ApiException.class);
+        var jsonId=export(r,"APPROVED_JSON",true,"free-json");
+        assertThat(context.getBean(com.ayaantrix.collector.export.worker.ExportWorker.class).dispatchOne()).isTrue();
+        assertThat(exportJob(r,jsonId).state()).isEqualTo("READY");
+    }
+
+    @Test
     void exportPartialStaleBindingAndRollback() {
         var r = reviewFixture();
         code(() -> export(r, "APPROVED_JSON", true, "empty"), "NO_APPROVED_CONTENT");
@@ -3405,7 +3440,9 @@ class SubmissionTests {
                         context.getBean(com.ayaantrix.collector.export.worker.ExportRenderer.class),
                         failed,
                         context.getBean(TestClock.class),
-                        context.getBean(PlatformTransactionManager.class));
+                        context.getBean(PlatformTransactionManager.class),
+                        context.getBean(com.ayaantrix.collector.workspace.repository.WorkspaceRepository.class),
+                        context.getBean(com.ayaantrix.collector.workspace.service.PlanEntitlements.class));
         for (int attempt = 1; attempt <= 3; attempt++) {
             context.getBean(TestClock.class).time = NOW.plusSeconds(attempt * 60);
             assertThat(worker.dispatchOne()).isTrue();
@@ -3507,7 +3544,7 @@ class SubmissionTests {
         decide(r, "APPROVE", "approve");
         var id = export(r, "APPROVED_JSON", true, "export");
         var real = context.getBean(PlatformTransactionManager.class);
-        var commits = new java.util.concurrent.atomic.AtomicInteger();
+        var acknowledgmentLost = new java.util.concurrent.atomic.AtomicBoolean();
         var uncertain =
                 new PlatformTransactionManager() {
                     public org.springframework.transaction.TransactionStatus getTransaction(
@@ -3521,7 +3558,9 @@ class SubmissionTests {
 
                     public void commit(org.springframework.transaction.TransactionStatus status) {
                         real.commit(status);
-                        if (commits.incrementAndGet() == 2)
+                        // Inject after the READY transition, independent of admission/heartbeat transactions.
+                        if ("READY".equals(exportJob(r, id).state())
+                                && acknowledgmentLost.compareAndSet(false, true))
                             throw new org.springframework.transaction.TransactionSystemException(
                                     "Synthetic lost commit acknowledgment");
                     }
@@ -3535,8 +3574,11 @@ class SubmissionTests {
                         context.getBean(com.ayaantrix.collector.export.worker.ExportRenderer.class),
                         storage,
                         context.getBean(TestClock.class),
-                        uncertain);
+                        uncertain,
+                        context.getBean(com.ayaantrix.collector.workspace.repository.WorkspaceRepository.class),
+                        context.getBean(com.ayaantrix.collector.workspace.service.PlanEntitlements.class));
         assertThat(worker.dispatchOne()).isTrue();
+        assertThat(acknowledgmentLost).isTrue();
         var job = exportJob(r, id);
         assertThat(job.state()).isEqualTo("READY");
         assertThat(storage.headPrivate(job.key()).bytes()).isPositive();
@@ -6445,6 +6487,10 @@ class SubmissionTests {
             beforeRead.run();
             return snapshot;
         }
+        public String schedule(UUID w,UUID op,String customer,Snapshot source,PlanKey target) {
+            beforeReturn.run();
+            return "sub_sched_"+op.toString().replace("-", "");
+        }
     }
 
     com.ayaantrix.collector.billing.service.BillingService billing() {
@@ -6526,6 +6572,71 @@ class SubmissionTests {
                 .isInstanceOf(ApiException.class);
     }
 
+    @Test void billingScheduledDowngradeIsBoundToRenewalAndDoesNotGrantEarlyEntitlements() {
+        var t=tenant();
+        billingCheckout(t,UUID.randomUUID().toString());
+        billingSnapshot(t,"active",true);
+        billing().reconcile(t.workspace());
+        String key=UUID.randomUUID().toString();
+        var end=NOW.plus(Duration.ofDays(30));
+        var result=as(t.actor(),()->billing().changePlan(t.workspace(),PlanKey.SOLO,end,key));
+        assertThat(result.get("state")).isEqualTo("SCHEDULED");
+        assertThat(as(t.actor(),()->billing().changePlan(t.workspace(),PlanKey.SOLO,end,key))).isEqualTo(result);
+        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,t.workspace())).isEqualTo("AGENCY");
+        assertThatThrownBy(()->as(t.actor(),()->billing().changePlan(t.workspace(),PlanKey.SOLO,end,UUID.randomUUID().toString())))
+            .isInstanceOfSatisfying(ApiException.class,e->assertThat(e.getCode()).isEqualTo("BILLING_PLAN_CHANGE_PENDING"));
+        UUID operation=jdbc.queryForObject("select id from collector.billing_plan_changes where workspace_id=?",UUID.class,t.workspace());
+        var fake=context.getBean(BillingFake.class);
+        context.getBean(TestClock.class).time=end;
+        fake.snapshots.put(fake.customer(t.workspace()),new com.ayaantrix.collector.billing.service.BillingProvider.Snapshot("sub_synthetic",t.workspace(),operation,PlanKey.SOLO,"active",end,end.plus(Duration.ofDays(30)),false,true));
+        jdbc.update("update collector.billing_accounts set next_reconcile_at=? where workspace_id=?",java.sql.Timestamp.from(end),t.workspace());
+        billing().reconcile(t.workspace());
+        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,t.workspace())).isEqualTo("SOLO");
+        assertThat(jdbc.queryForObject("select state from collector.billing_plan_changes where workspace_id=?",String.class,t.workspace())).isEqualTo("APPLIED");
+    }
+
+    @Test void billingUnknownPlanChangeReservesLimitsAndReusesIntentAfterFailure() {
+        var t=tenant();billingCheckout(t,UUID.randomUUID().toString());billingSnapshot(t,"active",true);billing().reconcile(t.workspace());
+        var fake=context.getBean(BillingFake.class);String key=UUID.randomUUID().toString();var end=NOW.plus(Duration.ofDays(30));
+        fake.beforeReturn=()->{throw new IllegalStateException("Synthetic unknown provider outcome");};
+        try {assertThatThrownBy(()->as(t.actor(),()->billing().changePlan(t.workspace(),PlanKey.SOLO,end,key))).isInstanceOf(IllegalStateException.class);}
+        finally {fake.beforeReturn=()->{};}
+        UUID first=jdbc.queryForObject("select id from collector.billing_plan_changes where workspace_id=?",UUID.class,t.workspace());
+        var limit=tx().execute(s->{context.getBean(com.ayaantrix.collector.workspace.repository.WorkspaceRepository.class).lockInvitationWorkspace(t.workspace()).orElseThrow();return context.getBean(com.ayaantrix.collector.workspace.service.PlanEntitlements.class).admissionPlan(t.workspace());});
+        assertThat(limit).isEqualTo(PlanKey.SOLO);
+        code(()->as(t.actor(),()->billing().changePlan(t.workspace(),PlanKey.SOLO,end.plusSeconds(1),key)),"IDEMPOTENCY_KEY_REUSED");
+        as(t.actor(),()->billing().retryPlanChange(t.workspace()));
+        assertThat(jdbc.queryForObject("select id from collector.billing_plan_changes where workspace_id=?",UUID.class,t.workspace())).isEqualTo(first);
+        billingSnapshot(t,"canceled",false);billing().reconcile(t.workspace());
+        assertThat(jdbc.queryForObject("select state from collector.billing_plan_changes where workspace_id=?",String.class,t.workspace())).isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",String.class,t.workspace())).isEqualTo("FREE");
+    }
+
+    @Test
+    void billingCancellationPreservesPaidTermThenBecomesPermanentFreeWithoutDeletingData() {
+        var t=tenant();
+        billingCheckout(t, UUID.randomUUID().toString());
+        billingSnapshot(t,"active",true);
+        billing().reconcile(t.workspace());
+        long members=jdbc.queryForObject("select count(*) from collector.workspace_members where workspace_id=?",Long.class,t.workspace());
+        billingSnapshot(t,"canceled",true);
+        billing().reconcile(t.workspace());
+        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",String.class,t.workspace())).isEqualTo("ACTIVE");
+        context.getBean(TestClock.class).time=NOW.plus(Duration.ofDays(30));
+        billingSnapshot(t,"canceled",true);
+        billing().reconcile(t.workspace());
+        assertThat(jdbc.queryForObject("select plan_key||':'||state from collector.subscriptions where workspace_id=?",String.class,t.workspace())).isEqualTo("FREE:FREE");
+        assertThat(jdbc.queryForObject("select count(*) from collector.workspace_members where workspace_id=?",Long.class,t.workspace())).isEqualTo(members);
+        var account=context.getBean(UserAccountRepository.class).findById(t.actor().id()).orElseThrow();
+        var issued=context.getBean(AgencySessions.class).login(new LoginRequest(account.getEmailNormalized(), PASSWORD));
+        var current=new Actor(t.actor().id(),issued.accessToken(),context.getBean(AccessTokens.class).decode(issued.accessToken()));
+        var response=as(current,()->billing().read(t.workspace()));
+        assertThat(((Map<?,?>)response.get("subscription")).get("planKey")).isEqualTo(PlanKey.FREE);
+        assertThat(((Map<?,?>)response.get("subscription")).get("currentPeriodEnd")).isNull();
+        assertThat(as(current,()->billing().usage(t.workspace())).storageLimitBytes()).isEqualTo(500_000_000L);
+        assertThat(as(current,()->billing().usage(t.workspace())).activeProjectLimit()).isEqualTo(2);
+    }
+
     @Test
     void billingOwnerOnlyTenantIsolationCsrfAndDefaultDeny() throws Exception {
         var t = tenant();
@@ -6537,6 +6648,11 @@ class SubmissionTests {
                 t.workspace(),
                 member.id());
         for (var actor : List.of(member, outsider)) {
+            mvc.perform(post(t.root() + "/billing/plan-change/retry")
+                            .with(csrf().asHeader())
+                            .header("Authorization", "Bearer " + actor.access())
+                            .contentType("application/json").content("{}"))
+                    .andExpect(status().is4xxClientError());
             mvc.perform(
                             get(t.root() + "/subscription")
                                     .header("Authorization", "Bearer " + actor.access()))
@@ -6878,7 +6994,7 @@ class SubmissionTests {
                                 "select state from collector.subscriptions where workspace_id=?",
                                 String.class,
                                 t.workspace()))
-                .isEqualTo("READ_ONLY");
+                .isEqualTo("FREE");
         assertThat(count(t, "audit_logs")).isEqualTo(audits + 1);
     }
 
@@ -6963,7 +7079,7 @@ class SubmissionTests {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.usage.aiDraftsReserved").value(2))
-                .andExpect(jsonPath("$.usage.storageLimitBytes").value(50000000000L));
+                .andExpect(jsonPath("$.usage.storageLimitBytes").value(25000000000L));
         var other = tenant();
         assertThat(as(other.actor(), () -> billing().usage(other.workspace())).aiDraftsUsed())
                 .isZero();
@@ -7000,14 +7116,14 @@ class SubmissionTests {
     }
 
     @Test
-    void usageExpiredTrialBlocksManualDraftSaveAndKeepsExistingContentWithoutCleanup() {
+    void usageReadOnlyPlanBlocksManualDraftSaveAndKeepsExistingContentWithoutCleanup() {
         var f = fixture();
         var t = f.tenant();
         String cookie = enter(f).credential();
         UUID item = textItem(f);
         save(f, cookie, item, text("Preserved draft"), 0);
         long version = detail(t, f.project()).project().structureVersion();
-        usagePeriod(t, "TRIALING", NOW.minusSeconds(1), null);
+        usagePeriod(t, "READ_ONLY", NOW.minusSeconds(1), null);
         assertThat(
                         as(t.actor(), () -> billing().read(t.workspace()))
                                 .get("subscription")
@@ -7098,7 +7214,8 @@ class SubmissionTests {
                                                         .read(t.workspace())
                                                         .entitlements())
                                 .canWrite())
-                .isFalse();
+                .isTrue();
+        assertThat(as(t.actor(), () -> context.getBean(WorkspaceService.class).read(t.workspace()).entitlements()).planKey()).isEqualTo(PlanKey.FREE);
     }
 
     @Test
@@ -7176,7 +7293,7 @@ class SubmissionTests {
         UUID item = textItem(f);
         jdbc.update(
                 "update collector.workspaces set"
-                    + " storage_limit_bytes=60000000000,storage_used_bytes=50000000000 where id=?",
+                    + " storage_limit_bytes=60000000000,storage_used_bytes=25000000000 where id=?",
                 f.tenant().workspace());
         var month =
                 NOW.atZone(ZoneOffset.UTC)

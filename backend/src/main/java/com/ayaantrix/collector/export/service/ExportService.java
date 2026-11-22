@@ -104,6 +104,8 @@ public class ExportService {
                     "PROJECT_VERSION_CONFLICT",
                     "Reload the project before exporting.",
                     project.version());
+        if(input.format().name().equals("APPROVED_ZIP"))
+            auth.entitlements().require(auth.entitlements().current(w).zipExport(),"ZIP exports");
         var all = structures.structure(w, p);
         Set<UUID> selected = new HashSet<>();
         if (input.sectionIds() != null) {

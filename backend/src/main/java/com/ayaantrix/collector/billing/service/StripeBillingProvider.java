@@ -21,6 +21,11 @@ import java.util.*;
 public class StripeBillingProvider implements BillingProvider {
     private final boolean enabled;
     private final String secret, solo, agency, configuration, base;
+    @Value("${collector.billing.legacy-solo-price:}")
+    private String legacySolo = "";
+
+    @Value("${collector.billing.legacy-agency-price:}")
+    private String legacyAgency = "";
     private final JsonMapper json;
     private final HttpClient http =
             HttpClient.newBuilder()
@@ -65,10 +70,15 @@ public class StripeBillingProvider implements BillingProvider {
     }
 
     public String checkout(UUID workspace, UUID operation, String customer, PlanKey plan) {
+        if (plan != PlanKey.SOLO && plan != PlanKey.AGENCY) throw unavailable();
+        validateMappings();
+        String priceId = plan == PlanKey.SOLO ? solo : agency;
+        validatePrice(call("GET", "prices/" + priceId, Map.of(), null), priceId,
+                plan == PlanKey.SOLO ? 700 : 1900, true);
         var fields = new LinkedHashMap<String, String>();
         fields.put("customer", customer);
         fields.put("mode", "subscription");
-        fields.put("line_items[0][price]", plan == PlanKey.SOLO ? solo : agency);
+        fields.put("line_items[0][price]", priceId);
         fields.put("line_items[0][quantity]", "1");
         fields.put("subscription_data[metadata][collector_workspace]", workspace.toString());
         fields.put("subscription_data[metadata][collector_checkout]", operation.toString());
@@ -106,11 +116,81 @@ public class StripeBillingProvider implements BillingProvider {
                 "billing.stripe.com");
     }
 
+    public String schedule(UUID workspace, UUID operation, String customer, Snapshot source, PlanKey target) {
+        if (target == PlanKey.FREE || target == source.plan() || !workspace.equals(source.workspace())
+                || !"active".equals(source.state()) || !source.paid() || source.cancelAtPeriodEnd()
+                || !source.id().matches("sub_[A-Za-z0-9]+")) throw unavailable();
+        validateMappings();
+        String price = target == PlanKey.SOLO ? solo : agency;
+        validatePrice(call("GET", "prices/" + price, Map.of(), null), price,
+                target == PlanKey.SOLO ? 700 : 1900, true);
+        // Stable keys recover either POST after an unknown network outcome without a second schedule.
+        var created = call("POST", "subscription_schedules", Map.of("from_subscription", source.id()),
+                "collector-plan-create-" + operation);
+        String id = created.path("id").asText();
+        if (!id.matches("sub_sched_[A-Za-z0-9]+")) throw unavailable();
+        validateScheduleOwner(created, customer, source.id());
+        var phases = created.path("phases");
+        if (phases.size() != 1) throw unavailable();
+        var phase = phases.get(0);
+        // Do not replace negotiated financial terms with simple monthly-plan phases.
+        for (String field : List.of("discounts", "add_invoice_items", "default_tax_rates"))
+            if (!phase.path(field).isMissingNode() && !phase.path(field).isNull()
+                    && !phase.path(field).isEmpty()) throw unavailable();
+        for (String field : List.of("trial_end", "coupon", "application_fee_percent", "transfer_data"))
+            if (!phase.path(field).isMissingNode() && !phase.path(field).isNull()) throw unavailable();
+        for (var item : phase.path("items"))
+            for (String field : List.of("discounts", "tax_rates", "billing_thresholds"))
+                if (!item.path(field).isMissingNode() && !item.path(field).isNull()
+                        && !item.path(field).isEmpty()) throw unavailable();
+        if (phase.path("start_date").asLong() != source.start().getEpochSecond()
+                || phase.path("end_date").asLong() != source.end().getEpochSecond()
+                || phase.path("items").size() != 1
+                || phase.path("items").get(0).path("quantity").asInt() != 1) throw unavailable();
+        String oldPrice = phase.path("items").get(0).path("price").asText();
+        if (!(source.plan() == PlanKey.SOLO ? List.of(solo, legacySolo) : List.of(agency, legacyAgency)).contains(oldPrice)
+                || oldPrice.isEmpty()) throw unavailable();
+        var fields = new LinkedHashMap<String,String>();
+        fields.put("end_behavior", "release");
+        fields.put("proration_behavior", "none");
+        for (int i=0;i<2;i++) {
+            String prefix="phases["+i+"]";
+            fields.put(prefix+"[items][0][price]",i==0?oldPrice:price);
+            fields.put(prefix+"[items][0][quantity]","1");
+            fields.put(prefix+"[start_date]",Long.toString((i==0?source.start():source.end()).getEpochSecond()));
+            fields.put(prefix+"[proration_behavior]","none");
+            fields.put(prefix+"[metadata][collector_workspace]",workspace.toString());
+            fields.put(prefix+"[metadata][collector_checkout]",(i==0?source.checkout():operation).toString());
+        }
+        fields.put("phases[0][end_date]",Long.toString(source.end().getEpochSecond()));
+        fields.put("phases[1][duration][interval]","month");
+        fields.put("phases[1][duration][interval_count]","1");
+        var updated=call("POST","subscription_schedules/"+id,fields,"collector-plan-update-"+operation);
+        validateScheduleOwner(updated,customer,source.id());
+        if (!id.equals(updated.path("id").asText()) || !"release".equals(updated.path("end_behavior").asText())
+                || updated.path("phases").size()!=2) throw unavailable();
+        var next=updated.path("phases").get(1);
+        if(next.path("start_date").asLong()!=source.end().getEpochSecond()
+                || next.path("items").size()!=1 || !price.equals(next.path("items").get(0).path("price").asText())
+                || next.path("items").get(0).path("quantity").asInt()!=1
+                || !operation.toString().equals(next.path("metadata").path("collector_checkout").asText())
+                || !workspace.toString().equals(next.path("metadata").path("collector_workspace").asText())) throw unavailable();
+        return id;
+    }
+
+    private void validateScheduleOwner(JsonNode schedule,String customer,String subscription) {
+        if (!schedule.path("livemode").isBoolean() || schedule.path("livemode").asBoolean()
+                || !customer.equals(schedule.path("customer").asText())
+                || !subscription.equals(schedule.path("subscription").asText())
+                || !"active".equals(schedule.path("status").asText())) throw unavailable();
+    }
+
     private String returnUrl(UUID workspace) {
         return base + "/app/w/" + workspace + "/billing?view=status";
     }
 
     public Snapshot current(String customer) {
+        validateMappings();
         var list =
                 call(
                         "GET",
@@ -152,14 +232,19 @@ public class StripeBillingProvider implements BillingProvider {
         var price = item.path("price");
         String priceId = price.path("id").asText();
         PlanKey plan =
-                solo.equals(priceId)
+                solo.equals(priceId) || (!legacySolo.isEmpty() && legacySolo.equals(priceId))
                         ? PlanKey.SOLO
-                        : agency.equals(priceId) ? PlanKey.AGENCY : null;
+                        : agency.equals(priceId) || (!legacyAgency.isEmpty() && legacyAgency.equals(priceId))
+                                ? PlanKey.AGENCY : null;
         if (plan == null
                 || item.path("quantity").asInt() != 1
                 || !"usd".equals(price.path("currency").asText())
                 || !"month".equals(price.path("recurring").path("interval").asText())
                 || price.path("recurring").path("interval_count").asInt() != 1) throw unavailable();
+        int amount = solo.equals(priceId) ? 700 : agency.equals(priceId) ? 1900
+                : legacySolo.equals(priceId) ? 1900 : 4900;
+        // Archived legacy prices may still back active subscriptions; never use them for Checkout.
+        validatePrice(price, priceId, amount, false);
         try {
             var metadata = selected.path("metadata");
             return new Snapshot(
@@ -175,6 +260,33 @@ public class StripeBillingProvider implements BillingProvider {
         } catch (RuntimeException invalid) {
             throw unavailable();
         }
+    }
+
+    private void validateMappings() {
+        var identifiers = new HashSet<String>();
+        for (String id : List.of(solo, agency, legacySolo, legacyAgency)) {
+            if (id.isEmpty()) continue;
+            if (!id.matches("price_[A-Za-z0-9]+") || !identifiers.add(id)) throw unavailable();
+        }
+    }
+
+    private void validatePrice(JsonNode price, String id, int amount, boolean purchasing) {
+        if (!id.equals(price.path("id").asText())
+                || !price.path("livemode").isBoolean()
+                || price.path("livemode").asBoolean()
+                || (purchasing && !price.path("active").asBoolean())
+                || !"recurring".equals(price.path("type").asText())
+                || !"per_unit".equals(price.path("billing_scheme").asText())
+                || !"usd".equals(price.path("currency").asText())
+                || !price.path("unit_amount").isIntegralNumber()
+                || price.path("unit_amount").asLong() != amount
+                || !"month".equals(price.path("recurring").path("interval").asText())
+                || price.path("recurring").path("interval_count").asInt() != 1
+                || !"licensed".equals(price.path("recurring").path("usage_type").asText())
+                || (!price.path("transform_quantity").isMissingNode()
+                        && !price.path("transform_quantity").isNull())
+                || (!price.path("custom_unit_amount").isMissingNode()
+                        && !price.path("custom_unit_amount").isNull())) throw unavailable();
     }
 
     private String hosted(JsonNode node, String host) {

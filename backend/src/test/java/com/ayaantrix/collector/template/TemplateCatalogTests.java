@@ -104,7 +104,7 @@ class TemplateCatalogTests {
 
     @Test void cleanMigrationHibernateAndAllStoredDefinitionsMatchOriginals() {
         assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(26);
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(29);
         assertThat(context.getBean(Flyway.class).info().pending()).isEmpty();
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(count("templates")).isEqualTo(10);assertThat(count("template_versions")).isEqualTo(10);
@@ -182,6 +182,7 @@ class TemplateCatalogTests {
     void unsupportedMethodsStayDefaultDeniedEvenWithValidCsrf(String suffix) throws Exception {
         var t=tenant();String path=t.root()+suffix+(suffix.endsWith("/")?VERSION:"");
         for(String method:List.of("POST","PUT","PATCH","DELETE"))
+            if (!(suffix.equals("/templates") && method.equals("POST")))
             mvc.perform(request(org.springframework.http.HttpMethod.valueOf(method),path).with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content("{}"))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
     }
@@ -203,9 +204,35 @@ class TemplateCatalogTests {
         mvc.perform(get(t.root()+"/templates").header("Authorization",bearer(t))).andExpect(status().isOk());
     }
     void custom(Tenant t,UUID id,UUID version) {
+        paid(t);
         var d=seed().originals().get(0);
         jdbc.update("insert into collector.templates(id,workspace_id,template_key,project_type,industry,title,is_builtin,version) values (?,?,?,'WEBSITE','PLUMBER','Custom',false,1)",id,t.workspace(),"custom."+id);
         jdbc.update("insert into collector.template_versions(id,template_id,version_no,schema_version,definition) values (?,?,1,1,?::jsonb)",version,id,d.toString());
+    }
+    void paid(Tenant t) {
+        jdbc.update("update collector.subscriptions set plan_key='SOLO',state='ACTIVE',current_period_start='2026-11-01T00:00:00Z',current_period_end='2026-12-01T00:00:00Z' where workspace_id=?",t.workspace());
+    }
+    @Test void freeTemplateWritesDeniedAndPaidVersionsRemainImmutable() throws Exception {
+        var t=tenant();var definition=seed().originals().get(0);
+        String body=json.writeValueAsString(Map.of("definition",definition));
+        mvc.perform(post(t.root()+"/templates").with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content(body))
+            .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PLAN_FEATURE_UNAVAILABLE"));
+        paid(t);
+        mvc.perform(post(t.root()+"/templates").header("Authorization",bearer(t)).contentType("application/json").content(body)).andExpect(status().isForbidden());
+        var created=mvc.perform(post(t.root()+"/templates").with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content(body))
+            .andExpect(status().isCreated()).andReturn();
+        var result=json.readTree(created.getResponse().getContentAsString());String root=t.root()+"/templates/"+result.path("id").asText();
+        UUID original=UUID.fromString(result.path("versionId").asText());
+        var edited=(ObjectNode)definition.deepCopy();edited.put("title","Updated private template");
+        String save=json.writeValueAsString(Map.of("definition",edited,"expectedVersion",1));
+        mvc.perform(put(root+"/draft").with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content(save))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(2));
+        mvc.perform(put(root+"/draft").with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content(save))
+            .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VERSION_CONFLICT"));
+        mvc.perform(post(root+"/versions").with(csrf().asHeader()).header("Authorization",bearer(t)).contentType("application/json").content("{\"expectedVersion\":2}"))
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.version").value(3));
+        assertThat(as(t.actor(),()->service().read(t.workspace(),original)).definition()).isEqualTo(definition);
+        var stranger=tenant();mvc.perform(get(root+"/draft").header("Authorization",bearer(stranger))).andExpect(status().isNotFound());
     }
     @Test void scopedRepositoryDoesNotLeakAnotherWorkspaceDefinitionOrCatalogEntry() throws Exception {
         var a=tenant();var b=tenant();UUID id=UUID.randomUUID(),version=UUID.randomUUID();custom(a,id,version);
@@ -278,6 +305,26 @@ class TemplateCatalogTests {
         mvc.perform(get(t.root()+"/template-versions/"+VERSION).header("Authorization",bearer(t))).andExpect(status().isOk());
         assertThat(count("templates")).isEqualTo(10);
     }
+    @Test void v27PreservesPopulatedLegacyTrialAndPaidSubscriptions() {
+        jdbc.execute("create database pricing_v27_upgrade");
+        String url="jdbc:postgresql://"+POSTGRES.getHost()+":"+POSTGRES.getMappedPort(5432)+"/pricing_v27_upgrade";
+        var source=new DriverManagerDataSource(url,POSTGRES.getUsername(),POSTGRES.getPassword());
+        var data=new JdbcTemplate(source);
+        Flyway.configure().dataSource(source).target("26").load().migrate();
+        for (String state:List.of("TRIALING","ACTIVE","PAST_DUE","READ_ONLY","SUSPENDED")) {
+            UUID workspace=UUID.randomUUID();
+            data.update("insert into collector.workspaces(id,name,timezone) values (?,?,'UTC')",workspace,"Preserved "+state);
+            data.update("insert into collector.subscriptions(workspace_id,plan_key,state,current_period_start,current_period_end) values (?,'AGENCY',?,now()-interval '30 days',now()-interval '1 day')",workspace,state);
+        }
+        String before=data.queryForObject("select jsonb_agg(to_jsonb(s) order by id)::text from collector.subscriptions s",String.class);
+        String workspacesBefore=data.queryForObject("select jsonb_agg(to_jsonb(w) order by id)::text from collector.workspaces w",String.class);
+        var flyway=Flyway.configure().dataSource(source).load();
+        flyway.migrate();
+        assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
+        assertThat(data.queryForObject("select jsonb_agg(to_jsonb(s) order by id)::text from collector.subscriptions s",String.class)).isEqualTo(before);
+        assertThat(data.queryForObject("select jsonb_agg(to_jsonb(w) order by id)::text from collector.workspaces w",String.class)).isEqualTo(workspacesBefore);
+        assertThat(flyway.migrate().migrationsExecuted).isZero();
+    }
     @Test void v6UpgradePreservesExistingIdentityWorkspaceAndMembershipAcrossStartup() throws Exception {
         jdbc.execute("create database template_v6_upgrade");String url="jdbc:postgresql://"+POSTGRES.getHost()+":"+POSTGRES.getMappedPort(5432)+"/template_v6_upgrade";
         var source=new DriverManagerDataSource(url,POSTGRES.getUsername(),POSTGRES.getPassword());var data=new JdbcTemplate(source);
@@ -286,7 +333,7 @@ class TemplateCatalogTests {
         data.update("insert into collector.workspaces(id,name,timezone) values (?,'Preserved workspace','UTC')",workspace);
         data.update("insert into collector.workspace_members(workspace_id,user_id,role) values (?,?,'OWNER')",workspace,user);
         try(var upgraded=start(url)){
-            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(26);
+            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(29);
             assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(data.queryForObject("select name from collector.workspaces where id=?",String.class,workspace)).isEqualTo("Preserved workspace");
             assertThat(data.queryForObject("select count(*) from collector.workspace_members where workspace_id=? and user_id=?",Integer.class,workspace,user)).isEqualTo(1);

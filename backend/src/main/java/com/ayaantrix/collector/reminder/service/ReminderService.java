@@ -69,6 +69,11 @@ public class ReminderService {
     public Policy update(UUID w, UUID p, Update input) {
         var project = owner(w, p, true);
         var previous = policy(project);
+        var tier=agency.entitlements().admissionPlan(w).reminders();
+        agency.entitlements().require(tier!=com.ayaantrix.collector.workspace.entity.PlanKey.ReminderTier.NONE,"automatic reminders");
+        if(tier==com.ayaantrix.collector.workspace.entity.PlanKey.ReminderTier.BASIC
+                && !input.paused() && !Boolean.FALSE.equals(input.enabled()))
+            agency.entitlements().require(basicRules(input.rules()) && input.timezone().equals(project.timezone()),"advanced reminder scheduling");
         zone(input.timezone());
         var ids = new HashSet<UUID>();
         for (var r : input.rules()) {
@@ -175,6 +180,10 @@ public class ReminderService {
             UUID except) {
         var r = new ArrayList<String>();
         UUID w = project.workspaceId(), p = project.id();
+        var plan=agency.entitlements().current(w);
+        if(plan.reminders()==com.ayaantrix.collector.workspace.entity.PlanKey.ReminderTier.NONE
+                || (plan.reminders()==com.ayaantrix.collector.workspace.entity.PlanKey.ReminderTier.BASIC && !basicRules(policy.rules())))
+            r.add("PLAN_FEATURE_UNAVAILABLE");
         if (!Set.of("EMAIL", "SMS").contains(channel)) r.add("CHANNEL_UNAVAILABLE");
         if (channel.equals("SMS"))
             r.addAll(
@@ -207,6 +216,11 @@ public class ReminderService {
                 monday.plusWeeks(1).atStartOfDay(zone(policy.timezone())).toInstant(),
                 except)) r.add("WEEKLY_LIMIT");
         return r;
+    }
+
+    private boolean basicRules(List<Rule> rules){
+        return rules.size()==3 && rules.stream().map(Rule::daysRelativeToDueDate).collect(java.util.stream.Collectors.toSet()).equals(Set.of(-3,0,3))
+            && rules.stream().allMatch(r->r.channel().equals("EMAIL")&&r.localTime().equals("10:00")&&r.weekdaysOnly());
     }
 
     public long missing(UUID w, UUID p) {

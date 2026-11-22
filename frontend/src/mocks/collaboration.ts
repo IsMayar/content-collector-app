@@ -201,6 +201,20 @@ registerProductResolver((request, path, _search, body) => {
       'NOT_FOUND',
       'Only your workspace templates can be edited.',
     )
+    if (action === 'draft' && method === 'GET') {
+      return response({
+        definition: t.draft || t.definition,
+        version: t.version,
+      })
+    }
+    if (['draft', 'versions'].includes(action) && method !== 'GET') {
+      requireRule(
+        body.expectedVersion === t.version,
+        409,
+        'VERSION_CONFLICT',
+        'This template changed. Reload before saving.',
+      )
+    }
     if (action === 'draft' && method === 'PUT') {
       const d = body.definition as unknown as TemplateDefinition
       requireRule(
@@ -210,7 +224,8 @@ registerProductResolver((request, path, _search, body) => {
         'Add at least one section.',
       )
       t.draft = clone(d)
-      return response({ definition: t.draft })
+      t.version++
+      return response({ definition: t.draft, version: t.version })
     }
     if (action === 'versions' && method === 'POST') {
       requireRule(t.draft, 409, 'NO_DRAFT', 'Save a draft first.')
@@ -219,7 +234,7 @@ registerProductResolver((request, path, _search, body) => {
       t.title = t.definition.title
       t.version++
       t.versionId = uid()
-      return response({ template: t })
+      return response({ version: t.version, versionId: t.versionId })
     }
   }
   if (

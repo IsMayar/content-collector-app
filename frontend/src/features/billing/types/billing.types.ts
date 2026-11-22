@@ -3,10 +3,15 @@ import type { Instant } from '@/shared/types/common.types'
 
 export interface Subscription {
   planKey: PlanKey
-  state: 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'READ_ONLY' | 'SUSPENDED'
-  currentPeriodStart: Instant
-  currentPeriodEnd: Instant
+  state: 'FREE' | 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'READ_ONLY' | 'SUSPENDED'
+  currentPeriodStart: Instant | null
+  currentPeriodEnd: Instant | null
   cancelAtPeriodEnd: boolean
+  pendingChange?: {
+    planKey: 'SOLO' | 'AGENCY'
+    effectiveAt: Instant
+    state: 'REQUESTED' | 'SCHEDULED'
+  } | null
   graceEndsAt: Instant | null
   readOnlyEndsAt: Instant | null
 }
@@ -27,4 +32,8 @@ export interface UsageSummary {
   smsSegmentsReserved?: number
   aiPeriodStart?: Instant
   aiPeriodEnd?: Instant
+  activeProjects?: number
+  activeProjectLimit?: number | null
+  clientContacts?: number
+  clientContactLimit?: number | null
 }

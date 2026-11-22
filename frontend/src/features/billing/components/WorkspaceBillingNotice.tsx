@@ -27,7 +27,7 @@ export function WorkspaceBillingNotice({
   if (
     !owner ||
     !subscription ||
-    (['ACTIVE', 'TRIALING'].includes(subscription.state) &&
+    (['FREE', 'ACTIVE', 'TRIALING'].includes(subscription.state) &&
       !subscription.cancelAtPeriodEnd)
   )
     return null

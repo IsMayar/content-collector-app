@@ -355,7 +355,8 @@ export function SettingsPage() {
                         {
                           name: fields.get('name'),
                           timezone: fields.get('timezone'),
-                          ...(env.mocksEnabled
+                          ...(env.mocksEnabled &&
+                          workspace.data!.entitlements.planKey !== 'FREE'
                             ? {
                                 logo: logo ?? workspace.data!.logo,
                               }
@@ -413,73 +414,74 @@ export function SettingsPage() {
 
                   {/* MOCK-ONLY LOGO FEATURE PRESERVED */}
 
-                  {env.mocksEnabled && (
-                    <details className="mt-4 rounded-lg border border-slate-200 px-4 py-3">
-                      <summary className="cursor-pointer text-sm font-medium text-slate-700">
-                        Workspace logo (preview only)
-                      </summary>
+                  {env.mocksEnabled &&
+                    workspace.data.entitlements.planKey !== 'FREE' && (
+                      <details className="mt-4 rounded-lg border border-slate-200 px-4 py-3">
+                        <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                          Workspace logo (preview only)
+                        </summary>
 
-                      <div className="mt-4 flex flex-wrap items-center gap-4">
-                        {(logo ?? workspace.data.logo) && (
-                          <img
-                            src={logo ?? workspace.data.logo}
-                            alt="Workspace logo preview"
-                            className="h-12 w-12 rounded-lg border border-slate-200 object-contain"
-                          />
-                        )}
+                        <div className="mt-4 flex flex-wrap items-center gap-4">
+                          {(logo ?? workspace.data.logo) && (
+                            <img
+                              src={logo ?? workspace.data.logo}
+                              alt="Workspace logo preview"
+                              className="h-12 w-12 rounded-lg border border-slate-200 object-contain"
+                            />
+                          )}
 
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <label
-                            htmlFor="workspace-logo-upload"
-                            className="block text-xs font-medium text-slate-600"
-                          >
-                            Upload PNG, JPEG, or WebP (up to 1 MB)
-                          </label>
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <label
+                              htmlFor="workspace-logo-upload"
+                              className="block text-xs font-medium text-slate-600"
+                            >
+                              Upload PNG, JPEG, or WebP (up to 1 MB)
+                            </label>
 
-                          <input
-                            id="workspace-logo-upload"
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            className="block w-full min-w-0 text-xs"
-                            onChange={(event) => {
-                              const file = event.target.files?.[0]
+                            <input
+                              id="workspace-logo-upload"
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              className="block w-full min-w-0 text-xs"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0]
 
-                              if (!file) return
+                                if (!file) return
 
-                              if (
-                                file.size > 1e6 ||
-                                ![
-                                  'image/png',
-                                  'image/jpeg',
-                                  'image/webp',
-                                ].includes(file.type)
-                              ) {
-                                setMessage(
-                                  'Choose a PNG, JPEG or WebP under 1 MB.',
-                                )
-                                return
-                              }
+                                if (
+                                  file.size > 1e6 ||
+                                  ![
+                                    'image/png',
+                                    'image/jpeg',
+                                    'image/webp',
+                                  ].includes(file.type)
+                                ) {
+                                  setMessage(
+                                    'Choose a PNG, JPEG or WebP under 1 MB.',
+                                  )
+                                  return
+                                }
 
-                              const reader = new FileReader()
+                                const reader = new FileReader()
 
-                              reader.onload = () =>
-                                setLogo(String(reader.result))
+                                reader.onload = () =>
+                                  setLogo(String(reader.result))
 
-                              reader.readAsDataURL(file)
-                            }}
-                          />
+                                reader.readAsDataURL(file)
+                              }}
+                            />
 
-                          <button
-                            type="button"
-                            className="text-xs font-medium text-red-600 hover:underline"
-                            onClick={() => setLogo('')}
-                          >
-                            Remove logo
-                          </button>
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-red-600 hover:underline"
+                              onClick={() => setLogo('')}
+                            >
+                              Remove logo
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </details>
-                  )}
+                      </details>
+                    )}
                 </form>
               )}
             </QueryState>

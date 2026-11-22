@@ -10,6 +10,7 @@ import java.util.UUID;
 @Table(name = "subscriptions", schema = "collector")
 public class WorkspaceSubscription {
     public enum State {
+        FREE,
         TRIALING,
         ACTIVE,
         PAST_DUE,
@@ -59,9 +60,13 @@ public class WorkspaceSubscription {
         id = UUID.randomUUID();
         this.workspaceId = workspaceId;
         this.planKey = planKey;
-        state = State.TRIALING;
+        state = planKey == PlanKey.FREE ? State.FREE : State.TRIALING;
         currentPeriodStart = now;
-        currentPeriodEnd = now.plus(Duration.ofDays(14));
+        // Free dates are accounting windows, never access-expiry dates.
+        currentPeriodEnd = planKey == PlanKey.FREE
+                ? now.atZone(ZoneOffset.UTC).withDayOfMonth(1).toLocalDate()
+                        .plusMonths(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+                : now.plus(Duration.ofDays(14));
         createdAt = now;
         updatedAt = now;
     }
@@ -70,10 +75,26 @@ public class WorkspaceSubscription {
         return planKey;
     }
 
+    public PlanKey effectivePlan(Instant now) {
+        return freeAt(now)
+                ? PlanKey.FREE : planKey;
+    }
+
+    private boolean freeAt(Instant now) {
+        return state == State.FREE || (!now.isBefore(currentPeriodEnd)
+                && (state == State.TRIALING || ((state == State.ACTIVE || state == State.PAST_DUE) && cancelAtPeriodEnd)));
+    }
+
+    public boolean trial(Instant now) {
+        return state == State.TRIALING && now.isBefore(currentPeriodEnd);
+    }
+
     public boolean writable(Instant now) {
         if (now.isBefore(currentPeriodStart)) return false;
+        if (freeAt(now)) return true;
         return switch (state) {
-            case TRIALING, ACTIVE -> now.isBefore(currentPeriodEnd);
+            case FREE, TRIALING -> true;
+            case ACTIVE -> now.isBefore(currentPeriodEnd);
             case PAST_DUE ->
                     cancelAtPeriodEnd
                             ? now.isBefore(currentPeriodEnd)
@@ -87,6 +108,7 @@ public class WorkspaceSubscription {
     }
 
     public State effectiveState(Instant now) {
+        if (freeAt(now)) return State.FREE;
         return (state == State.TRIALING || state == State.ACTIVE || state == State.PAST_DUE)
                         && !writable(now)
                 ? State.READ_ONLY
@@ -94,6 +116,8 @@ public class WorkspaceSubscription {
     }
 
     public Instant readOnlyDeadline() {
+        // A legacy trial falls back to Free; no content-access deadline is imposed.
+        if (state == State.FREE || state == State.TRIALING || ((state == State.ACTIVE || state == State.PAST_DUE) && cancelAtPeriodEnd)) return Instant.MAX;
         Instant end =
                 state == State.PAST_DUE && !cancelAtPeriodEnd && graceEndsAt != null
                         ? graceEndsAt

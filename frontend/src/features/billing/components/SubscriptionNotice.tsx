@@ -19,7 +19,7 @@ export function SubscriptionNotice({
   const s = subscription
   const message =
     s.state === 'TRIALING'
-      ? `Your 14-day trial ends ${formatDate(s.currentPeriodEnd)}. Trial AI and SMS allowances may be reduced; check your limits before choosing a plan.`
+      ? `Your existing trial ends ${formatDate(s.currentPeriodEnd)}. Your workspace will continue on Free unless you choose a paid plan.`
       : s.state === 'PAST_DUE'
         ? `Payment needs attention. Editing remains available until ${formatDate(s.cancelAtPeriodEnd ? s.currentPeriodEnd : s.graceEndsAt)}. Update your payment method to avoid read-only access.`
         : s.state === 'READ_ONLY'
@@ -27,7 +27,7 @@ export function SubscriptionNotice({
           : s.state === 'SUSPENDED'
             ? 'This subscription is suspended. Contact support about restoring access.'
             : s.cancelAtPeriodEnd
-              ? `Cancellation is scheduled for ${formatDate(s.currentPeriodEnd)}. Editing remains available until then.`
+              ? `Cancellation is scheduled for ${formatDate(s.currentPeriodEnd)}. Your workspace will then continue on Free with its limits. No content is deleted.`
               : null
 
   if (!message) return null

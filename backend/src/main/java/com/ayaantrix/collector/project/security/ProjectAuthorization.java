@@ -20,12 +20,15 @@ public class ProjectAuthorization {
     private final WorkspaceAuthorization workspaces;
     private final WorkspaceSubscriptionRepository plans;
     private final Clock clock;
+    private final com.ayaantrix.collector.workspace.service.PlanEntitlements entitlements;
 
     ProjectAuthorization(
             WorkspaceAuthorization workspaces,
             WorkspaceSubscriptionRepository plans,
             Clock clock,
-            com.ayaantrix.collector.project.repository.ProjectAssignmentRepository assignments) {
+            com.ayaantrix.collector.project.repository.ProjectAssignmentRepository assignments,
+            com.ayaantrix.collector.workspace.service.PlanEntitlements entitlements) {
+        this.entitlements=entitlements;
         this.workspaces = workspaces;
         this.plans = plans;
         this.clock = clock;
@@ -39,6 +42,8 @@ public class ProjectAuthorization {
     public boolean owner(WorkspaceAuthorization.Access access) {
         return access.member().role() == WorkspaceRole.OWNER;
     }
+
+    public com.ayaantrix.collector.workspace.service.PlanEntitlements entitlements(){return entitlements;}
 
     public void writable(WorkspaceAuthorization.Access access) {
         if (!canWrite(access))
@@ -96,7 +101,7 @@ public class ProjectAuthorization {
                         access.workspace().id(), project, access.member().id());
         return new com.ayaantrix.collector.project.dto.ProjectDtos.Permissions(
                 owner && write && editable,
-                write && (owner || a.filter(x -> x.canReview()).isPresent()),
+                write && (owner || (entitlements.current(access.workspace().id()).delegatedReview() && a.filter(x -> x.canReview()).isPresent())),
                 read && (owner || a.filter(x -> x.canExport()).isPresent()),
                 owner && write);
     }

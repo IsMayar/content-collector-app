@@ -18,7 +18,7 @@ import { ArrowRight, CalendarDays, Check, Info } from 'lucide-react'
 type QuotaMeterProps = {
   label: string
   count: number
-  limit: number
+  limit: number | null
   description: string
   limitLabel: string
 }
@@ -30,18 +30,22 @@ function QuotaMeter({
   description,
   limitLabel,
 }: QuotaMeterProps) {
-  const ratio = limit > 0 ? percent(count, limit) : 0
+  const ratio = limit !== null && limit > 0 ? percent(count, limit) : 0
 
   return (
     <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-slate-900">{label}</h3>
         <span className="text-xs font-semibold tabular-nums text-slate-500">
-          {limit === 0 ? 'Not included' : `${ratio}%`}
+          {limit === null
+            ? 'Unlimited'
+            : limit === 0
+              ? 'Not included'
+              : `${ratio}%`}
         </span>
       </div>
 
-      {limit > 0 ? (
+      {limit !== null && limit > 0 ? (
         <progress
           className="mt-3 block h-2 w-full overflow-hidden rounded-full accent-blue-600"
           value={Math.min(count, limit)}
@@ -61,11 +65,11 @@ function QuotaMeter({
 
       {limit === 0 && (
         <p className="mt-1 text-xs leading-5 text-slate-600">
-          No allowance is included in the current trial or plan.
+          No allowance is included in your current plan.
         </p>
       )}
 
-      {limit > 0 && count >= limit && (
+      {limit !== null && limit > 0 && count >= limit && (
         <p className="mt-1 text-xs font-medium text-amber-700">
           Limit reached. New reservations are paused.
         </p>
@@ -78,24 +82,24 @@ const planOptions = [
   {
     key: 'SOLO',
     title: 'Solo',
-    price: 19,
+    price: 7,
     features: [
       '1 seat',
-      '50 GB storage',
-      '100 AI drafts per month',
-      '25 SMS segments per month',
-      'Unlimited active projects within resource limits',
+      '5 GB storage',
+      '50 AI drafts per month',
+      'No SMS',
+      '10 active projects · 50 client contacts',
     ],
   },
   {
     key: 'AGENCY',
     title: 'Agency',
-    price: 49,
+    price: 19,
     features: [
       '5 seats',
-      '50 GB storage',
-      '300 AI drafts per month',
-      '100 SMS segments per month',
+      '25 GB storage',
+      '200 AI drafts per month',
+      '50 SMS segments per month',
       'Unlimited active projects within resource limits',
     ],
   },
@@ -159,10 +163,18 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
       ? 'Solo'
       : current?.planKey === 'AGENCY'
         ? 'Agency'
-        : current?.planKey || 'Loading…'
+        : current?.planKey === 'FREE'
+          ? 'Free'
+          : 'Loading…'
 
   const illustrativePrice =
-    current?.planKey === 'SOLO' ? 19 : current?.planKey === 'AGENCY' ? 49 : null
+    current?.planKey === 'SOLO'
+      ? 7
+      : current?.planKey === 'AGENCY'
+        ? 19
+        : current?.planKey === 'FREE'
+          ? 0
+          : null
 
   return (
     <div className="min-w-0 space-y-5 text-[#0A1A2F]">
@@ -238,7 +250,8 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
           </div>
 
           <p className="mt-1 text-xs text-slate-500">
-            Illustrative proposed pricing; not a payment confirmation.
+            Catalog pricing. Existing subscriptions retain their
+            provider-confirmed price until changed.
           </p>
 
           {usage.data && (
@@ -273,12 +286,16 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
               <div>
                 <p className="text-xs text-slate-500">
                   {current.state === 'TRIALING'
-                    ? 'Trial ends'
-                    : 'Current billing period ends'}
+                    ? 'Existing trial ends'
+                    : current.state === 'FREE'
+                      ? 'No expiration'
+                      : 'Current billing period ends'}
                 </p>
 
                 <p className="mt-1 text-base font-semibold text-slate-900">
-                  {new Date(current.currentPeriodEnd).toLocaleDateString()}
+                  {current.currentPeriodEnd
+                    ? new Date(current.currentPeriodEnd).toLocaleDateString()
+                    : 'Free forever · No credit card required'}
                 </p>
 
                 {current.cancelAtPeriodEnd && (
@@ -290,32 +307,36 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
             </div>
           )}
 
-          <p className="mt-4 max-w-lg text-sm leading-6 text-slate-600">
-            A past-due account has 7 days of grace, then 30 days of read-only
-            access. Permitted reads and exports remain available.
-          </p>
+          {current?.state !== 'FREE' && (
+            <p className="mt-4 max-w-lg text-sm leading-6 text-slate-600">
+              A past-due account has 7 days of grace, then 30 days of read-only
+              access. Permitted reads and exports remain available.
+            </p>
+          )}
 
-          <button
-            type="button"
-            className="mt-4 inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={command.pending}
-            onClick={async () => {
-              setRedirectError('')
-              const result = await command.run<{ url: string }>(
-                `workspaces/${id}/billing/portal`,
-                {},
-                'POST',
-                {
-                  'Idempotency-Key': (checkoutKeys.current[`${id}:portal`] ??=
-                    crypto.randomUUID()),
-                },
-              )
-              if (result) hosted(result.url)
-            }}
-          >
-            Manage in hosted billing portal
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
+          {current?.state !== 'FREE' && (
+            <button
+              type="button"
+              className="mt-4 inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={command.pending}
+              onClick={async () => {
+                setRedirectError('')
+                const result = await command.run<{ url: string }>(
+                  `workspaces/${id}/billing/portal`,
+                  {},
+                  'POST',
+                  {
+                    'Idempotency-Key': (checkoutKeys.current[`${id}:portal`] ??=
+                      crypto.randomUUID()),
+                  },
+                )
+                if (result) hosted(result.url)
+              }}
+            >
+              Manage in hosted billing portal
+              <ArrowRight size={16} aria-hidden="true" />
+            </button>
+          )}
         </section>
       </div>
 
@@ -345,6 +366,34 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
 
         {usage.data && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {usage.data.activeProjects !== undefined &&
+              usage.data.activeProjectLimit !== undefined && (
+                <QuotaMeter
+                  label="Active projects"
+                  count={usage.data.activeProjects}
+                  limit={usage.data.activeProjectLimit}
+                  description={`${usage.data.activeProjects} draft, active or paused`}
+                  limitLabel={
+                    usage.data.activeProjectLimit === null
+                      ? 'Unlimited'
+                      : String(usage.data.activeProjectLimit)
+                  }
+                />
+              )}
+            {usage.data.clientContacts !== undefined &&
+              usage.data.clientContactLimit !== undefined && (
+                <QuotaMeter
+                  label="Client contacts"
+                  count={usage.data.clientContacts}
+                  limit={usage.data.clientContactLimit}
+                  description={`${usage.data.clientContacts} unique active or reserved contacts`}
+                  limitLabel={
+                    usage.data.clientContactLimit === null
+                      ? 'Unlimited'
+                      : String(usage.data.clientContactLimit)
+                  }
+                />
+              )}
             <QuotaMeter
               label="Storage"
               count={
@@ -438,10 +487,43 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
             Compare plans
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Proposed Solo and Agency pricing.
+            Free is $0 forever. Paid plan changes take effect at your next
+            renewal.
           </p>
         </div>
 
+        {current?.pendingChange && (
+          <div
+            role="status"
+            className="mb-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-800"
+          >
+            {current.pendingChange.state === 'SCHEDULED'
+              ? 'Scheduled'
+              : 'Awaiting provider confirmation'}
+            : {current.pendingChange.planKey === 'SOLO' ? 'Solo' : 'Agency'}{' '}
+            from{' '}
+            {new Date(current.pendingChange.effectiveAt).toLocaleDateString()}.
+            Your current plan remains in place until the provider confirms the
+            change.
+            {current.pendingChange.state === 'REQUESTED' && (
+              <button
+                type="button"
+                className="button-secondary mt-3"
+                disabled={command.pending}
+                onClick={async () => {
+                  const result = await command.run(
+                    `workspaces/${id}/billing/plan-change/retry`,
+                    {},
+                    'POST',
+                  )
+                  if (result) await subscription.refetch()
+                }}
+              >
+                Retry confirmation
+              </button>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {planOptions.map((plan) => (
             <article
@@ -463,7 +545,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
               <p className="mt-2 text-2xl font-semibold tabular-nums text-[#0A1A2F]">
                 ${plan.price}
                 <span className="ml-1 text-sm font-normal text-slate-500">
-                  / month proposed
+                  / month
                 </span>
               </p>
 
@@ -487,8 +569,40 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
                 type="button"
                 className={`${primaryButton} w-full`}
                 aria-label={`Choose ${plan.title.toLowerCase()}`}
-                disabled={command.pending}
+                disabled={
+                  command.pending ||
+                  !!current?.pendingChange ||
+                  (current?.state === 'ACTIVE' &&
+                    (current.planKey === plan.key || current.cancelAtPeriodEnd))
+                }
                 onClick={async () => {
+                  if (
+                    current?.state === 'ACTIVE' &&
+                    current.planKey !== 'FREE' &&
+                    current.currentPeriodEnd
+                  ) {
+                    if (
+                      !window.confirm(
+                        `Schedule ${plan.title} at $${plan.price}/month from ${new Date(current.currentPeriodEnd).toLocaleDateString()}? Your current paid plan continues until then.`,
+                      )
+                    )
+                      return
+                    const result = await command.run(
+                      `workspaces/${id}/billing/plan-change`,
+                      {
+                        planKey: plan.key,
+                        effectiveAt: current.currentPeriodEnd,
+                      },
+                      'POST',
+                      {
+                        'Idempotency-Key': (checkoutKeys.current[
+                          `${id}:change:${plan.key}:${current.currentPeriodEnd}`
+                        ] ??= crypto.randomUUID()),
+                      },
+                    )
+                    if (result) await subscription.refetch()
+                    return
+                  }
                   const result = await command.run<{ url: string }>(
                     `workspaces/${id}/billing/checkout`,
                     { planKey: plan.key },

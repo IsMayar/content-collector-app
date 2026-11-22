@@ -31,6 +31,7 @@ public class BillingService {
     private final Clock clock;
     private final TransactionTemplate tx;
     private final WorkspaceSubscriptionRepository plans;
+    private final com.ayaantrix.collector.billing.repository.PlanChangeRepository changes;
 
     public BillingService(
             BillingRepository repo,
@@ -43,7 +44,9 @@ public class BillingService {
             TokenDeliveryCipher cipher,
             Clock clock,
             PlatformTransactionManager manager,
-            WorkspaceSubscriptionRepository plans) {
+            WorkspaceSubscriptionRepository plans,
+            com.ayaantrix.collector.billing.repository.PlanChangeRepository changes) {
+        this.changes = changes;
         this.repo = repo;
         this.auth = auth;
         this.workspaces = workspaces;
@@ -64,11 +67,13 @@ public class BillingService {
                     var plan = plans.findByWorkspaceId(w).orElseThrow();
                     var row = repo.subscription(w);
                     var dto = new LinkedHashMap<String, Object>();
-                    dto.put("planKey", row.get("plan_key"));
+                    boolean free=plan.effectiveState(clock.instant())==WorkspaceSubscription.State.FREE;
+                    dto.put("planKey", plan.effectivePlan(clock.instant()));
                     dto.put("state", plan.effectiveState(clock.instant()));
-                    dto.put("currentPeriodStart", instant(row, "current_period_start"));
-                    dto.put("currentPeriodEnd", instant(row, "current_period_end"));
-                    dto.put("cancelAtPeriodEnd", row.get("cancel_at_period_end"));
+                    dto.put("currentPeriodStart", free?null:instant(row, "current_period_start"));
+                    dto.put("currentPeriodEnd", free?null:instant(row, "current_period_end"));
+                    dto.put("cancelAtPeriodEnd", !free && Boolean.TRUE.equals(row.get("cancel_at_period_end")));
+                    dto.put("pendingChange", changes.pending(w).map(c -> Map.of("planKey", c.target(), "effectiveAt", c.effectiveAt(), "state", c.state())).orElse(null));
                     dto.put("graceEndsAt", instant(row, "grace_ends_at"));
                     dto.put(
                             "readOnlyEndsAt",
@@ -95,8 +100,8 @@ public class BillingService {
                     var period = repo.subscription(w);
                     var limits = workspaces.read(w).entitlements();
                     return new com.ayaantrix.collector.billing.dto.BillingDtos.Usage(
-                            instant(period, "current_period_start"),
-                            instant(period, "current_period_end"),
+                            limits.planKey()==PlanKey.FREE?month.toInstant():instant(period, "current_period_start"),
+                            limits.planKey()==PlanKey.FREE?month.plusMonths(1).toInstant():instant(period, "current_period_end"),
                             number(counters, "storage_used_bytes"),
                             number(counters, "storage_reserved_bytes"),
                             limits.storageLimitBytes(),
@@ -110,7 +115,11 @@ public class BillingService {
                             number(counters, "ai_reserved"),
                             number(counters, "sms_reserved"),
                             month.toInstant(),
-                            month.plusMonths(1).toInstant());
+                            month.plusMonths(1).toInstant(),
+                            auth.entitlements().projects(w),
+                            limits.activeProjectLimit(),
+                            auth.entitlements().contacts(w),
+                            limits.clientContactLimit());
                 });
     }
 
@@ -121,6 +130,7 @@ public class BillingService {
     private record Intent(UUID id, UUID actor, String customer, String url) {}
 
     public String hosted(UUID w, PlanKey plan, String key) {
+        if(plan==PlanKey.FREE)throw conflict("FREE_REQUIRES_NO_CHECKOUT");
         IdempotencyRepository.validKey(key);
         String kind = plan == null ? "PORTAL" : "CHECKOUT";
         String hash = IdempotencyRepository.hash(kind + ":" + plan);
@@ -164,6 +174,7 @@ public class BillingService {
                                         id, actor, (String) account.get("customer_id"), null);
                             }
                             if (plan != null) {
+                                if (changes.pending(w).isPresent()) throw conflict("BILLING_PLAN_CHANGE_PENDING");
                                 seats(w, plan, now);
                                 if (repo.checkoutPending(w, now))
                                     throw conflict("BILLING_CHECKOUT_PENDING");
@@ -233,9 +244,86 @@ public class BillingService {
     }
 
     private void seats(UUID w, PlanKey plan, Instant now) {
+        auth.entitlements().validateTarget(w, plan);
         if (members.countByWorkspaceIdAndState(w, WorkspaceMember.State.ACTIVE)
                         + invitations.reserved(w, now)
                 > plan.seats()) throw conflict("PLAN_SEAT_CONFLICT");
+    }
+
+    public Map<String,Object> retryPlanChange(UUID w) {
+        var pending = tx.execute(s -> {
+            var access = auth.access(w, true);
+            repo.account(w);
+            var change = changes.pending(w).orElseThrow(() -> conflict("BILLING_PLAN_CHANGE_NOT_FOUND"));
+            if (!change.actor().equals(access.member().userId()))
+                throw conflict("BILLING_RECONCILIATION_REQUIRED");
+            return change;
+        });
+        return changePlan(w, pending.target(), pending.effectiveAt(), pending.key());
+    }
+
+    public Map<String,Object> changePlan(UUID w, PlanKey target, Instant expectedRenewal, String key) {
+        if(target == PlanKey.FREE) throw conflict("USE_PERIOD_END_CANCELLATION");
+        IdempotencyRepository.validKey(key);
+        String customer = tx.execute(s -> {
+            auth.access(w,true);
+            repo.ensure(w,clock.instant());
+            String value=(String)repo.account(w).get("customer_id");
+            if(value==null)throw conflict("BILLING_CUSTOMER_REQUIRED");
+            return value;
+        });
+        var source=provider.current(customer);
+        var change=tx.execute(s -> {
+            var access=auth.access(w,true);
+            if(access.workspace().state()!=Workspace.State.ACTIVE)throw conflict("BILLING_UNAVAILABLE");
+            var now=clock.instant();
+            var account=repo.account(w);
+            var local=repo.subscription(w);
+            if(!"ACTIVE".equals(local.get("state")))throw conflict("BILLING_SUBSCRIPTION_CHANGED");
+            if(!customer.equals(account.get("customer_id")))throw conflict("BILLING_RECONCILIATION_REQUIRED");
+            var previous=changes.replay(w,access.member().userId(),key);
+            if(previous.isPresent()) {
+                var c=previous.get();
+                if(c.target()!=target || !c.effectiveAt().equals(expectedRenewal))throw conflict("IDEMPOTENCY_KEY_REUSED");
+                if(!c.state().equals("REQUESTED"))return c;
+                if(now.isBefore(c.lease()))throw conflict("BILLING_OPERATION_RUNNING");
+                if(!now.isBefore(c.createdAt().plus(Duration.ofHours(23))))throw conflict("BILLING_RECONCILIATION_REQUIRED");
+            } else if(changes.pending(w).isPresent())throw conflict("BILLING_PLAN_CHANGE_PENDING");
+            if(source==null || !w.equals(source.workspace()) || !"active".equals(source.state())
+                    || !source.paid() || source.cancelAtPeriodEnd() || source.plan()==target
+                    || !source.end().equals(expectedRenewal) || !now.isBefore(source.end())
+                    || !source.plan().name().equals(local.get("plan_key"))
+                    || !repo.checkoutMatches(w,source.checkout(),source.plan().name())
+                        && !changes.matches(w,source.checkout(),source.id(),source.plan(),source.start()))
+                throw conflict("BILLING_SUBSCRIPTION_CHANGED");
+            seats(w,target,now);
+            if(previous.isPresent()) {
+                var c=previous.get();
+                if(!c.subscription().equals(source.id()) || !c.checkout().equals(source.checkout()))throw conflict("BILLING_SUBSCRIPTION_CHANGED");
+                changes.lease(w,c.id(),now);
+                return c;
+            }
+            var c=new com.ayaantrix.collector.billing.repository.PlanChangeRepository.Change(UUID.randomUUID(),access.member().userId(),key,target,source.id(),source.checkout(),source.end(),"REQUESTED",null,now.plusSeconds(90),now);
+            changes.create(w,c,now);
+            return c;
+        });
+        if(!change.state().equals("REQUESTED"))return Map.of("planKey",change.target(),"effectiveAt",change.effectiveAt(),"state",change.state());
+        try {
+            String schedule=provider.schedule(w,change.id(),customer,source,target);
+            if(schedule==null || !schedule.matches("sub_sched_[A-Za-z0-9]+"))throw StripeBillingProvider.unavailable();
+            tx.executeWithoutResult(s -> {
+                var access=auth.access(w,true);
+                repo.account(w);
+                if(!access.member().userId().equals(change.actor()))throw conflict("ACCESS_DENIED");
+                if (!changes.scheduled(w,change.id(),schedule,clock.instant()))
+                    throw conflict("BILLING_SUBSCRIPTION_CHANGED");
+            });
+            return Map.of("planKey",target,"effectiveAt",change.effectiveAt(),"state","SCHEDULED");
+        } catch(RuntimeException failure) {
+            // Keep the intent and reduced admission limits until the unknown outcome is reconciled.
+            tx.executeWithoutResult(s -> changes.release(w,change.id(),clock.instant()));
+            throw failure;
+        }
     }
 
     /** Durable, fenced claim; provider reads hold no database transaction or tenant locks. */
@@ -256,12 +344,15 @@ public class BillingService {
                                 || !now.isBefore(instant(account, "lease_until"))) return;
                         if (snapshot != null) {
                             if (!w.equals(snapshot.workspace())
-                                    || !repo.checkoutMatches(
-                                            w, snapshot.checkout(), snapshot.plan().name())
+                                    || (!repo.checkoutMatches(w, snapshot.checkout(), snapshot.plan().name())
+                                        && !changes.matches(w,snapshot.checkout(),snapshot.id(),snapshot.plan(),snapshot.start()))
                                     || !snapshot.end().isAfter(snapshot.start()))
                                 throw StripeBillingProvider.unavailable();
                             var old = repo.subscription(w);
+                            // Provider reconciliation cannot lift an administrative suspension.
+                            if("SUSPENDED".equals(old.get("state"))){repo.reconciled(w,customer,watermark,now);return;}
                             String state;
+                            PlanKey effectivePlan=snapshot.plan();
                             Instant start = snapshot.start(),
                                     end = snapshot.end(),
                                     grace = null,
@@ -280,6 +371,7 @@ public class BillingService {
                                 case "past_due" -> {
                                     if (account.get("fingerprint") == null)
                                         throw StripeBillingProvider.unavailable();
+                                    effectivePlan=PlanKey.valueOf((String)old.get("plan_key"));
                                     start = instant(old, "current_period_start");
                                     end = instant(old, "current_period_end");
                                     delinquent = instant(account, "delinquent_since");
@@ -290,7 +382,16 @@ public class BillingService {
                                     state = now.isBefore(grace) ? "PAST_DUE" : "READ_ONLY";
                                     readOnly = grace.plus(Duration.ofDays(30));
                                 }
-                                case "canceled", "unpaid", "paused", "incomplete_expired" -> {
+                                case "canceled" -> {
+                                    // Preserve an already paid period; never extend it from local time.
+                                    if(snapshot.paid() && now.isBefore(end)) state="ACTIVE";
+                                    else {state="FREE";effectivePlan=PlanKey.FREE;}
+                                }
+                                case "incomplete_expired" -> {
+                                    state="FREE";
+                                    effectivePlan=PlanKey.FREE;
+                                }
+                                case "unpaid", "paused" -> {
                                     state = "READ_ONLY";
                                     readOnly = end.plus(Duration.ofDays(30));
                                 }
@@ -300,7 +401,7 @@ public class BillingService {
                                 }
                                 default -> throw StripeBillingProvider.unavailable();
                             }
-                            seats(w, snapshot.plan(), now);
+                            // Reconciliation never deletes collaborators or refuses a confirmed cancellation.
                             String fingerprint =
                                     IdempotencyRepository.hash(
                                             snapshot.id()
@@ -319,16 +420,18 @@ public class BillingService {
                             if (!fingerprint.equals(account.get("fingerprint")))
                                 repo.apply(
                                         w,
-                                        snapshot.plan().name(),
+                                        effectivePlan.name(),
                                         state,
                                         start,
                                         end,
                                         grace,
                                         readOnly,
-                                        snapshot.cancelAtPeriodEnd(),
+                                        state.equals("FREE")?false:snapshot.cancelAtPeriodEnd(),
                                         delinquent,
                                         fingerprint,
                                         now);
+                            if("ACTIVE".equals(state) && snapshot.paid()) changes.applied(w,snapshot.checkout(),now);
+                            if("FREE".equals(state)) changes.cancelled(w,snapshot.id(),now);
                         }
 
                         repo.reconciled(w, customer, watermark, now);

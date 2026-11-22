@@ -1,5 +1,7 @@
 # Implementation status
 
+Pricing/entitlements V2, 19 November 2026: **In progress**, not a completed roadmap or release gate. New-price Checkout validation and explicit legacy-price reconciliation passed 7 local Stripe adapter fixture tests. Permanent Free lifecycle, plan/feature enforcement, transitions, migration, frontend updates and final integration verification remain outstanding. No approved Stripe sandbox is configured; real-provider acceptance remains pending. See [pricing V2 progress](PRICING_AND_ENTITLEMENTS_V2.md) and [sandbox setup](STRIPE_SANDBOX_SETUP.md). Earlier T32/T33 evidence below remains historical.
+
 Source: [MVP guide, Section 22](spec/Website_Content_Collector_MVP.md#22-sequential-implementation-plan). Updated 5 November 2026.
 
 All tasks were initialized as Not started. T01–T03 are Complete. M0/T04 remain In progress pending hosted CI. T07 is Complete for workspace foundation/live membership/onboarding acceptance. M1/T05 and T06 remain In progress; T08 is Complete; M2 and M3 are In progress; M4 is In progress; M5, M6 and M7 are In progress.
@@ -1020,3 +1022,7 @@ Verification:
 
 ### UI/UX refinement — 2026-11-18 (acceptance pending)
 Unified project content/editing workspace, stable sidebar theme, compact profile/settings navigation and invited-member guidance. Focused units: 24 passed; desktop/laptop/tablet/phone mock browser checks and invited-member desktop journey passed. Changed-file lint and direct Vite bundle passed. TypeScript blocked by three existing client-portal errors; broader auth/review/billing check: 40 passed, 10 failed. No backend/specification changes or release gates closed. See [UI_UX_REFINEMENT.md](UI_UX_REFINEMENT.md) for exact evidence and limitations.
+
+### Approved pricing V2 — 2026-11-21
+
+Local implementation/fixture acceptance complete: permanent Free, Solo $7, Agency $19; authoritative limits/features, safe legacy trial/cancellation fallback, durable next-renewal paid changes and retry, frontend pricing/onboarding/billing. V27–V29 added; historical migrations/specifications unchanged. Final backend verify: **1,108 passed**; full frontend: **262 passed**; final affected billing/settings: **22 passed**; real HTTPS fixture billing journey with MSW disabled: **1 passed**. Final TypeScript/build and changed-file lint/format passed. Earlier failed runs and corrected fixture assumptions remain recorded in [PRICING_AND_ENTITLEMENTS_V2.md](PRICING_AND_ENTITLEMENTS_V2.md). Real Stripe sandbox acceptance pending; logo uploads remain existing demo-only functionality. T35 stays In progress, and all previous release gates remain open. Protected files unchanged; no commit/push/deployment/provider enablement.

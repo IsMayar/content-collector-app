@@ -3,16 +3,31 @@ import { z } from 'zod'
 
 export const subscriptionResponse = z.object({
   subscription: z.object({
-    planKey: z.enum(['SOLO', 'AGENCY']),
-    state: z.enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'READ_ONLY', 'SUSPENDED']),
-    currentPeriodStart: z.iso.datetime(),
-    currentPeriodEnd: z.iso.datetime(),
+    planKey: z.enum(['FREE', 'SOLO', 'AGENCY']),
+    state: z.enum([
+      'FREE',
+      'TRIALING',
+      'ACTIVE',
+      'PAST_DUE',
+      'READ_ONLY',
+      'SUSPENDED',
+    ]),
+    currentPeriodStart: z.iso.datetime().nullable(),
+    currentPeriodEnd: z.iso.datetime().nullable(),
     cancelAtPeriodEnd: z.boolean(),
+    pendingChange: z
+      .object({
+        planKey: z.enum(['SOLO', 'AGENCY']),
+        effectiveAt: z.iso.datetime(),
+        state: z.enum(['REQUESTED', 'SCHEDULED']),
+      })
+      .nullable()
+      .optional(),
     graceEndsAt: z.iso.datetime().nullable(),
     readOnlyEndsAt: z.iso.datetime().nullable(),
   }),
   entitlements: z
-    .object({ planKey: z.enum(['SOLO', 'AGENCY']), seats: z.number() })
+    .object({ planKey: z.enum(['FREE', 'SOLO', 'AGENCY']), seats: z.number() })
     .passthrough(),
 })
 
@@ -35,6 +50,10 @@ export const usageResponse = z.object({
     smsSegmentsReserved: counter.default(0),
     aiPeriodStart: z.iso.datetime().optional(),
     aiPeriodEnd: z.iso.datetime().optional(),
+    activeProjects: counter.optional(),
+    activeProjectLimit: counter.nullable().optional(),
+    clientContacts: counter.optional(),
+    clientContactLimit: counter.nullable().optional(),
   }),
 })
 

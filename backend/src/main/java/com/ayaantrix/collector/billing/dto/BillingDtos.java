@@ -10,6 +10,7 @@ public final class BillingDtos {
     private BillingDtos() {}
 
     public record Checkout(@NotNull PlanKey planKey) {}
+    public record PlanChange(@NotNull PlanKey planKey, @NotNull Instant effectiveAt) {}
 
     public record Usage(
             Instant periodStart,
@@ -27,5 +28,9 @@ public final class BillingDtos {
             long aiDraftsReserved,
             long smsSegmentsReserved,
             Instant aiPeriodStart,
-            Instant aiPeriodEnd) {}
+            Instant aiPeriodEnd,
+            long activeProjects,
+            Integer activeProjectLimit,
+            long clientContacts,
+            Integer clientContactLimit) {}
 }

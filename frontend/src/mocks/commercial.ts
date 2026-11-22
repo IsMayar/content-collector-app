@@ -76,7 +76,9 @@ registerProductResolver((request, path, _search, body) => {
           ? 'READ_ONLY'
           : scenario === 'grace'
             ? 'PAST_DUE'
-            : 'TRIALING'
+            : w.entitlements.planKey === 'FREE'
+              ? 'FREE'
+              : 'ACTIVE'
       w.subscription.graceEndsAt =
         scenario === 'grace'
           ? new Date(Date.now() + 7 * 864e5).toISOString()
@@ -454,6 +456,12 @@ registerProductResolver((request, path, _search, body) => {
   const actor = agencyActor(request, wid, true, method !== 'GET')
   const w = actor.workspace
   if (path.length === 2 && method === 'PATCH') {
+    requireRule(
+      typeof body.logo !== 'string' || w.entitlements.planKey !== 'FREE',
+      403,
+      'PLAN_FEATURE_UNAVAILABLE',
+      'Custom branding is available on paid plans.',
+    )
     checkVersion(w.workspace.version, body.expectedVersion)
     requireRule(
       body.name && body.timezone,
@@ -494,8 +502,67 @@ registerProductResolver((request, path, _search, body) => {
         smsSegmentsReserved: 0,
         aiPeriodStart: w.usage.periodStart,
         aiPeriodEnd: w.usage.periodEnd,
+        activeProjects: Object.values(productDb.projects).filter(
+          (r) =>
+            r.project.workspaceId === wid &&
+            ['DRAFT', 'ACTIVE', 'PAUSED'].includes(r.project.state),
+        ).length,
+        activeProjectLimit:
+          w.subscription.planKey === 'FREE'
+            ? 2
+            : w.subscription.planKey === 'SOLO'
+              ? 10
+              : null,
+        clientContacts: new Set(
+          Object.values(productDb.projects)
+            .filter((r) => r.project.workspaceId === wid)
+            .flatMap((r) =>
+              r.contacts
+                .filter(
+                  (c) =>
+                    c.state === 'ACTIVE' &&
+                    Date.parse(c.accessExpiresAt) > Date.now(),
+                )
+                .map((c) => c.email.trim().toLowerCase()),
+            ),
+        ).size,
+        clientContactLimit:
+          w.subscription.planKey === 'FREE'
+            ? 5
+            : w.subscription.planKey === 'SOLO'
+              ? 50
+              : null,
       },
     })
+  if (resource === 'billing' && pid === 'plan-change') {
+    if (area === 'retry') {
+      requireRule(
+        !!w.subscription.pendingChange,
+        409,
+        'BILLING_PLAN_CHANGE_NOT_FOUND',
+        'No plan change is pending.',
+      )
+      w.subscription.pendingChange!.state = 'SCHEDULED'
+      return response(w.subscription.pendingChange)
+    }
+    requireRule(
+      w.subscription.state === 'ACTIVE' &&
+        !w.subscription.cancelAtPeriodEnd &&
+        ['SOLO', 'AGENCY'].includes(String(body.planKey)) &&
+        body.planKey !== w.subscription.planKey &&
+        body.effectiveAt === w.subscription.currentPeriodEnd &&
+        !w.subscription.pendingChange,
+      409,
+      'BILLING_SUBSCRIPTION_CHANGED',
+      'Refresh billing before changing your plan.',
+    )
+    w.subscription.pendingChange = {
+      planKey: body.planKey as 'SOLO' | 'AGENCY',
+      effectiveAt: String(body.effectiveAt),
+      state: 'SCHEDULED',
+    }
+    return response(w.subscription.pendingChange)
+  }
   if (resource === 'billing' && ['checkout', 'portal'].includes(pid)) {
     requireRule(
       pid !== 'checkout' || ['SOLO', 'AGENCY'].includes(String(body.planKey)),

@@ -104,6 +104,7 @@ class ProjectFoundationTests {
     }
     Tenant tenant(){var a=actor();UUID w=as(a,()->context.getBean(WorkspaceService.class).create(new WorkspaceDtos.Create("Project studio","UTC",null))).id();UUID client=as(a,()->service().createCustomer(w,new CustomerCreate("Synthetic customer",null,null))).id();return new Tenant(a,w,client);}
     BuiltInTemplateSeeder seed(){return context.getBean(BuiltInTemplateSeeder.class);}
+    Tenant paidTenant(){var t=tenant();jdbc.update("update collector.subscriptions set plan_key='AGENCY',state='ACTIVE',current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.plusSeconds(86400*30L)),t.workspace());return t;}
     ProjectService service(){return context.getBean(ProjectService.class);}
     String bearer(Tenant t){return "Bearer "+t.actor().access();}
     TransactionTemplate tx(){return new TransactionTemplate(context.getBean(PlatformTransactionManager.class));}
@@ -112,6 +113,32 @@ class ProjectFoundationTests {
     View create(Tenant t,ProjectType type){return as(t.actor(),()->service().create(t.workspace(),input(t,type),UUID.randomUUID().toString()));}
     org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder postProject(Tenant t,Object body,String key){return post(t.root()+"/projects").with(csrf().asHeader()).header("Authorization",bearer(t)).header("Idempotency-Key",key).contentType("application/json").content(json.writeValueAsString(body));}
     long count(Tenant t,String table){return jdbc.queryForObject("select count(*) from collector."+table+" where workspace_id=?",Long.class,t.workspace());}
+    @Test void freeConcurrentProjectAdmissionsCannotExceedTwo() throws Exception {
+        var t=tenant();create(t,ProjectType.WEBSITE);
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            Callable<Boolean> attempt=()->{gate.await();try{create(t,ProjectType.WEB_APP);return true;}catch(ApiException denied){assertThat(denied.getMessage()).contains("limit");return false;}};
+            var first=pool.submit(attempt);var second=pool.submit(attempt);gate.countDown();
+            assertThat(List.of(first.get(20,TimeUnit.SECONDS),second.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(true,false);
+        }
+        assertThat(count(t,"projects")).isEqualTo(2);
+        assertThat(count(t,"project_snapshots")).isEqualTo(2);
+    }
+    @Test void freeContactQuotaIsWorkspaceWideDistinctAndConcurrencySafe() throws Exception {
+        var t=tenant();var first=create(t,ProjectType.WEBSITE);var second=create(t,ProjectType.WEB_APP);
+        var clients=context.getBean(com.ayaantrix.collector.project.service.ProjectClientService.class);
+        java.util.function.BiFunction<UUID,String,Object> add=(project,email)->as(t.actor(),()->clients.createContact(t.workspace(),project,new com.ayaantrix.collector.project.dto.ProjectClientDtos.ContactCreate(t.client(),"Synthetic",email,NOW.plus(Duration.ofDays(60)))));
+        for(int i=0;i<4;i++)add.apply(first.id(),"contact"+i+"@example.test");
+        add.apply(second.id(),"CONTACT0@example.test");
+        var gate=new CountDownLatch(1);
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            Callable<Boolean> attempt=()->{gate.await();try{add.apply(first.id(),UUID.randomUUID()+"@example.test");return true;}catch(ApiException denied){assertThat(denied.getMessage()).contains("limit");return false;}};
+            var a=pool.submit(attempt);var b=pool.submit(attempt);gate.countDown();
+            assertThat(List.of(a.get(20,TimeUnit.SECONDS),b.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(true,false);
+        }
+        assertThat(jdbc.queryForObject("select count(distinct email_normalized) from collector.project_contacts where workspace_id=?",Long.class,t.workspace())).isEqualTo(5);
+        assertThat(count(t,"project_contacts")).isEqualTo(6);
+    }
     @ParameterizedTest @ValueSource(strings={"WEBSITE","WEB_APP","MOBILE_APP"})
     void createsAllThreeTypesWithExactFrontendShapeAndGenuineInitialProgress(String name) throws Exception {
         var t=tenant();var input=input(t,ProjectType.valueOf(name));
@@ -131,7 +158,7 @@ class ProjectFoundationTests {
             .andExpect(jsonPath("$.structure[0].items[0].version").value(1)).andExpect(jsonPath("$.structure[0].items[0].state").value("NOT_STARTED"));
     }
     @Test void allTenSourceDefinitionsRetainEveryFieldOrderAndConfiguration() {
-        var t=tenant();
+        var t=paidTenant();
         for(var original:seed().originals()){
             var input=new Create(t.client(),"Original template",ProjectType.valueOf(original.get("projectType").asText()),LocalDate.of(2026,12,20),"UTC",BuiltInTemplateSeeder.versionId(original.get("key").asText(),1));
             var project=as(t.actor(),()->service().create(t.workspace(),input,UUID.randomUUID().toString()));
@@ -204,7 +231,7 @@ class ProjectFoundationTests {
     @Test void serviceCannotBeInvokedWithoutTrustedIdentity(){var t=tenant();assertThatThrownBy(()->service().create(t.workspace(),input(t,ProjectType.WEBSITE),"no-actor")).isInstanceOf(ApiException.class);}
     @ParameterizedTest @ValueSource(strings={"READ_ONLY","SUSPENDED","DELETION_PENDING","EXPIRED","MISSING_PLAN"}) void existingPlanPolicyDeniesNewWritesAndPreservesEligibleReadAccess(String state) throws Exception {
         var t=tenant();var p=create(t,ProjectType.WEBSITE);
-        if(state.equals("EXPIRED"))jdbc.update("update collector.subscriptions set current_period_start=?,current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.minusSeconds(86400)),java.sql.Timestamp.from(NOW),t.workspace());
+        if(state.equals("EXPIRED"))jdbc.update("update collector.subscriptions set plan_key='SOLO',state='READ_ONLY',current_period_start=?,current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.minusSeconds(86400)),java.sql.Timestamp.from(NOW),t.workspace());
         else if(state.equals("MISSING_PLAN"))jdbc.update("delete from collector.subscriptions where workspace_id=?",t.workspace());else jdbc.update("update collector.workspaces set state=? where id=?",state,t.workspace());
         mvc.perform(postProject(t,input(t,ProjectType.WEBSITE),"readonly")).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("WORKSPACE_READ_ONLY"));
         var read=mvc.perform(get(t.root()+"/projects/"+p.id()).header("Authorization",bearer(t)));
@@ -214,7 +241,7 @@ class ProjectFoundationTests {
         assertThat(count(t,"projects")).isEqualTo(1);
     }
     @Test void noArbitraryProjectCapOrProviderUsageIsCharged() {
-        var t=tenant();String before=jdbc.queryForObject("select row_to_json(w)::text from collector.workspaces w where id=?",String.class,t.workspace());
+        var t=paidTenant();String before=jdbc.queryForObject("select row_to_json(w)::text from collector.workspaces w where id=?",String.class,t.workspace());
         for(int i=0;i<7;i++)create(t,ProjectType.WEB_APP);
         assertThat(count(t,"projects")).isEqualTo(7);assertThat(jdbc.queryForObject("select row_to_json(w)::text from collector.workspaces w where id=?",String.class,t.workspace())).isEqualTo(before);
         assertThat(jdbc.queryForObject("select count(*) from collector.outbox_jobs",Integer.class)).isZero();
@@ -258,7 +285,7 @@ class ProjectFoundationTests {
         }
     }
     @Test void listingSupportsSearchCombinedFiltersStableSortAndBoundedPagination() throws Exception {
-        var t=tenant();create(t,ProjectType.WEBSITE);create(t,ProjectType.WEB_APP);create(t,ProjectType.MOBILE_APP);
+        var t=paidTenant();create(t,ProjectType.WEBSITE);create(t,ProjectType.WEB_APP);create(t,ProjectType.MOBILE_APP);
         mvc.perform(get(t.root()+"/projects").param("size","1").param("page","1").param("sort","title").header("Authorization",bearer(t)))
             .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1)).andExpect(jsonPath("$.page.page").value(1)).andExpect(jsonPath("$.page.size").value(1)).andExpect(jsonPath("$.page.totalElements").value(3));
         mvc.perform(get(t.root()+"/projects").param("search","SYnTheTiC").param("projectType","WEB_APP").param("state","DRAFT").param("sort","dueDate").header("Authorization",bearer(t)))
@@ -283,7 +310,7 @@ class ProjectFoundationTests {
         jdbc.update("insert into collector.template_versions(id,template_id,version_no,schema_version,definition) values (?,?,?,1,?::jsonb)",id,template,version,definition.toString());return id;
     }
     @Test void visibleConditionsAndRepeaterConfigSurviveCopyWithUnansweredDependenciesHidden() {
-        var t=tenant();var original=(ObjectNode)seed().originals().get(0).deepCopy();var first=(ObjectNode)original.at("/sections/0/items/0");first.put("type","SINGLE_SELECT");first.putObject("validation").putArray("options").addObject().put("key","yes").put("label","Yes");
+        var t=paidTenant();var original=(ObjectNode)seed().originals().get(0).deepCopy();var first=(ObjectNode)original.at("/sections/0/items/0");first.put("type","SINGLE_SELECT");first.putObject("validation").putArray("options").addObject().put("key","yes").put("label","Yes");
         ((ObjectNode)original.at("/sections/0/items/1")).putObject("visibleWhen").put("dependsOnItemKey","home.headline").put("operator","EQUALS").put("optionKey","yes");
         UUID version=workspaceTemplate(t,original,1);var input=new Create(t.client(),"Conditional",ProjectType.WEBSITE,LocalDate.of(2026,12,20),"UTC",version);
         var p=as(t.actor(),()->service().create(t.workspace(),input,"conditional"));var detail=as(t.actor(),()->service().read(t.workspace(),p.id()));
@@ -323,7 +350,7 @@ class ProjectFoundationTests {
     }
     @Test void cleanFlywayHibernateAndRestartPreserveProjectSnapshotAndSession() throws Exception {
         var t=tenant();var p=create(t,ProjectType.MOBILE_APP);var before=as(t.actor(),()->service().read(t.workspace(),p.id()));context.close();open();
-        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(26);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+        assertThat(context.getBean(Flyway.class).info().applied()).hasSize(29);assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");assertThat(as(t.actor(),()->service().read(t.workspace(),p.id()))).isEqualTo(before);
         mvc.perform(get(t.root()+"/projects/"+p.id()).header("Authorization",bearer(t))).andExpect(status().isOk());seed().seed();assertThat(count(t,"projects")).isEqualTo(1);
     }
@@ -334,7 +361,7 @@ class ProjectFoundationTests {
         var original=seed().originals().get(0);data.update("insert into collector.templates(id,template_key,project_type,industry,title,is_builtin,version) values (?,?,'WEBSITE','PLUMBER',?,true,1)",BuiltInTemplateSeeder.templateId(KEY),KEY,original.get("title").asText());
         data.update("insert into collector.template_versions(id,template_id,version_no,schema_version,definition) values (?,?,1,1,?::jsonb)",VERSION,BuiltInTemplateSeeder.templateId(KEY),original.toString());
         try(var upgraded=start(url)){
-            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(26);assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
+            assertThat(upgraded.getBean(Flyway.class).info().applied()).hasSize(29);assertThat(upgraded.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();
             assertThat(data.queryForObject("select name from collector.workspaces where id=?",String.class,w)).isEqualTo("Preserved");assertThat(data.queryForObject("select password_hash from collector.users where id=?",String.class,user)).isEqualTo(hash);
             assertThat(json.readTree(data.queryForObject("select definition::text from collector.template_versions where id=?",String.class,VERSION))).isEqualTo(original);assertThat(data.queryForObject("select count(*) from collector.templates where is_builtin",Integer.class)).isEqualTo(10);
         }
@@ -350,7 +377,7 @@ class ProjectFoundationTests {
                 if(kind.equals("DISABLE"))jdbc.update("update collector.workspace_members set state='DISABLED' where workspace_id=?",t.workspace());
                 else if(kind.equals("DEMOTE"))jdbc.update("update collector.workspace_members set role='MEMBER' where workspace_id=?",t.workspace());
                 else if(kind.equals("READ_ONLY"))jdbc.update("update collector.workspaces set state='READ_ONLY' where id=?",t.workspace());
-                else jdbc.update("update collector.subscriptions set current_period_start=?,current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.minusSeconds(86400)),java.sql.Timestamp.from(NOW),t.workspace());
+                else jdbc.update("update collector.subscriptions set plan_key='SOLO',state='READ_ONLY',current_period_start=?,current_period_end=? where workspace_id=?",java.sql.Timestamp.from(NOW.minusSeconds(86400)),java.sql.Timestamp.from(NOW),t.workspace());
             }));
             assertThat(held.await(5,TimeUnit.SECONDS)).isTrue();
             var write=pool.submit(()->{try{create(t,ProjectType.WEBSITE);return 201;}catch(ApiException e){return e.getStatus().value();}});

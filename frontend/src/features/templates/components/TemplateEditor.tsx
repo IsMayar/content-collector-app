@@ -1,19 +1,50 @@
 import type { TemplateDefinition } from '@/features/templates/types/template.types'
 import { Notice } from '@/shared/components/Feedback'
-import { ErrorNotice, Field, Panel } from '@/shared/components/ProductUI'
+import {
+  ErrorNotice,
+  Field,
+  Panel,
+  QueryState,
+} from '@/shared/components/ProductUI'
+import { useData } from '@/services/api/resourceApi'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useState } from 'react'
 
-export function TemplateEditor({
-  root,
-  definition,
-  onClose,
-}: {
+export function TemplateEditor(props: {
   root: string
   definition: TemplateDefinition
   onClose: () => void
 }) {
+  const query = useData<{ version: number; definition: TemplateDefinition }>(
+    `${props.root}/draft`,
+  )
+  return (
+    <QueryState query={query}>
+      {query.data && (
+        <TemplateDraftEditor
+          root={props.root}
+          definition={query.data.definition}
+          initialVersion={query.data.version}
+          onClose={props.onClose}
+        />
+      )}
+    </QueryState>
+  )
+}
+
+function TemplateDraftEditor({
+  root,
+  definition,
+  onClose,
+  initialVersion,
+}: {
+  root: string
+  definition: TemplateDefinition
+  onClose: () => void
+  initialVersion: number
+}) {
   const [draft, setDraft] = useState(() => structuredClone(definition))
+  const [version, setVersion] = useState(initialVersion)
   const command = useCommand()
   const [saved, setSaved] = useState(false)
   const [message, setMessage] = useState('')
@@ -27,9 +58,13 @@ export function TemplateEditor({
         className="stack-form"
         onSubmit={async (e) => {
           e.preventDefault()
-          if (
-            await command.run(`${root}/draft`, { definition: draft }, 'PUT')
-          ) {
+          const result = await command.run<{ version: number }>(
+            `${root}/draft`,
+            { definition: draft, expectedVersion: version },
+            'PUT',
+          )
+          if (result) {
+            setVersion(result.version)
             setSaved(true)
             setMessage('Template draft saved. Publish when you’re ready.')
           }
@@ -154,7 +189,12 @@ export function TemplateEditor({
             className="primary-button"
             disabled={!saved || command.pending}
             onClick={async () => {
-              if (await command.run(`${root}/versions`, {})) {
+              const result = await command.run<{ version: number }>(
+                `${root}/versions`,
+                { expectedVersion: version },
+              )
+              if (result) {
+                setVersion(result.version)
                 setMessage(
                   'New template version published. Existing projects are unchanged.',
                 )

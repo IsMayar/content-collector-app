@@ -112,18 +112,18 @@ class WorkspaceFoundationTests {
         UUID id=UUID.fromString(json.readTree(result.getResponse().getContentAsString()).at("/workspace/id").asText());
         assertThat(count("workspaces")).isEqualTo(1);assertThat(count("workspace_members")).isEqualTo(1);assertThat(count("subscriptions")).isEqualTo(1);
         assertThat(jdbc.queryForObject("select user_id from collector.workspace_members where workspace_id=? and role='OWNER' and state='ACTIVE'",UUID.class,id)).isEqualTo(owner.id());
-        assertThat(jdbc.queryForObject("select current_period_end from collector.subscriptions",Instant.class)).isEqualTo(NOW.plus(Duration.ofDays(14)));
+        assertThat(jdbc.queryForObject("select current_period_end from collector.subscriptions",Instant.class)).isEqualTo(Instant.parse("2026-11-01T00:00:00Z"));
         mvc.perform(get(ROOT+"/"+id).header("Authorization","Bearer "+owner.access())).andExpect(status().isOk())
-            .andExpect(jsonPath("$.entitlements.planKey").value(plan)).andExpect(jsonPath("$.entitlements.seats").value(plan.equals("SOLO")?1:5))
-            .andExpect(jsonPath("$.entitlements.storageLimitBytes").value(50_000_000_000L)).andExpect(jsonPath("$.entitlements.canWrite").value(true))
+            .andExpect(jsonPath("$.entitlements.planKey").value("FREE")).andExpect(jsonPath("$.entitlements.seats").value(1))
+            .andExpect(jsonPath("$.entitlements.storageLimitBytes").value(500_000_000L)).andExpect(jsonPath("$.entitlements.canWrite").value(true))
             .andExpect(jsonPath("$.entitlements.aiDraftAllowance").value(0)).andExpect(jsonPath("$.entitlements.aiEnabled").value(false))
             .andExpect(jsonPath("$.entitlements.smsEnabled").value(false));
-        assertThat(PlanKey.SOLO.aiDrafts()).isEqualTo(100);assertThat(PlanKey.AGENCY.aiDrafts()).isEqualTo(300);
-        assertThat(PlanKey.SOLO.smsSegments()).isEqualTo(25);assertThat(PlanKey.AGENCY.smsSegments()).isEqualTo(100);
+        assertThat(PlanKey.SOLO.aiDrafts()).isEqualTo(50);assertThat(PlanKey.AGENCY.aiDrafts()).isEqualTo(200);
+        assertThat(PlanKey.SOLO.smsSegments()).isEqualTo(0);assertThat(PlanKey.AGENCY.smsSegments()).isEqualTo(50);
     }
     @Test void omittedPlanAndTimezoneUseSafeSpecificationDefaults() throws Exception {
         var owner=actor("owner@example.test");mvc.perform(write("POST",ROOT,Map.of("name","Studio"),owner)).andExpect(status().isCreated()).andExpect(jsonPath("$.workspace.timezone").value("America/Chicago"));
-        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions",String.class)).isEqualTo("SOLO");
+        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions",String.class)).isEqualTo("FREE");
     }
     @ParameterizedTest @ValueSource(strings={"", "Mars/Olympus", "GMT+10", " Asia/Kabul"})
     void invalidTimezoneCannotLeavePartialWorkspace(String timezone) throws Exception {
@@ -205,20 +205,20 @@ class WorkspaceFoundationTests {
         UUID id=UUID.fromString(json.readTree(result.getResponse().getContentAsString()).at("/workspace/id").asText());
         assertThat(jdbc.queryForObject("select user_id from collector.workspace_members",UUID.class)).isEqualTo(owner.id());
         mvc.perform(write("PATCH",ROOT+"/"+id,Map.of("expectedVersion",0,"planKey","AGENCY","ownerId",other.id(),"state","ACTIVE"),owner)).andExpect(status().isOk());
-        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions",String.class)).isEqualTo("SOLO");
-        assertThat(jdbc.queryForObject("select state from collector.subscriptions",String.class)).isEqualTo("TRIALING");
+        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions",String.class)).isEqualTo("FREE");
+        assertThat(jdbc.queryForObject("select state from collector.subscriptions",String.class)).isEqualTo("FREE");
     }
     @Test void missingEntitlementFailsClosedWithoutLeakingAnotherPlan(){
         var owner=actor("owner@example.test");var w=create(owner);jdbc.update("delete from collector.subscriptions where workspace_id=?",w.id());
         var e=as(owner,()->service.read(w.id())).entitlements();assertThat(e.canWrite()).isFalse();assertThat(e.seats()).isZero();assertThat(e.storageLimitBytes()).isZero();
         assertThatThrownBy(()->as(owner,()->service.update(w.id(),new WorkspaceDtos.Update("Denied",null,0L)))).isInstanceOf(ApiException.class);
     }
-    @Test void trialExpiryChecksClockAtExactBoundaryWithoutCleanupJob(){
+    @Test void freePlanDoesNotExpireAtTheOldTrialBoundary(){
         var owner=actor("owner@example.test");var w=create(owner);
         // Service uses the real session checker; keep that session usable to isolate entitlement expiry.
         jdbc.update("update collector.auth_sessions set expires_at=?,idle_expires_at=?",java.sql.Timestamp.from(NOW.plus(Duration.ofDays(20))),java.sql.Timestamp.from(NOW.plus(Duration.ofDays(20))));
         clock.now.set(NOW.plus(Duration.ofDays(14)).minusSeconds(1));assertThat(as(owner,()->service.read(w.id())).entitlements().canWrite()).isTrue();
-        clock.now.set(NOW.plus(Duration.ofDays(14)));assertThat(as(owner,()->service.read(w.id())).entitlements().canWrite()).isFalse();
+        clock.now.set(NOW.plus(Duration.ofDays(14)));assertThat(as(owner,()->service.read(w.id())).entitlements().canWrite()).isTrue();
     }
     @ParameterizedTest @ValueSource(strings={"READ_ONLY","SUSPENDED","DELETION_PENDING"})
     void workspaceStateBlocksWritesEvenWithUnexpiredTrial(String state){
@@ -306,7 +306,7 @@ class WorkspaceFoundationTests {
     }
     @Test void cleanMigrationsHibernateValidationAndRestartPreserveTenantState(){
         var owner=actor("owner@example.test");var w=create(owner);context.close();open();
-        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(26);
+        assertThat(context.getBean(Flyway.class).validateWithResult().validationSuccessful).isTrue();assertThat(context.getBean(Flyway.class).info().applied()).hasSize(29);
         assertThat(context.getEnvironment().getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
         assertThat(as(owner,()->service.read(w.id())).workspace().id()).isEqualTo(w.id());assertThat(count("workspace_members")).isEqualTo(1);
     }
@@ -337,7 +337,7 @@ class WorkspaceFoundationTests {
         assertThat(membership.get("workspaceId").asText()).isEqualTo(w.id().toString());assertThat(membership.get("workspaceName").asText()).isEqualTo("Workspace");
         assertThat(membership.get("role").asText()).isEqualTo("OWNER");assertThat(membership.properties()).hasSize(4);
         assertThat(membership.get("memberId").asText()).isEqualTo(jdbc.queryForObject("select id from collector.workspace_members where workspace_id=?",UUID.class,w.id()).toString());
-        mvc.perform(get(ROOT+"/"+w.id()).header("Authorization","Bearer "+owner.access())).andExpect(status().isOk()).andExpect(jsonPath("$.entitlements.planKey").value("AGENCY"));
+        mvc.perform(get(ROOT+"/"+w.id()).header("Authorization","Bearer "+owner.access())).andExpect(status().isOk()).andExpect(jsonPath("$.entitlements.planKey").value("FREE"));
     }
     @Test void meProjectsOnlyOwnActiveOwnerAndMemberWorkspacesInOneJoin() throws Exception {
         var owner=actor("owner@example.test");var second=actor("second@example.test");var unrelated=actor("unrelated@example.test");

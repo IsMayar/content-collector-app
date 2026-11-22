@@ -19,13 +19,19 @@ public class ExportWorker {
     private final PrivateObjectStorage storage;
     private final Clock clock;
     private final TransactionTemplate tx;
+    private final com.ayaantrix.collector.workspace.repository.WorkspaceRepository workspaces;
+    private final com.ayaantrix.collector.workspace.service.PlanEntitlements plans;
 
     public ExportWorker(
             ExportRepository jobs,
             ExportRenderer renderer,
             PrivateObjectStorage storage,
             Clock clock,
-            PlatformTransactionManager manager) {
+            PlatformTransactionManager manager,
+            com.ayaantrix.collector.workspace.repository.WorkspaceRepository workspaces,
+            com.ayaantrix.collector.workspace.service.PlanEntitlements plans) {
+        this.workspaces = workspaces;
+        this.plans = plans;
         this.jobs = jobs;
         this.renderer = renderer;
         this.storage = storage;
@@ -42,6 +48,7 @@ public class ExportWorker {
         String key = key(j, j.attempts());
         boolean published = false;
         try {
+            tx.executeWithoutResult(s -> requireFormat(j));
             var directory = Path.of(System.getProperty("java.io.tmpdir"), "collector-exports");
             Files.createDirectories(directory);
             if (Files.isSymbolicLink(directory))
@@ -63,10 +70,12 @@ public class ExportWorker {
             long bytes = Files.size(temp);
             published =
                     Boolean.TRUE.equals(
-                            tx.execute(s -> jobs.ready(j, key, bytes, clock.instant())));
+                            tx.execute(s -> { requireFormat(j); return jobs.ready(j, key, bytes, clock.instant()); }));
         } catch (Exception failed) {
             String code =
-                    failed instanceof ExportRenderer.TooLarge
+                    failed instanceof com.ayaantrix.collector.common.error.ApiException
+                            ? "PLAN_FEATURE_UNAVAILABLE"
+                            : failed instanceof ExportRenderer.TooLarge
                             ? "EXPORT_TOO_LARGE"
                             : "EXPORT_GENERATION_FAILED";
             tx.executeWithoutResult(
@@ -74,7 +83,7 @@ public class ExportWorker {
                             jobs.fail(
                                     j,
                                     code,
-                                    failed instanceof ExportRenderer.TooLarge,
+                                    failed instanceof ExportRenderer.TooLarge || failed instanceof com.ayaantrix.collector.common.error.ApiException,
                                     clock.instant()));
         } finally {
             if (!published) {
@@ -103,6 +112,13 @@ public class ExportWorker {
                 }
         }
         return true;
+    }
+
+    private void requireFormat(Job job) {
+        // Same workspace-first lock order as subscription reconciliation and admissions.
+        workspaces.lockInvitationWorkspace(job.workspace()).orElseThrow();
+        if ("APPROVED_ZIP".equals(job.format()))
+            plans.require(plans.current(job.workspace()).zipExport(), "ZIP exports");
     }
 
     public void cleanup() {

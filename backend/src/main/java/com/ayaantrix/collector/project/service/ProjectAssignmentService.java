@@ -22,6 +22,7 @@ public class ProjectAssignmentService {
  public Assignment put(UUID workspace,UUID project,UUID member,Change input){
   var access=auth.access(workspace,true);auth.writable(access);if(input==null||!validator.validate(input).isEmpty())throw new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Assignment fields are invalid.");
   var p=projects.lockForStructure(workspace,project).orElseThrow(ProjectAuthorization::missing);if(!p.structureEditable())throw new ApiException(HttpStatus.CONFLICT,"READ_ONLY","This project cannot change assignments in its current state.");
+  auth.entitlements().require(auth.entitlements().admissionPlan(workspace).teamAssignments(),"project assignments");
   members.eligibleAssignee(workspace,member).orElseThrow(ProjectAuthorization::missing);
   var before=assignments.findByWorkspaceIdAndProjectIdAndWorkspaceMemberId(workspace,project,member);
   if(before.filter(a->a.canReview()==input.canReview()&&a.canExport()==input.canExport()).isPresent())return view(before.get());

@@ -364,7 +364,7 @@ async function command(input) {
         .getByLabel('Workspace', { exact: true })
         .inputValue()
       await expect(
-        page.getByText('Workspace owner', { exact: true }),
+        page.getByRole('button', { name: 'Profile and settings', exact: true }),
       ).toBeVisible()
       await expect(
         page.getByText('Synthetic Onboarding Owner', { exact: true }),
@@ -1396,13 +1396,13 @@ async function command(input) {
       )
       await expect(
         page.getByRole('heading', {
-          name: 'Subscription status',
+          name: 'Billing & usage',
           exact: true,
           level: 1,
         }),
       ).toBeVisible()
       await expect(
-        page.getByText('TRIALING', { exact: true }).first(),
+        page.getByText('FREE', { exact: true }).first(),
       ).toBeVisible()
       const key = crypto.randomUUID()
       const args = {
@@ -1417,7 +1417,7 @@ async function command(input) {
       const replay = await run(args)
       assert.equal(replay.data.url, result.data.url)
       await expect(
-        page.getByText('TRIALING', { exact: true }).first(),
+        page.getByText('FREE', { exact: true }).first(),
       ).toBeVisible()
       break
     }
@@ -1442,9 +1442,7 @@ async function command(input) {
           new URL(res.url()).pathname.endsWith('/subscription') &&
           res.status() === 200,
       )
-      await page
-        .getByRole('button', { name: 'Refresh status', exact: true })
-        .click()
+      await page.reload()
       await refreshed
       await expect(
         page.getByText('ACTIVE', { exact: true }).first(),
@@ -3391,7 +3389,7 @@ async function command(input) {
         .getByLabel('Workspace', { exact: true })
         .selectOption(settings.workspace)
       await expect(
-        page.getByText('Workspace owner', { exact: true }),
+        page.getByRole('button', { name: 'Profile and settings', exact: true }),
       ).toBeVisible()
       assert.ok(
         (await run('workspaces')).status === 200,

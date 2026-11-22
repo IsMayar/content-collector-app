@@ -16,8 +16,10 @@ import java.util.*;
 public class AttachmentRepository {
     private final JdbcTemplate jdbc;
     private final JsonMapper json;
+    private final com.ayaantrix.collector.workspace.service.PlanEntitlements plans;
 
-    public AttachmentRepository(JdbcTemplate jdbc, JsonMapper json) {
+    public AttachmentRepository(JdbcTemplate jdbc, JsonMapper json,com.ayaantrix.collector.workspace.service.PlanEntitlements plans) {
+        this.plans=plans;
         this.jdbc = jdbc;
         this.json = json;
     }
@@ -137,7 +139,7 @@ public class AttachmentRepository {
                         reservation,
                         w,
                         reservation,
-                        com.ayaantrix.collector.workspace.entity.PlanKey.STORAGE_BYTES);
+                        plans.admissionPlan(w).storageBytes());
         if (ok != 1) {
             // The caller holds the workspace lock: these figures describe the same quota decision.
             var quota =
@@ -145,7 +147,7 @@ public class AttachmentRepository {
                             "select storage_used_bytes, greatest(0,"
                                 + " least(storage_limit_bytes,?)-storage_used_bytes-storage_reserved_bytes)"
                                 + " available_bytes from collector.workspaces where id=?",
-                            com.ayaantrix.collector.workspace.entity.PlanKey.STORAGE_BYTES,
+                            plans.admissionPlan(w).storageBytes(),
                             w);
             throw new com.ayaantrix.collector.common.error.StorageQuotaException(
                     ((Number) quota.get("storage_used_bytes")).longValue(),

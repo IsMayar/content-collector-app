@@ -31,7 +31,9 @@ import { z } from 'zod'
 export function validateProductRead(path: string, data: unknown) {
   const route = path.split('?')[0]
   let schema: z.ZodType = object
-  if (/^client\/projects\/[^/]+\/ai-drafts\/[^/]+$/.test(route))
+  if (/^workspaces\/[^/]+\/templates\/[^/]+\/draft$/.test(route))
+    schema = z.object({ version: z.number().int().nonnegative(), definition })
+  else if (/^client\/projects\/[^/]+\/ai-drafts\/[^/]+$/.test(route))
     schema = z.object({ job: aiJobSchema })
   else if (/^workspaces\/[^/]+\/projects\/[^/]+\/exports$/.test(route))
     schema = z.object({ data: z.array(exportSummarySchema) })

@@ -40,13 +40,14 @@ public class AnalyticsService {
         var now = clock.instant();
         return new ProjectAnalytics(
                 structures.progress(w, List.of(p)).get(p),
-                List.copyOf(
+                auth.entitlements().current(w).analytics()==com.ayaantrix.collector.workspace.entity.PlanKey.AnalyticsTier.BASIC ? List.of() : List.copyOf(
                         FrictionCalculator.calculate(repo.observations(w, p, now), now).values()),
                 now);
     }
 
     public List<TemplateMetric> templates(UUID w) {
         auth.access(w, true);
+        auth.entitlements().require(auth.entitlements().current(w).analytics()==com.ayaantrix.collector.workspace.entity.PlanKey.AnalyticsTier.WORKSPACE,"workspace analytics");
         var now = clock.instant();
         return FrictionCalculator.calculate(repo.observations(w, null, now), now)
                 .entrySet()

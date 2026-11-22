@@ -2,26 +2,22 @@ import { ArrowRight, Check, ChevronDown, Info } from 'lucide-react'
 import { Link } from 'react-router'
 import { publicPlans } from '../publicPlans'
 
-const sharedFeatures = [
-  '50 GB private storage',
-  'Unlimited active projects within resource limits',
-  'Website, web app, and mobile app projects',
-  'Approved ZIP, JSON, and Markdown exports',
-]
+const sharedFeatures = ['Website, web app, and mobile app projects']
 
 const comparison = [
-  { feature: 'Workspace seats', solo: '1', agency: '5' },
-  { feature: 'Active projects', solo: 'Unlimited*', agency: 'Unlimited*' },
-  { feature: 'Private storage', solo: '50 GB', agency: '50 GB' },
-  { feature: 'AI drafts / month', solo: '100', agency: '300' },
-  { feature: 'US SMS segments / month', solo: '25', agency: '100' },
+  { feature: 'Workspace seats', free: '1', solo: '1', agency: '5' },
+  { feature: 'Active projects', free: '2', solo: '10', agency: 'Unlimited' },
+  { feature: 'Client contacts', free: '5', solo: '50', agency: 'Unlimited' },
+  { feature: 'Private storage', free: '500 MB', solo: '5 GB', agency: '25 GB' },
+  { feature: 'AI drafts / month', free: '0', solo: '50', agency: '200' },
+  { feature: 'US SMS segments / month', free: '0', solo: '0', agency: '50' },
 ]
 
 const questions = [
   {
-    title: 'What happens after the trial?',
+    title: 'Does Free expire?',
     answer:
-      'Select a plan to continue editing. Payment collection is a mock preview until production billing is integrated.',
+      'No. Free never expires and requires no credit card. Upgrade when you need more capacity. Existing trials continue until their original end date, then fall back to Free.',
   },
   {
     title: 'How do reminders work?',
@@ -41,14 +37,13 @@ export function PricingPage() {
       <div className="mx-auto w-full max-w-6xl px-5 py-12 sm:px-8 sm:py-16 lg:px-10">
         <header className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-700">
-            Proposed pilot pricing
+            Simple, transparent pricing
           </p>
           <h1 className="mt-3 text-[32px] font-bold leading-tight tracking-tight text-[#0A1A2F] sm:text-[38px]">
             Simple plans for your team.
           </h1>
           <p className="mt-3 text-[15px] leading-7 text-slate-600">
-            Compare the proposed Solo and Agency plans. A 14-day trial is
-            planned for the upcoming MVP.
+            Start on Free forever. Choose Solo or Agency when you need more.
           </p>
         </header>
 
@@ -62,12 +57,12 @@ export function PricingPage() {
             className="mt-0.5 shrink-0 text-blue-700"
           />
           <span>
-            These plans and prices are proposals. Billing is a preview until the
-            production payment integration is ready.
+            Paid Checkout remains unavailable until the payment provider is
+            configured. AI, email and SMS also require configured providers.
           </span>
         </div>
 
-        <div className="mx-auto mt-9 grid max-w-4xl gap-5 md:grid-cols-2">
+        <div className="mx-auto mt-9 grid max-w-6xl gap-5 md:grid-cols-3">
           {publicPlans.map(([name, price, description, ...features]) => (
             <article
               key={name}
@@ -91,12 +86,12 @@ export function PricingPage() {
                   ${price}
                 </span>
                 <span className="text-sm text-slate-500">
-                  / month · proposed
+                  {name === 'Free' ? 'forever' : '/ month'}
                 </span>
               </div>
               <div className="my-6 h-px bg-slate-100" />
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Planned inclusions
+                Included
               </p>
               <ul className="mb-7 flex-1 space-y-3">
                 {[...features, ...sharedFeatures].map((feature) => (
@@ -134,7 +129,7 @@ export function PricingPage() {
             Compare plans
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            A quick look at the proposed limits.
+            Compare capacity and features.
           </p>
           <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="w-full min-w-[460px] border-collapse text-left text-[13px]">
@@ -142,6 +137,9 @@ export function PricingPage() {
                 <tr>
                   <th scope="col" className="px-5 py-4 font-semibold">
                     Feature
+                  </th>
+                  <th scope="col" className="px-5 py-4 font-semibold">
+                    Free
                   </th>
                   <th scope="col" className="px-5 py-4 font-semibold">
                     Solo
@@ -152,7 +150,7 @@ export function PricingPage() {
                 </tr>
               </thead>
               <tbody>
-                {comparison.map(({ feature, solo, agency }) => (
+                {comparison.map(({ feature, free, solo, agency }) => (
                   <tr key={feature} className="border-t border-slate-100">
                     <th
                       scope="row"
@@ -160,6 +158,7 @@ export function PricingPage() {
                     >
                       {feature}
                     </th>
+                    <td className="px-5 py-3.5 text-slate-600">{free}</td>
                     <td className="px-5 py-3.5 text-slate-600">{solo}</td>
                     <td className="px-5 py-3.5 text-slate-600">{agency}</td>
                   </tr>
@@ -168,8 +167,8 @@ export function PricingPage() {
             </table>
           </div>
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            * Within resource limits. All figures are proposed pilot pricing and
-            allowances.
+            Resource limits and provider availability apply. Your content is
+            retained when you change plans.
           </p>
         </section>
 

@@ -1,3 +1,4 @@
+import basicSsl from '@vitejs/plugin-basic-ssl'
 import { fileURLToPath, URL } from 'node:url'
 import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
@@ -16,6 +17,7 @@ export default defineConfig(({ mode, command }) => {
       ),
     },
     plugins: [
+      basicSsl(),
       react(),
       tailwindcss(),
       {

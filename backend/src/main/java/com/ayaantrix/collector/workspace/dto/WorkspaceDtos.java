@@ -15,6 +15,17 @@ public final class WorkspaceDtos {
     }
     public record Membership(UUID memberId,UUID workspaceId,String workspaceName,WorkspaceRole role){}
     public record Entitlements(PlanKey planKey,int seats,long storageLimitBytes,boolean unlimitedActiveProjects,
-            int aiDraftAllowance,int smsSegmentAllowance,boolean canWrite,boolean aiEnabled,boolean smsEnabled){}
+            int aiDraftAllowance,int smsSegmentAllowance,boolean canWrite,boolean aiEnabled,boolean smsEnabled){
+        @com.fasterxml.jackson.annotation.JsonProperty public Integer activeProjectLimit(){return planKey.activeProjects();}
+        @com.fasterxml.jackson.annotation.JsonProperty public Integer clientContactLimit(){return planKey.contacts();}
+        @com.fasterxml.jackson.annotation.JsonProperty public PlanKey.ReminderTier reminderTier(){return planKey.reminders();}
+        @com.fasterxml.jackson.annotation.JsonProperty public PlanKey.AnalyticsTier analyticsTier(){return planKey.analytics();}
+        @com.fasterxml.jackson.annotation.JsonProperty public boolean customTemplates(){return planKey.customTemplates();}
+        @com.fasterxml.jackson.annotation.JsonProperty public boolean sharedTemplates(){return planKey.sharedTemplates();}
+        @com.fasterxml.jackson.annotation.JsonProperty public boolean teamAssignments(){return planKey.teamAssignments();}
+        @com.fasterxml.jackson.annotation.JsonProperty public boolean delegatedReview(){return planKey.delegatedReview();}
+        @com.fasterxml.jackson.annotation.JsonProperty public boolean zipExport(){return planKey.zipExport();}
+        @com.fasterxml.jackson.annotation.JsonProperty public boolean branding(){return planKey.branding();}
+    }
     public record Details(View workspace,Entitlements entitlements){}
 }

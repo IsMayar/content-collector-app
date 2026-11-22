@@ -1703,7 +1703,7 @@ class AttachmentStorageTests {
                         pending.uploadId(),
                         UUID.randomUUID().toString());
         jdbc.update(
-                "update collector.subscriptions set state='READ_ONLY' where workspace_id=?",
+                "update collector.subscriptions set plan_key='SOLO',state='READ_ONLY' where workspace_id=?",
                 t.f().tenant().workspace());
         denial(() -> reserve(t, "new.txt", "text/plain", text()), "READ_ONLY");
         assertThat(
