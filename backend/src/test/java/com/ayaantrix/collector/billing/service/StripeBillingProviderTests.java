@@ -104,6 +104,36 @@ class StripeBillingProviderTests {
     }
 
     @Test
+    void recognizesScheduledEndOfPeriodCancellationWhenStripeFlagIsFalse() throws Exception {
+        String cancelAtPeriodEnd =
+                snapshot("price_solo")
+                        .replace(
+                                "\"cancel_at_period_end\":true,",
+                                "\"cancel_at_period_end\":false,\"cancel_at\":1796342400,");
+        assertThat(provider(http(cancelAtPeriodEnd)).current("cus_synthetic").cancelAtPeriodEnd())
+                .isTrue();
+
+        String noCancellation =
+                snapshot("price_solo")
+                        .replace(
+                                "\"cancel_at_period_end\":true,",
+                                "\"cancel_at_period_end\":false,\"cancel_at\":null,");
+        assertThat(provider(http(noCancellation)).current("cus_synthetic").cancelAtPeriodEnd())
+                .isFalse();
+    }
+
+    @Test
+    void rejectsCancellationOutsidePaidPeriodBoundary() throws Exception {
+        String differentDate =
+                snapshot("price_solo")
+                        .replace(
+                                "\"cancel_at_period_end\":true,",
+                                "\"cancel_at_period_end\":false,\"cancel_at\":1796342401,");
+        assertThatThrownBy(() -> provider(http(differentDate)).current("cus_synthetic"))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
     void rejectsUnknownPricesMultipleSubscriptionsAndLiveOrWrongCustomerResults() throws Exception {
         for (String body :
                 List.of(
