@@ -329,10 +329,10 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
 
           {current?.state !== 'FREE' && (
             <p className="mt-4 max-w-lg text-sm leading-6 text-slate-600">
-              If a renewal payment fails, editing remains available for at
-              least 7 days and through the paid billing period, whichever is
-              later. Read-only access then lasts up to 30 days. Permitted reads
-              and exports remain available.
+              If a renewal payment fails, editing remains available for at least
+              7 days and through the paid billing period, whichever is later.
+              Read-only access then lasts up to 30 days. Permitted reads and
+              exports remain available.
             </p>
           )}
 
@@ -546,13 +546,12 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
             )}
           </div>
         )}
-        {current &&
-          ['PAST_DUE', 'READ_ONLY'].includes(current.state) && (
-            <p className="mb-4 text-sm text-amber-800">
-              Resolve the overdue payment in the hosted billing portal before
-              changing plans.
-            </p>
-          )}
+        {current && ['PAST_DUE', 'READ_ONLY'].includes(current.state) && (
+          <p className="mb-4 text-sm text-amber-800">
+            Resolve the overdue payment in the hosted billing portal before
+            changing plans.
+          </p>
+        )}
         {current?.state === 'SUSPENDED' && (
           <p className="mb-4 text-sm text-amber-800">
             Contact support to restore this subscription before changing plans.
