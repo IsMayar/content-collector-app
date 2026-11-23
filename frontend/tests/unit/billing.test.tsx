@@ -62,10 +62,14 @@ it('schedules a paid change only after confirmation and refreshes server state',
     </MemoryRouter>,
   )
   expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
-  await userEvent.click(screen.getByRole('button', { name: 'Upgrade to Agency' }))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Upgrade to Agency' }),
+  )
   expect(fake.run).not.toHaveBeenCalled()
   confirm.mockReturnValue(true)
-  await userEvent.click(screen.getByRole('button', { name: 'Upgrade to Agency' }))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Upgrade to Agency' }),
+  )
   expect(fake.run).toHaveBeenCalledWith(
     'workspaces/workspace/billing/plan-change',
     { planKey: 'AGENCY', effectiveAt: subscription.currentPeriodEnd },
