@@ -110,7 +110,7 @@ it('labels Agency to Solo as a downgrade', async () => {
 })
 it.each(['PAST_DUE', 'READ_ONLY', 'SUSPENDED'])(
   'recognizes Solo as the current plan and prevents new checkout in %s',
-  async (state) => {
+  (state) => {
     fake.read.mockReturnValue({
       data: {
         ...subscription,
@@ -145,7 +145,7 @@ it('recognizes Agency as the current plan when past due and disables downgrade',
     </MemoryRouter>,
   )
   expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Upgrade to Solo' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Downgrade to Solo' })).toBeDisabled()
 })
 it('disables plan actions until the subscription is loaded', () => {
   fake.read.mockReturnValue({ data: undefined, isLoading: true })
