@@ -108,6 +108,45 @@ it('labels Agency to Solo as a downgrade', async () => {
     confirm.mockRestore()
   }
 })
+it.each(['PAST_DUE', 'READ_ONLY', 'SUSPENDED'])(
+  'recognizes Solo as the current plan and prevents new checkout in %s',
+  async (state) => {
+    fake.read.mockReturnValue({
+      data: {
+        ...subscription,
+        state,
+        graceEndsAt: '2026-12-23T00:00:00Z',
+      },
+      refetch: vi.fn(),
+    })
+    render(
+      <MemoryRouter>
+        <BillingPage />
+      </MemoryRouter>,
+    )
+    const solo = screen.getByRole('button', { name: 'Current plan' })
+    const agency = screen.getByRole('button', { name: 'Upgrade to Agency' })
+    expect(solo).toBeDisabled()
+    expect(agency).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: 'Upgrade to Solo' }),
+    ).not.toBeInTheDocument()
+    expect(fake.run).not.toHaveBeenCalled()
+  },
+)
+it('recognizes Agency as the current plan when past due and disables downgrade', () => {
+  fake.read.mockReturnValue({
+    data: { ...subscription, planKey: 'AGENCY', state: 'PAST_DUE' },
+    refetch: vi.fn(),
+  })
+  render(
+    <MemoryRouter>
+      <BillingPage />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Upgrade to Solo' })).toBeDisabled()
+})
 it('disables plan actions until the subscription is loaded', () => {
   fake.read.mockReturnValue({ data: undefined, isLoading: true })
   render(
