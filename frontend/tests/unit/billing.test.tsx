@@ -61,10 +61,11 @@ it('schedules a paid change only after confirmation and refreshes server state',
       <BillingPage />
     </MemoryRouter>,
   )
-  await userEvent.click(screen.getByRole('button', { name: 'Choose agency' }))
+  expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
+  await userEvent.click(screen.getByRole('button', { name: 'Upgrade to Agency' }))
   expect(fake.run).not.toHaveBeenCalled()
   confirm.mockReturnValue(true)
-  await userEvent.click(screen.getByRole('button', { name: 'Choose agency' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Upgrade to Agency' }))
   expect(fake.run).toHaveBeenCalledWith(
     'workspaces/workspace/billing/plan-change',
     { planKey: 'AGENCY', effectiveAt: subscription.currentPeriodEnd },
@@ -73,6 +74,45 @@ it('schedules a paid change only after confirmation and refreshes server state',
   )
   expect(refresh).toHaveBeenCalledOnce()
   confirm.mockRestore()
+})
+it('labels the Agency to Solo action as a downgrade without changing the scheduled flow', async () => {
+  const refresh = vi.fn()
+  fake.read.mockReturnValue({
+    data: { ...subscription, planKey: 'AGENCY', state: 'ACTIVE' },
+    refetch: refresh,
+  })
+  fake.run.mockResolvedValue({ state: 'SCHEDULED' })
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  try {
+    render(
+      <MemoryRouter>
+        <BillingPage />
+      </MemoryRouter>,
+    )
+    const downgrade = screen.getByRole('button', { name: 'Downgrade to Solo' })
+    expect(downgrade).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
+    await userEvent.click(downgrade)
+    expect(fake.run).toHaveBeenCalledWith(
+      'workspaces/workspace/billing/plan-change',
+      { planKey: 'SOLO', effectiveAt: subscription.currentPeriodEnd },
+      'POST',
+      expect.any(Object),
+    )
+    expect(refresh).toHaveBeenCalledOnce()
+  } finally {
+    confirm.mockRestore()
+  }
+})
+it('disables plan actions until the subscription is loaded', () => {
+  fake.read.mockReturnValue({ data: undefined, isLoading: true })
+  render(
+    <MemoryRouter>
+      <BillingPage />
+    </MemoryRouter>,
+  )
+  expect(screen.getByRole('button', { name: 'Upgrade to Solo' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeDisabled()
 })
 it('retries a pending provider confirmation without creating a new checkout', async () => {
   const refresh = vi.fn()
@@ -93,6 +133,8 @@ it('retries a pending provider confirmation without creating a new checkout', as
       <BillingPage />
     </MemoryRouter>,
   )
+  expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeDisabled()
   await userEvent.click(
     screen.getByRole('button', { name: 'Retry confirmation' }),
   )
@@ -127,6 +169,8 @@ it('shows permanent Free without a paid portal or expiry', () => {
   expect(
     screen.getByText('Free forever · No credit card required'),
   ).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Upgrade to Solo' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeEnabled()
   expect(
     screen.queryByRole('button', { name: /Manage in hosted billing portal/ }),
   ).not.toBeInTheDocument()
@@ -200,7 +244,7 @@ it('keeps a stable in-memory checkout retry key and sends only the selected plan
       <BillingPage />
     </MemoryRouter>,
   )
-  const button = screen.getByRole('button', { name: 'Choose solo' })
+  const button = screen.getByRole('button', { name: 'Upgrade to Solo' })
   await userEvent.click(button)
   await userEvent.click(button)
   expect(fake.run).toHaveBeenCalledTimes(2)
@@ -235,7 +279,7 @@ it('keeps owner-only billing controls unavailable to members', () => {
   )
   expect(screen.getByText('Owner access required')).toBeInTheDocument()
   expect(
-    screen.queryByRole('button', { name: 'Choose solo' }),
+    screen.queryByRole('button', { name: 'Upgrade to Solo' }),
   ).not.toBeInTheDocument()
   expect(fake.read).toHaveBeenCalledWith(
     'workspace',
@@ -338,6 +382,8 @@ it('explains scheduled cancellation without claiming editing has already stopped
     </MemoryRouter>,
   )
   expect(screen.getByText(/Cancellation is scheduled for/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeDisabled()
 })
 it('does not expose billing state notices or make an owner query for a member', () => {
   fake.read.mockReturnValue({ data: { ...subscription, state: 'PAST_DUE' } })
