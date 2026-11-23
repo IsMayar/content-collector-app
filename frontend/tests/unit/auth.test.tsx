@@ -46,9 +46,18 @@ async function signIn(
 it('opens email-code entry immediately after successful account registration', async () => {
   const { user, router } = mount('/sign-up')
   await user.type(await screen.findByLabelText('Your name'), 'Robin Demo')
-  await user.type(screen.getByLabelText('Email address'), 'new-account@example.test')
-  await user.type(screen.getByLabelText('Password', { exact: true }), demoPassword)
-  await user.type(screen.getByLabelText('Confirm password', { exact: true }), demoPassword)
+  await user.type(
+    screen.getByLabelText('Email address'),
+    'new-account@example.test',
+  )
+  await user.type(
+    screen.getByLabelText('Password', { exact: true }),
+    demoPassword,
+  )
+  await user.type(
+    screen.getByLabelText('Confirm password', { exact: true }),
+    demoPassword,
+  )
   await user.click(screen.getByRole('button', { name: 'Create account' }))
 
   expect(
@@ -69,13 +78,21 @@ it('keeps the registration form open if registration fails', async () => {
   const { user, router } = mount('/sign-up')
   await user.type(await screen.findByLabelText('Your name'), 'Robin Demo')
   await user.type(screen.getByLabelText('Email address'), 'failed@example.test')
-  await user.type(screen.getByLabelText('Password', { exact: true }), demoPassword)
-  await user.type(screen.getByLabelText('Confirm password', { exact: true }), demoPassword)
+  await user.type(
+    screen.getByLabelText('Password', { exact: true }),
+    demoPassword,
+  )
+  await user.type(
+    screen.getByLabelText('Confirm password', { exact: true }),
+    demoPassword,
+  )
   await user.click(screen.getByRole('button', { name: 'Create account' }))
 
   expect(await screen.findByRole('alert')).toBeVisible()
   expect(router.state.location.pathname).toBe('/sign-up')
-  expect(screen.getByLabelText('Email address')).toHaveValue('failed@example.test')
+  expect(screen.getByLabelText('Email address')).toHaveValue(
+    'failed@example.test',
+  )
 })
 describe('safe return destinations', () => {
   it('keeps client access independent of an unavailable agency session service', async () => {
