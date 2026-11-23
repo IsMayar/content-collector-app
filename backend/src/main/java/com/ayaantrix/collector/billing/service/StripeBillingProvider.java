@@ -247,6 +247,19 @@ public class StripeBillingProvider implements BillingProvider {
         validatePrice(price, priceId, amount, false);
         try {
             var metadata = selected.path("metadata");
+            // Stripe's portal may schedule cancellation using cancel_at while
+            // cancel_at_period_end remains false. Only accept the exact paid
+            // period boundary; other cancellation times are not represented locally.
+            var cancelAt = selected.path("cancel_at");
+            boolean cancelAtEnd = selected.path("cancel_at_period_end").asBoolean();
+            if (!cancelAt.isMissingNode()
+                    && !cancelAt.isNull()
+                    && !"canceled".equals(selected.path("status").asText())) {
+                if (!cancelAt.isIntegralNumber()
+                        || cancelAt.asLong() != item.path("current_period_end").asLong())
+                    throw unavailable();
+                cancelAtEnd = true;
+            }
             return new Snapshot(
                     selected.path("id").asText(),
                     UUID.fromString(metadata.path("collector_workspace").asText()),
@@ -255,7 +268,7 @@ public class StripeBillingProvider implements BillingProvider {
                     selected.path("status").asText(),
                     Instant.ofEpochSecond(item.path("current_period_start").asLong()),
                     Instant.ofEpochSecond(item.path("current_period_end").asLong()),
-                    selected.path("cancel_at_period_end").asBoolean(),
+                    cancelAtEnd,
                     "paid".equals(selected.path("latest_invoice").path("status").asText()));
         } catch (RuntimeException invalid) {
             throw unavailable();
