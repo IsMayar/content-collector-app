@@ -80,7 +80,9 @@ it('disables both project creation actions and explains the read-only restrictio
   ).not.toBeInTheDocument()
   expect(screen.getByText('No projects found')).toBeInTheDocument()
   expect(
-    screen.getByText(/Project creation is paused until editing access is restored/),
+    screen.getByText(
+      /Project creation is paused until editing access is restored/,
+    ),
   ).toBeInTheDocument()
 })
 
