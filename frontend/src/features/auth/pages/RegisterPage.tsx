@@ -21,32 +21,32 @@ export function RegisterPage() {
       />
 
       <AuthForm
-          schema={signUpSchema}
-          fields={[
-            {
-              name: 'displayName',
-              label: 'Your name',
-              autoComplete: 'name',
-              placeholder: 'Enter your full name',
-            },
-            email,
-            {
-              ...newPassword,
-              label: 'Password',
-            },
-            confirmPassword,
-          ]}
-          submitLabel="Create account"
-          onSubmit={async (values) => {
-            await register({
-              email: values.email,
-              displayName: values.displayName,
-              password: values.password,
-            }).unwrap()
+        schema={signUpSchema}
+        fields={[
+          {
+            name: 'displayName',
+            label: 'Your name',
+            autoComplete: 'name',
+            placeholder: 'Enter your full name',
+          },
+          email,
+          {
+            ...newPassword,
+            label: 'Password',
+          },
+          confirmPassword,
+        ]}
+        submitLabel="Create account"
+        onSubmit={async (values) => {
+          await register({
+            email: values.email,
+            displayName: values.displayName,
+            password: values.password,
+          }).unwrap()
 
-            navigate('/verify-email', { replace: true })
-          }}
-        />
+          navigate('/verify-email', { replace: true })
+        }}
+      />
 
       <p className="mt-5 border-t border-slate-200 pt-4 text-center text-[13px] text-slate-600">
         Already have an account?{' '}
