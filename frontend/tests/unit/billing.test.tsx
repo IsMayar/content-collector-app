@@ -145,7 +145,9 @@ it('recognizes Agency as the current plan when past due and disables downgrade',
     </MemoryRouter>,
   )
   expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Downgrade to Solo' })).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: 'Downgrade to Solo' }),
+  ).toBeDisabled()
 })
 it('disables plan actions until the subscription is loaded', () => {
   fake.read.mockReturnValue({ data: undefined, isLoading: true })
