@@ -173,12 +173,12 @@ export function AgencyLayout() {
         <main id="main-content" tabIndex={-1} className="agency-content">
           {error && <Notice error>{error}</Notice>}
           {membership && !billingPageVisible && (
-              <WorkspaceBillingNotice
-                workspace={membership.workspaceId}
-                owner={membership.role === 'OWNER'}
-                canWrite={workspace.data?.entitlements.canWrite}
-              />
-            )}
+            <WorkspaceBillingNotice
+              workspace={membership.workspaceId}
+              owner={membership.role === 'OWNER'}
+              canWrite={workspace.data?.entitlements.canWrite}
+            />
+          )}
           {membership?.role !== 'OWNER' &&
             workspace.data &&
             !workspace.data.entitlements.canWrite && (
