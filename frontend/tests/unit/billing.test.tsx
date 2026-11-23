@@ -75,7 +75,7 @@ it('schedules a paid change only after confirmation and refreshes server state',
   expect(refresh).toHaveBeenCalledOnce()
   confirm.mockRestore()
 })
-it('labels the Agency to Solo action as a downgrade without changing the scheduled flow', async () => {
+it('labels Agency to Solo as a downgrade', async () => {
   const refresh = vi.fn()
   fake.read.mockReturnValue({
     data: { ...subscription, planKey: 'AGENCY', state: 'ACTIVE' },
@@ -112,7 +112,9 @@ it('disables plan actions until the subscription is loaded', () => {
     </MemoryRouter>,
   )
   expect(screen.getByRole('button', { name: 'Upgrade to Solo' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: 'Upgrade to Agency' }),
+  ).toBeDisabled()
 })
 it('retries a pending provider confirmation without creating a new checkout', async () => {
   const refresh = vi.fn()
@@ -134,7 +136,9 @@ it('retries a pending provider confirmation without creating a new checkout', as
     </MemoryRouter>,
   )
   expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: 'Upgrade to Agency' }),
+  ).toBeDisabled()
   await userEvent.click(
     screen.getByRole('button', { name: 'Retry confirmation' }),
   )
@@ -170,7 +174,9 @@ it('shows permanent Free without a paid portal or expiry', () => {
     screen.getByText('Free forever · No credit card required'),
   ).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Upgrade to Solo' })).toBeEnabled()
-  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeEnabled()
+  expect(
+    screen.getByRole('button', { name: 'Upgrade to Agency' }),
+  ).toBeEnabled()
   expect(
     screen.queryByRole('button', { name: /Manage in hosted billing portal/ }),
   ).not.toBeInTheDocument()
@@ -383,7 +389,9 @@ it('explains scheduled cancellation without claiming editing has already stopped
   )
   expect(screen.getByText(/Cancellation is scheduled for/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Upgrade to Agency' })).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: 'Upgrade to Agency' }),
+  ).toBeDisabled()
 })
 it('does not expose billing state notices or make an owner query for a member', () => {
   fake.read.mockReturnValue({ data: { ...subscription, state: 'PAST_DUE' } })
