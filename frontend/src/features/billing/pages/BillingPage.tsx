@@ -636,7 +636,9 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
                 }}
               >
                 {planActionLabel(current, plan)}
-                {!(current?.state === 'ACTIVE' && current.planKey === plan.key) && (
+                {planActionLabel(current, plan) === 'Current plan' ? (
+                  <Check size={16} aria-hidden="true" />
+                ) : (
                   <ArrowRight size={16} aria-hidden="true" />
                 )}
               </button>
