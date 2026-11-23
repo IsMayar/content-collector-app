@@ -1,4 +1,6 @@
 import { useProjects } from '@/features/projects/api/projectsApi'
+import type { WorkspaceDetail } from '@/features/workspace/types/workspace.types'
+import { useData } from '@/services/api/resourceApi'
 import { ProjectTable } from '@/features/projects/components/ProjectTable'
 import { projectTypes } from '@/features/projects/types/projectOptions'
 import {
@@ -14,6 +16,9 @@ export function ProjectsPage() {
   const { id, base, owner } = useWorkspace()
   const [search, setSearch] = useSearchParams()
   const query = useProjects(id, search)
+  const access = useData<WorkspaceDetail>(`workspaces/${id}`, { skip: !owner })
+  const canCreate = access.data?.entitlements.canWrite === true
+  const readOnly = access.data?.entitlements.canWrite === false
   function filter(key: string, value: string) {
     const next = new URLSearchParams(search)
     if (value) next.set(key, value)
@@ -27,12 +32,40 @@ export function ProjectsPage() {
         title="Projects"
         description="Live client projects: track content, deadlines, reviews and delivery."
       >
-        {owner && (
-          <Link className="primary-button" to={`${base}/projects/new`}>
-            ＋ Create project
-          </Link>
-        )}
+        {owner &&
+          (canCreate ? (
+            <Link className="primary-button" to={`${base}/projects/new`}>
+              ＋ Create project
+            </Link>
+          ) : (
+            <button type="button" className="primary-button" disabled>
+              ＋ Create project
+            </button>
+          ))}
       </Heading>
+      {owner && !canCreate && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-slate-700"
+        >
+          {readOnly ? (
+            <>
+              This workspace is read-only. Project creation is paused, but you
+              can still view existing projects.{' '}
+              <Link
+                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+                to={`${base}/settings?view=billing`}
+              >
+                Manage billing
+              </Link>
+            </>
+          ) : access.isError ? (
+            'Project creation is unavailable because workspace editing permissions could not be verified. Refresh the page to try again.'
+          ) : (
+            'Checking workspace editing permissions before enabling project creation…'
+          )}
+        </div>
+      )}
       <div className="filter-bar">
         <Field label="Search projects">
           <input
@@ -127,11 +160,14 @@ export function ProjectsPage() {
             title="No projects found"
             description={
               owner
-                ? 'Try another filter, or start a fresh collection.'
+                ? canCreate
+                  ? 'Try another filter, or start a fresh collection.'
+                  : 'No projects found. Project creation is unavailable while workspace editing is paused.'
                 : 'Try another filter. If no projects are assigned to you yet, ask your workspace owner for access.'
             }
             to={owner ? `${base}/projects/new` : undefined}
             label="New project"
+            disabledAction={owner && !canCreate}
           />
         )}
       </QueryState>
