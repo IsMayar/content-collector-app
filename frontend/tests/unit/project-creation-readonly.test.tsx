@@ -70,15 +70,20 @@ it('disables both project creation actions and explains the read-only restrictio
     screen.queryByRole('link', { name: /Create project|New project/i }),
   ).not.toBeInTheDocument()
   expect(
+    screen.getByRole('button', { name: /Create project/i }),
+  ).toHaveAttribute(
+    'title',
+    'Project creation is paused while the workspace is read-only.',
+  )
+  expect(
+    screen.queryByText(/This workspace is read-only/),
+  ).not.toBeInTheDocument()
+  expect(screen.getByText('No projects found')).toBeInTheDocument()
+  expect(
     screen.getByText(
-      /Project creation is paused, but you can still view existing projects/,
+      /Project creation is paused until editing access is restored/,
     ),
   ).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Manage billing' })).toHaveAttribute(
-    'href',
-    '/app/w/workspace/settings?view=billing',
-  )
-  expect(screen.getByText('No projects found')).toBeInTheDocument()
 })
 
 it('keeps creation links available when workspace writing is allowed', () => {

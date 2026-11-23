@@ -38,33 +38,26 @@ export function ProjectsPage() {
               ＋ Create project
             </Link>
           ) : (
-            <button type="button" className="primary-button" disabled>
+            <button
+              type="button"
+              className="primary-button"
+              disabled
+              title={
+                readOnly
+                  ? 'Project creation is paused while the workspace is read-only.'
+                  : 'Workspace editing permissions are being checked.'
+              }
+            >
               ＋ Create project
             </button>
           ))}
       </Heading>
-      {owner && !canCreate && (
-        <div
-          role="status"
-          className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-slate-700"
-        >
-          {readOnly ? (
-            <>
-              This workspace is read-only. Project creation is paused, but you
-              can still view existing projects.{' '}
-              <Link
-                className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-                to={`${base}/settings?view=billing`}
-              >
-                Manage billing
-              </Link>
-            </>
-          ) : access.isError ? (
-            'Project creation is unavailable because workspace editing permissions could not be verified. Refresh the page to try again.'
-          ) : (
-            'Checking workspace editing permissions before enabling project creation…'
-          )}
-        </div>
+      {owner && !canCreate && !readOnly && (
+        <p role="status" className="mb-4 text-sm text-slate-600">
+          {access.isError
+            ? 'Project creation is unavailable because workspace editing permissions could not be verified. Refresh the page to try again.'
+            : 'Checking workspace editing permissions before enabling project creation…'}
+        </p>
       )}
       <div className="filter-bar">
         <Field label="Search projects">
@@ -162,7 +155,7 @@ export function ProjectsPage() {
               owner
                 ? canCreate
                   ? 'Try another filter, or start a fresh collection.'
-                  : 'No projects found. Project creation is unavailable while workspace editing is paused.'
+                  : 'There are no projects here yet. Project creation is paused until editing access is restored.'
                 : 'Try another filter. If no projects are assigned to you yet, ask your workspace owner for access.'
             }
             to={owner ? `${base}/projects/new` : undefined}
