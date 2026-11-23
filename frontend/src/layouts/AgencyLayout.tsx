@@ -46,6 +46,13 @@ export function AgencyLayout() {
   const [error, setError] = useState('')
   const mobileNavigation = useRef<HTMLDetailsElement>(null)
   const home = membership ? `/app/w/${membership.workspaceId}/overview` : '/app'
+  const billingPageVisible =
+    !!membership &&
+    (pathname === `/app/w/${membership.workspaceId}/billing` ||
+      (pathname === `/app/w/${membership.workspaceId}/settings` &&
+        ['billing', 'usage', 'status'].includes(
+          new URLSearchParams(search).get('view') || '',
+        )))
   const workspace = useData<WorkspaceDetail>(
     membership ? `workspaces/${membership.workspaceId}` : '',
   )
@@ -165,14 +172,13 @@ export function AgencyLayout() {
         </details>
         <main id="main-content" tabIndex={-1} className="agency-content">
           {error && <Notice error>{error}</Notice>}
-          {membership &&
-            pathname !== `/app/w/${membership.workspaceId}/billing` && (
-              <WorkspaceBillingNotice
-                workspace={membership.workspaceId}
-                owner={membership.role === 'OWNER'}
-                canWrite={workspace.data?.entitlements.canWrite}
-              />
-            )}
+          {membership && !billingPageVisible && (
+            <WorkspaceBillingNotice
+              workspace={membership.workspaceId}
+              owner={membership.role === 'OWNER'}
+              canWrite={workspace.data?.entitlements.canWrite}
+            />
+          )}
           {membership?.role !== 'OWNER' &&
             workspace.data &&
             !workspace.data.entitlements.canWrite && (
