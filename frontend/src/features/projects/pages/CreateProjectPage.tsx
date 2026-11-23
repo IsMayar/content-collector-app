@@ -1,6 +1,7 @@
 import { env } from '@/config/env'
 import { Steps } from '@/features/projects/components/ProjectSteps'
 import type { Client, Project } from '@/features/projects/types/project.types'
+import type { WorkspaceDetail } from '@/features/workspace/types/workspace.types'
 import { projectTypes } from '@/features/projects/types/projectOptions'
 import { TemplatePreview } from '@/features/templates/components/TemplatePreview'
 import { TemplateSymbol } from '@/features/templates/components/TemplateSymbol'
@@ -28,6 +29,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 
 export function CreateProjectPage() {
   const { id, base, owner } = useWorkspace()
+  const access = useData<WorkspaceDetail>(`workspaces/${id}`, { skip: !owner })
+  const canCreate = access.data?.entitlements.canWrite === true
   const navigate = useNavigate()
   const [search] = useSearchParams()
   const [step, setStep] = useState(search.get('template') ? 2 : 1)
@@ -76,7 +79,7 @@ export function CreateProjectPage() {
     setStep(3)
   }
   async function create(sendInvitation: boolean, openAccess = false) {
-    if (busy) return
+    if (busy || !canCreate) return
     setBusy(true)
     try {
       let clientId = values.clientId
@@ -165,6 +168,46 @@ export function CreateProjectPage() {
         title="Owner access required"
         description="Your owner can create projects and assign them to you."
       />
+    )
+  if (!access.data)
+    return (
+      <Panel title="Checking project creation access">
+        <p>
+          {access.isError
+            ? 'Workspace editing permissions could not be verified. Project creation is unavailable until access can be checked.'
+            : 'Checking workspace editing permissions…'}
+        </p>
+        {access.isError && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => void access.refetch()}
+          >
+            Try again
+          </button>
+        )}
+      </Panel>
+    )
+  if (!canCreate)
+    return (
+      <Panel title="Project creation paused">
+        <p>
+          This workspace is read-only. Creating projects and saving new drafts
+          are paused until editing access is restored. Existing projects remain
+          available to view.
+        </p>
+        <div className="actions mt-4">
+          <Link className="secondary-button" to={`${base}/projects`}>
+            View projects
+          </Link>
+          <Link
+            className="primary-button"
+            to={`${base}/settings?view=billing`}
+          >
+            Manage billing
+          </Link>
+        </div>
+      </Panel>
     )
   if (partial)
     return (
