@@ -120,9 +120,9 @@ function planActionLabel(
   )
     return 'Current plan'
   if (
-    current?.state === 'ACTIVE' &&
-    current.planKey === 'AGENCY' &&
-    plan.key === 'SOLO'
+    current?.planKey === 'AGENCY' &&
+    plan.key === 'SOLO' &&
+    ['ACTIVE', 'PAST_DUE', 'READ_ONLY', 'SUSPENDED'].includes(current.state)
   )
     return 'Downgrade to Solo'
   return `Upgrade to ${plan.title}`
