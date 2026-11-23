@@ -43,6 +43,60 @@ async function signIn(
   await user.paste(password)
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
 }
+it('opens email-code entry immediately after successful account registration', async () => {
+  const { user, router } = mount('/sign-up')
+  await user.type(await screen.findByLabelText('Your name'), 'Robin Demo')
+  await user.type(
+    screen.getByLabelText('Email address'),
+    'new-account@example.test',
+  )
+  await user.type(
+    screen.getByLabelText('Password', { exact: true }),
+    demoPassword,
+  )
+  await user.type(
+    screen.getByLabelText('Confirm password', { exact: true }),
+    demoPassword,
+  )
+  await user.click(screen.getByRole('button', { name: 'Create account' }))
+
+  expect(
+    await screen.findByRole('heading', { name: 'Verify your email' }),
+  ).toBeVisible()
+  expect(router.state.location.pathname).toBe('/verify-email')
+  expect(screen.getByLabelText('Email link code')).toBeVisible()
+  expect(
+    screen.queryByRole('link', { name: 'Verify your email' }),
+  ).not.toBeInTheDocument()
+})
+it('keeps the registration form open if registration fails', async () => {
+  server.use(
+    http.post('http://localhost:5173/api/v1/auth/register', () =>
+      HttpResponse.json(
+        { detail: 'Registration unavailable' },
+        { status: 503 },
+      ),
+    ),
+  )
+  const { user, router } = mount('/sign-up')
+  await user.type(await screen.findByLabelText('Your name'), 'Robin Demo')
+  await user.type(screen.getByLabelText('Email address'), 'failed@example.test')
+  await user.type(
+    screen.getByLabelText('Password', { exact: true }),
+    demoPassword,
+  )
+  await user.type(
+    screen.getByLabelText('Confirm password', { exact: true }),
+    demoPassword,
+  )
+  await user.click(screen.getByRole('button', { name: 'Create account' }))
+
+  expect(await screen.findByRole('alert')).toBeVisible()
+  expect(router.state.location.pathname).toBe('/sign-up')
+  expect(screen.getByLabelText('Email address')).toHaveValue(
+    'failed@example.test',
+  )
+})
 describe('safe return destinations', () => {
   it('keeps client access independent of an unavailable agency session service', async () => {
     server.use(
