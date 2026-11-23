@@ -200,10 +200,7 @@ export function CreateProjectPage() {
           <Link className="secondary-button" to={`${base}/projects`}>
             View projects
           </Link>
-          <Link
-            className="primary-button"
-            to={`${base}/settings?view=billing`}
-          >
+          <Link className="primary-button" to={`${base}/settings?view=billing`}>
             Manage billing
           </Link>
         </div>
