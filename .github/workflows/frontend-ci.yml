@@ -40,9 +40,6 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Formatting
-        run: |
-          npx prettier --write src/features/billing/pages/BillingPage.tsx tests/unit/billing.test.tsx
-          git diff -- src/features/billing/pages/BillingPage.tsx tests/unit/billing.test.tsx
-          npm run format:check
+        run: npm run format:check
       - name: Unit and integration regression
         run: npm test -- --maxWorkers=1 --pool=threads
