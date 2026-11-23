@@ -334,7 +334,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
         })
       }),
       http.get('http://localhost:5173/api/v1/probe/:id', ({ request }) =>
-        request.headers.get('Authorization') === '***'
+        request.headers.get('Authorization') === 'Bearer rotated-token'
           ? HttpResponse.json({ ok: true })
           : HttpResponse.json({}, { status: 401 }),
       ),
