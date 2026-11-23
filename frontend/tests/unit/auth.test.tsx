@@ -72,7 +72,10 @@ it('opens email-code entry immediately after successful account registration', a
 it('keeps the registration form open if registration fails', async () => {
   server.use(
     http.post('http://localhost:5173/api/v1/auth/register', () =>
-      HttpResponse.json({ detail: 'Registration unavailable' }, { status: 503 }),
+      HttpResponse.json(
+        { detail: 'Registration unavailable' },
+        { status: 503 },
+      ),
     ),
   )
   const { user, router } = mount('/sign-up')
@@ -331,7 +334,7 @@ describe('authentication through real RTK Query requests intercepted by MSW', ()
         })
       }),
       http.get('http://localhost:5173/api/v1/probe/:id', ({ request }) =>
-        request.headers.get('Authorization') === 'Bearer rotated-token'
+        request.headers.get('Authorization') === '***'
           ? HttpResponse.json({ ok: true })
           : HttpResponse.json({}, { status: 401 }),
       ),
