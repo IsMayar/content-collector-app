@@ -70,7 +70,9 @@ it('disables both project creation actions and explains the read-only restrictio
     screen.queryByRole('link', { name: /Create project|New project/i }),
   ).not.toBeInTheDocument()
   expect(
-    screen.getByText(/Project creation is paused, but you can still view existing projects/),
+    screen.getByText(
+      /Project creation is paused, but you can still view existing projects/,
+    ),
   ).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Manage billing' })).toHaveAttribute(
     'href',
@@ -88,14 +90,17 @@ it('keeps creation links available when workspace writing is allowed', () => {
     </MemoryRouter>,
   )
 
-  expect(
-    screen.getByRole('link', { name: /Create project/i }),
-  ).toHaveAttribute('href', '/app/w/workspace/projects/new')
+  expect(screen.getByRole('link', { name: /Create project/i })).toHaveAttribute(
+    'href',
+    '/app/w/workspace/projects/new',
+  )
   expect(screen.getByRole('link', { name: 'New project' })).toHaveAttribute(
     'href',
     '/app/w/workspace/projects/new',
   )
-  expect(screen.queryByText(/Project creation is paused/)).not.toBeInTheDocument()
+  expect(
+    screen.queryByText(/Project creation is paused/),
+  ).not.toBeInTheDocument()
 })
 
 it('blocks direct navigation to the creation wizard while read-only', () => {
@@ -109,8 +114,12 @@ it('blocks direct navigation to the creation wizard while read-only', () => {
   expect(
     screen.getByText(/Creating projects and saving new drafts are paused/),
   ).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Save as draft' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Create project' })).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Save as draft' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Create project' }),
+  ).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'View projects' })).toHaveAttribute(
     'href',
     '/app/w/workspace/projects',
