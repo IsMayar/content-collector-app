@@ -504,8 +504,8 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
             Compare plans
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Free is $0 forever. Upgrades from Free start at checkout;
-            changes between paid plans take effect at your next renewal.
+            Free is $0 forever. Upgrades from Free start at checkout; changes
+            between paid plans take effect at your next renewal.
           </p>
         </div>
 
