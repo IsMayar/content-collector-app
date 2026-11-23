@@ -7,14 +7,11 @@ import {
 } from '@/features/auth/components/authFields'
 import { AuthForm } from '@/features/auth/components/AuthForm'
 import { signUpSchema } from '@/features/auth/schemas/accountSchemas'
-import { Notice } from '@/shared/components/Feedback'
-import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 export function RegisterPage() {
-  const [register, result] = authApi.useRegisterMutation()
-
-  const [complete, setComplete] = useState(false)
+  const [register] = authApi.useRegisterMutation()
+  const navigate = useNavigate()
 
   return (
     <AuthCard>
@@ -23,22 +20,7 @@ export function RegisterPage() {
         description="Start collecting content with your team and clients."
       />
 
-      {complete ? (
-        <div className="space-y-4">
-          <Notice>
-            If your address can be registered, you'll receive an email with the
-            next steps. Check your inbox to verify your account.
-          </Notice>
-
-          <Link
-            to="/verify-email"
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-[13px] font-semibold text-blue-700 hover:bg-slate-50"
-          >
-            Verify your email
-          </Link>
-        </div>
-      ) : (
-        <AuthForm
+      <AuthForm
           schema={signUpSchema}
           fields={[
             {
@@ -62,11 +44,9 @@ export function RegisterPage() {
               password: values.password,
             }).unwrap()
 
-            result.reset()
-            setComplete(true)
+            navigate('/verify-email', { replace: true })
           }}
         />
-      )}
 
       <p className="mt-5 border-t border-slate-200 pt-4 text-center text-[13px] text-slate-600">
         Already have an account?{' '}
