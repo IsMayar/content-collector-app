@@ -207,7 +207,9 @@ test('registration validation, verification resend and client layout', async ({
     .getByRole('button', { name: 'Create account', exact: true })
     .click()
   await expect(page).toHaveURL(/\/verify-email$/)
-  await expect(page.getByRole('heading', { name: 'Verify your email' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Verify your email' }),
+  ).toBeVisible()
   await expect(page.getByLabel('Email link code')).toBeVisible()
   await page.getByText('Need a new verification link?', { exact: true }).click()
   await page.getByLabel('Email address').fill('robin@example.test')
