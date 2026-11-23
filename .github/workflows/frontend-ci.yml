@@ -40,9 +40,6 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Formatting
-        run: |
-          npx prettier --write tests/unit/auth.test.tsx
-          node -e "const fs=require('node:fs');console.log('AUTH_FORMATTED_JSON='+JSON.stringify(fs.readFileSync('tests/unit/auth.test.tsx','utf8')))"
-          npm run format:check
+        run: npm run format:check
       - name: Unit and integration regression
         run: npm test -- --maxWorkers=1 --pool=threads
