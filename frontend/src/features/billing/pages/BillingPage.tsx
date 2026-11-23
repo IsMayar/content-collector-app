@@ -108,6 +108,23 @@ const planOptions = [
 const primaryButton =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50'
 
+type PlanSelection = { planKey: 'FREE' | 'SOLO' | 'AGENCY'; state: string }
+
+function planActionLabel(
+  current: PlanSelection | undefined,
+  plan: (typeof planOptions)[number],
+) {
+  if (current?.state === 'ACTIVE' && current.planKey === plan.key)
+    return 'Current plan'
+  if (
+    current?.state === 'ACTIVE' &&
+    current.planKey === 'AGENCY' &&
+    plan.key === 'SOLO'
+  )
+    return 'Downgrade to Solo'
+  return `Upgrade to ${plan.title}`
+}
+
 export function BillingPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const checkoutKeys = useRef<Record<string, string>>({})
@@ -487,8 +504,8 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
             Compare plans
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Free is $0 forever. Paid plan changes take effect at your next
-            renewal.
+            Free is $0 forever. Upgrades from Free start at checkout; changes
+            between paid plans take effect at your next renewal.
           </p>
         </div>
 
@@ -568,11 +585,12 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
               <button
                 type="button"
                 className={`${primaryButton} w-full`}
-                aria-label={`Choose ${plan.title.toLowerCase()}`}
+                aria-label={planActionLabel(current, plan)}
                 disabled={
+                  !current ||
                   command.pending ||
-                  !!current?.pendingChange ||
-                  (current?.state === 'ACTIVE' &&
+                  !!current.pendingChange ||
+                  (current.state === 'ACTIVE' &&
                     (current.planKey === plan.key || current.cancelAtPeriodEnd))
                 }
                 onClick={async () => {
@@ -617,8 +635,12 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
                   if (result) hosted(result.url)
                 }}
               >
-                Choose {plan.title}
-                <ArrowRight size={16} aria-hidden="true" />
+                {planActionLabel(current, plan)}
+                {planActionLabel(current, plan) === 'Current plan' ? (
+                  <Check size={16} aria-hidden="true" />
+                ) : (
+                  <ArrowRight size={16} aria-hidden="true" />
+                )}
               </button>
             </article>
           ))}
