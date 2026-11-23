@@ -148,11 +148,13 @@ export function Empty({
   description,
   to,
   label,
+  disabledAction = false,
 }: {
   title: string
   description: string
   to?: string
   label?: string
+  disabledAction?: boolean
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white px-5 py-9 text-center shadow-sm sm:px-8">
@@ -168,14 +170,23 @@ export function Empty({
       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
         {description}
       </p>
-      {to && (
-        <Link
-          className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-[#2563EB] px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-          to={to}
-        >
-          {label || 'Continue'}
-        </Link>
-      )}
+      {to &&
+        (disabledAction ? (
+          <button
+            type="button"
+            disabled
+            className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-[#2563EB] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {label || 'Continue'}
+          </button>
+        ) : (
+          <Link
+            className="mt-5 inline-flex min-h-10 items-center justify-center rounded-lg bg-[#2563EB] px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            to={to}
+          >
+            {label || 'Continue'}
+          </Link>
+        ))}
     </section>
   )
 }
