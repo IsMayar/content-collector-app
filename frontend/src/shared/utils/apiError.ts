@@ -50,6 +50,8 @@ export function errorMessage(error: unknown): string {
     return 'This resource is unavailable or you no longer have access.'
   if (problem.status === 429)
     return 'Too many attempts. Please wait before trying again.'
+  if (problem.code === 'WORKSPACE_ACCESS_EXPIRED')
+    return 'Workspace access is unavailable. The subscription period may not have started, or the read-only access window has ended. Review billing or contact support.'
   if (problem.status === 403) return 'You do not have permission to do that.'
   if (problem.code === 'PROJECT_VERSION_CONFLICT')
     return 'This project changed. Refresh its current state before retrying.'

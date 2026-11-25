@@ -238,6 +238,44 @@ class ProjectFoundationTests {
         // A missing subscription cannot establish a bounded T33 read window.
         if(state.equals("MISSING_PLAN"))read.andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
         else read.andExpect(status().isOk()).andExpect(jsonPath("$.project.permissions.canEditStructure").value(false));
+        if(state.equals("EXPIRED")) {
+            // Existing projects and export history stay readable in the paid
+            // read-only grace window; new writes remain forbidden above.
+            mvc.perform(get(t.root()+"/projects").header("Authorization",bearer(t)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.page.totalElements").value(1));
+            mvc.perform(get(t.root()+"/projects/"+p.id()+"/exports").header("Authorization",bearer(t)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.length()").value(0));
+        }
+        assertThat(count(t,"projects")).isEqualTo(1);
+    }
+    @Test void futureDatedActiveStripePeriodBlocksProjectReadsAndWrites() throws Exception {
+        var t=tenant();
+        var project=create(t,ProjectType.WEBSITE);
+        var start=NOW.plus(Duration.ofDays(30));
+        var end=start.plus(Duration.ofDays(30));
+        jdbc.update("update collector.subscriptions set plan_key='SOLO',state='ACTIVE',current_period_start=?,current_period_end=?,grace_ends_at=null,read_only_ends_at=null,cancel_at_period_end=false where workspace_id=?",
+                java.sql.Timestamp.from(start),java.sql.Timestamp.from(end),t.workspace());
+
+        mvc.perform(get(t.root()).header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entitlements.canWrite").value(false));
+        mvc.perform(get(t.root()+"/subscription").header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscription.state").value("READ_ONLY"));
+        mvc.perform(get(t.root()+"/projects").header("Authorization",bearer(t)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        mvc.perform(get(t.root()+"/projects/"+project.id()).header("Authorization",bearer(t)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        mvc.perform(get(t.root()+"/projects/"+project.id()+"/exports").header("Authorization",bearer(t)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        mvc.perform(postProject(t,input(t,ProjectType.WEBSITE),"future-period"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_READ_ONLY"));
         assertThat(count(t,"projects")).isEqualTo(1);
     }
     @Test void noArbitraryProjectCapOrProviderUsageIsCharged() {

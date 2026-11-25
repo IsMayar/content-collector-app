@@ -44,6 +44,23 @@ class PricingPolicyTests {
         assertThat(PlanKey.AGENCY.aiDrafts()).isEqualTo(200);
         assertThat(PlanKey.AGENCY.smsSegments()).isEqualTo(50);
     }
+    @Test void futureDatedActiveSubscriptionDeniesAccessUntilItsPeriodBegins() {
+        var subscription=new WorkspaceSubscription(UUID.randomUUID(),PlanKey.SOLO,NOW);
+        var futureStart=NOW.plus(Duration.ofDays(30));
+        var futureEnd=futureStart.plus(Duration.ofDays(30));
+        org.springframework.test.util.ReflectionTestUtils.setField(subscription,"state",WorkspaceSubscription.State.ACTIVE);
+        org.springframework.test.util.ReflectionTestUtils.setField(subscription,"currentPeriodStart",futureStart);
+        org.springframework.test.util.ReflectionTestUtils.setField(subscription,"currentPeriodEnd",futureEnd);
+
+        // Stripe test clocks can make an ACTIVE paid period start after server time.
+        // Never grant access solely based on the stored ACTIVE state.
+        assertThat(subscription.effectiveState(NOW)).isEqualTo(WorkspaceSubscription.State.READ_ONLY);
+        assertThat(subscription.writable(NOW)).isFalse();
+        assertThat(subscription.readable(NOW)).isFalse();
+        assertThat(subscription.readOnlyDeadline()).isEqualTo(futureEnd.plus(Duration.ofDays(30)));
+        assertThat(subscription.writable(futureStart)).isTrue();
+        assertThat(subscription.readable(futureStart)).isTrue();
+    }
     @Test void verifiedPeriodEndCancellationFallsBackToFreeWithoutWaitingForWorker() {
         var s=new WorkspaceSubscription(UUID.randomUUID(),PlanKey.AGENCY,NOW);
         org.springframework.test.util.ReflectionTestUtils.setField(s,"state",WorkspaceSubscription.State.ACTIVE);

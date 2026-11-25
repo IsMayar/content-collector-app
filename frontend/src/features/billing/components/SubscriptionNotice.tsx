@@ -17,13 +17,20 @@ export function SubscriptionNotice({
 }) {
   if (!subscription) return null
   const s = subscription
+  // A future-dated Stripe test-clock period is not readable yet, even if its
+  // stored subscription state is ACTIVE. Never promise read/export access.
+  const periodNotStarted =
+    s.currentPeriodStart !== null &&
+    Date.parse(s.currentPeriodStart) > Date.now()
   const message =
     s.state === 'TRIALING'
       ? `Your existing trial ends ${formatDate(s.currentPeriodEnd)}. Your workspace will continue on Free unless you choose a paid plan.`
       : s.state === 'PAST_DUE'
         ? `Payment needs attention. Editing remains available until ${formatDate(s.cancelAtPeriodEnd ? s.currentPeriodEnd : s.graceEndsAt)}. Update your payment method to avoid read-only access.`
         : s.state === 'READ_ONLY'
-          ? `This workspace is read-only. Editing, AI, reminders and new invitations are paused. Authorized reads and exports remain available until ${formatDate(s.readOnlyEndsAt)}.`
+          ? periodNotStarted
+            ? `This subscription period starts ${formatDate(s.currentPeriodStart)}, which is in the future. Workspace access is paused. Review billing dates or contact support.`
+            : `This workspace is read-only. Editing, AI, reminders and new invitations are paused. Authorized reads and exports remain available until ${formatDate(s.readOnlyEndsAt)}.`
           : s.state === 'SUSPENDED'
             ? 'This subscription is suspended. Contact support about restoring access.'
             : s.cancelAtPeriodEnd
