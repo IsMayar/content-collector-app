@@ -3,6 +3,8 @@ import com.ayaantrix.collector.workspace.entity.*;
 import com.ayaantrix.collector.workspace.dto.*;
 import com.ayaantrix.collector.workspace.repository.*;
 import com.ayaantrix.collector.workspace.service.*;
+import com.ayaantrix.collector.billing.service.BillingProvider;
+import com.ayaantrix.collector.billing.service.BillingService;
 
 import com.ayaantrix.collector.CollectorApplication;
 import com.ayaantrix.collector.auth.entity.UserAccount;
@@ -60,7 +62,12 @@ class WorkspaceFoundationTests {
         public ZoneId getZone(){return ZoneOffset.UTC;} public Clock withZone(ZoneId zone){return this;} public Instant instant(){return now.get();}
     }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
-    static class Configuration { @Bean @Primary TestClock workspaceClock(){return new TestClock();} }
+    static class Configuration {
+        @Bean @Primary TestClock workspaceClock(){return new TestClock();}
+        @Bean @Primary BillingProvider syntheticBillingProvider(){
+            return org.mockito.Mockito.mock(BillingProvider.class);
+        }
+    }
     record Actor(UUID id,String access,Jwt jwt){@Override public String toString(){return "SyntheticActor[redacted]";}}
     private ConfigurableApplicationContext context;private SigningKeyFixture keys;private JdbcTemplate jdbc;private JsonMapper json;
     private MockMvc mvc;private UserAccountRepository users;private WorkspaceService service;private TestClock clock;
@@ -79,7 +86,8 @@ class WorkspaceFoundationTests {
     @AfterAll void stop(){if(context!=null)context.close();}
     @BeforeEach void reset(){
         SecurityContextHolder.clearContext();clock.now.set(NOW);
-        for(String table:List.of("subscriptions","workspace_members","workspaces","session_tokens","auth_sessions","outbox_jobs","access_tokens","users","account_request_limits"))jdbc.update("delete from collector."+table);
+        org.mockito.Mockito.reset(context.getBean(BillingProvider.class));
+        for(String table:List.of("billing_plan_changes","billing_operations","billing_accounts","billing_events","subscriptions","workspace_members","workspaces","session_tokens","auth_sessions","outbox_jobs","access_tokens","users","account_request_limits"))jdbc.update("delete from collector."+table);
     }
     private Actor actor(String email){
         var user=new UserAccount(email,"Synthetic User",passwordHash,NOW);user.markVerified(NOW);users.saveAndFlush(user);
@@ -177,6 +185,131 @@ class WorkspaceFoundationTests {
         assertThatThrownBy(()->as(owner,()->service.create(new WorkspaceDtos.Create("Denied","UTC",null)))).isInstanceOf(ApiException.class);
         assertThat(count("workspaces")).isEqualTo(1);
     }
+    private void syntheticCustomer(UUID w, UUID actor, UUID checkout, String plan) {
+        jdbc.update(
+                "insert into collector.billing_accounts(workspace_id,customer_id,next_reconcile_at,created_at) values(?,?,?,?)",
+                w, "cus_" + w.toString().replace("-", ""), java.sql.Timestamp.from(NOW),
+                java.sql.Timestamp.from(NOW));
+        jdbc.update(
+                "insert into collector.billing_operations(id,workspace_id,actor_id,kind,plan_key,idempotency_key,request_hash,lease_until,created_at) values(?,?,?,'CHECKOUT',?,?,?,?,?)",
+                checkout, w, actor, plan, "synthetic-checkout", "synthetic-hash",
+                java.sql.Timestamp.from(NOW), java.sql.Timestamp.from(NOW));
+    }
+
+    private void dueNow(UUID w) {
+        jdbc.update("update collector.billing_accounts set next_reconcile_at=? where workspace_id=?",
+                java.sql.Timestamp.from(clock.instant()), w);
+    }
+
+    @Test void stripeReconcilerPersistsFailureReadOnlyRecoveryAndCancellationEndStates() {
+        var owner=actor("billing-owner@example.test");
+        UUID w=create(owner).id();
+        UUID checkout=UUID.randomUUID();
+        syntheticCustomer(w, owner.id(), checkout, "SOLO");
+        var provider=context.getBean(BillingProvider.class);
+        var billing=context.getBean(BillingService.class);
+        var initial=new BillingProvider.Snapshot("sub_synthetic",w,checkout,PlanKey.SOLO,
+                "active",NOW.minus(Duration.ofDays(20)),NOW.plusSeconds(5),false,true);
+        org.mockito.Mockito.when(provider.current("cus_"+w.toString().replace("-","")))
+                .thenReturn(initial);
+        billing.reconcile(w);
+        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("ACTIVE");
+
+        var failed=new BillingProvider.Snapshot("sub_synthetic",w,checkout,PlanKey.SOLO,
+                "past_due",initial.start(),initial.end(),false,false);
+        org.mockito.Mockito.when(provider.current("cus_"+w.toString().replace("-","")))
+                .thenReturn(failed);
+        dueNow(w);
+        billing.reconcile(w);
+        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("PAST_DUE");
+        Instant grace=jdbc.queryForObject(
+                "select grace_ends_at from collector.subscriptions where workspace_id=?",
+                Instant.class,w);
+        assertThat(grace).isEqualTo(NOW.plus(Duration.ofDays(7)));
+
+        clock.now.set(grace);
+        dueNow(w);
+        billing.reconcile(w);
+        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("READ_ONLY");
+        assertThat(jdbc.queryForObject(
+                "select read_only_ends_at from collector.subscriptions where workspace_id=?",
+                Instant.class,w)).isEqualTo(grace.plus(Duration.ofDays(30)));
+
+        var recovered=new BillingProvider.Snapshot("sub_synthetic",w,checkout,PlanKey.SOLO,
+                "active",grace,grace.plus(Duration.ofDays(30)),false,true);
+        org.mockito.Mockito.when(provider.current("cus_"+w.toString().replace("-","")))
+                .thenReturn(recovered);
+        dueNow(w);
+        billing.reconcile(w);
+        var row=jdbc.queryForMap(
+                "select s.state,s.plan_key,s.grace_ends_at,s.read_only_ends_at,b.delinquent_since from collector.subscriptions s join collector.billing_accounts b on b.workspace_id=s.workspace_id where s.workspace_id=?",
+                w);
+        assertThat(row.get("state")).isEqualTo("ACTIVE");
+        assertThat(row.get("plan_key")).isEqualTo("SOLO");
+        assertThat(row.get("grace_ends_at")).isNull();
+        assertThat(row.get("read_only_ends_at")).isNull();
+        assertThat(row.get("delinquent_since")).isNull();
+
+        var canceled=new BillingProvider.Snapshot("sub_synthetic",w,checkout,PlanKey.SOLO,
+                "canceled",recovered.start(),recovered.end(),true,true);
+        org.mockito.Mockito.when(provider.current("cus_"+w.toString().replace("-","")))
+                .thenReturn(canceled);
+        dueNow(w);
+        billing.reconcile(w);
+        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("ACTIVE");
+        clock.now.set(recovered.end());
+        dueNow(w);
+        billing.reconcile(w);
+        assertThat(jdbc.queryForObject(
+                "select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("FREE");
+        assertThat(jdbc.queryForObject(
+                "select plan_key from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("FREE");
+    }
+
+    @ParameterizedTest @ValueSource(strings={"SOLO","AGENCY"})
+    void stripeReconcilerAppliesScheduledPlanAtTheVerifiedRenewalBoundary(String targetName) {
+        PlanKey target=PlanKey.valueOf(targetName);
+        PlanKey source=target==PlanKey.SOLO?PlanKey.AGENCY:PlanKey.SOLO;
+        var owner=actor("plan-"+targetName.toLowerCase(Locale.ROOT)+"@example.test");
+        UUID w=create(owner).id();
+        UUID checkout=UUID.randomUUID(), change=UUID.randomUUID();
+        syntheticCustomer(w,owner.id(),checkout,source.name());
+        var provider=context.getBean(BillingProvider.class);
+        var billing=context.getBean(BillingService.class);
+        Instant renewal=NOW.plus(Duration.ofDays(2));
+        var initial=new BillingProvider.Snapshot("sub_synthetic",w,checkout,source,
+                "active",NOW.minus(Duration.ofDays(20)),renewal,false,true);
+        org.mockito.Mockito.when(provider.current("cus_"+w.toString().replace("-","")))
+                .thenReturn(initial);
+        billing.reconcile(w);
+        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo(source.name());
+
+        jdbc.update("insert into collector.billing_plan_changes(id,workspace_id,actor_id,idempotency_key,target_plan,subscription_id,source_checkout,effective_at,state,provider_schedule_id,lease_until,created_at,updated_at) values(?,?,?,?,?,?,?,?,'SCHEDULED',?,?,?,?)",
+                change,w,owner.id(),"plan-change-"+targetName,target.name(),"sub_synthetic",
+                checkout,java.sql.Timestamp.from(renewal),"sub_sched_synthetic",
+                java.sql.Timestamp.from(NOW),java.sql.Timestamp.from(NOW),java.sql.Timestamp.from(NOW));
+        clock.now.set(renewal);
+        var renewed=new BillingProvider.Snapshot("sub_synthetic",w,change,target,
+                "active",renewal,renewal.plus(Duration.ofDays(30)),false,true);
+        org.mockito.Mockito.when(provider.current("cus_"+w.toString().replace("-","")))
+                .thenReturn(renewed);
+        dueNow(w);
+        billing.reconcile(w);
+        assertThat(jdbc.queryForObject("select plan_key from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo(target.name());
+        assertThat(jdbc.queryForObject("select state from collector.billing_plan_changes where id=?",
+                String.class,change)).isEqualTo("APPLIED");
+        assertThat(jdbc.queryForObject("select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("ACTIVE");
+    }
+
     @Test void noJwtMeansNoServiceCreation(){
         assertThatThrownBy(()->service.create(new WorkspaceDtos.Create("Denied","UTC",null))).isInstanceOf(ApiException.class).extracting(e->((ApiException)e).getStatus().value()).isEqualTo(401);
         assertThat(count("workspaces")).isZero();
