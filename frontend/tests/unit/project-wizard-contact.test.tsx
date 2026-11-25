@@ -228,9 +228,6 @@ it('preserves project-access recovery if contact creation fails', async () => {
   )
   expect(
     screen.getByRole('link', { name: 'Open project access' }),
-  ).toHaveAttribute(
-    'href',
-    '/app/w/w-id/projects/project-1?tab=access',
-  )
+  ).toHaveAttribute('href', '/app/w/w-id/projects/project-1?tab=access')
   expect(fake.run).toHaveBeenCalledTimes(2)
 })
