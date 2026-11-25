@@ -75,4 +75,4 @@ jobs:
         run: docker info
 
       - name: Verify billing and project-access rules
-        run: mvn --batch-mode --no-transfer-progress -Dtest=PricingPolicyTests,ProjectFoundationTests,StripeBillingProviderTests test
+        run: mvn --batch-mode --no-transfer-progress -Dtest=PricingPolicyTests,ProjectFoundationTests,WorkspaceFoundationTests,StripeBillingProviderTests,StripeWebhookTests test

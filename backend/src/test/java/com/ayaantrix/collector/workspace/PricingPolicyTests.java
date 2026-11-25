@@ -73,4 +73,51 @@ class PricingPolicyTests {
         assertThat(s.writable(end)).isFalse();
         assertThat(s.readable(end)).isFalse();
     }
+    @Test void pastDueGraceAndReadOnlyWindowHaveExactBoundaries() {
+        var subscription = new WorkspaceSubscription(UUID.randomUUID(), PlanKey.SOLO, NOW);
+        var grace = NOW.plus(Duration.ofDays(7));
+        var deadline = grace.plus(Duration.ofDays(30));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                subscription, "state", WorkspaceSubscription.State.PAST_DUE);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                subscription, "currentPeriodStart", NOW.minus(Duration.ofDays(30)));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                subscription, "currentPeriodEnd", NOW.plus(Duration.ofDays(2)));
+        org.springframework.test.util.ReflectionTestUtils.setField(subscription, "graceEndsAt", grace);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                subscription, "readOnlyEndsAt", deadline);
+
+        assertThat(subscription.writable(grace.minusNanos(1))).isTrue();
+        assertThat(subscription.effectiveState(grace.minusNanos(1)))
+                .isEqualTo(WorkspaceSubscription.State.PAST_DUE);
+        assertThat(subscription.writable(grace)).isFalse();
+        assertThat(subscription.effectiveState(grace))
+                .isEqualTo(WorkspaceSubscription.State.READ_ONLY);
+        assertThat(subscription.readOnlyDeadline()).isEqualTo(deadline);
+        assertThat(subscription.readable(deadline.minusNanos(1))).isTrue();
+        assertThat(subscription.readable(deadline)).isFalse();
+    }
+
+    @Test void scheduledCancellationReturnsPaidPlansToPermanentFreeAtPeriodEnd() {
+        for (var plan : java.util.List.of(PlanKey.SOLO, PlanKey.AGENCY)) {
+            var subscription = new WorkspaceSubscription(UUID.randomUUID(), plan, NOW);
+            var end = NOW.plus(Duration.ofDays(1));
+            org.springframework.test.util.ReflectionTestUtils.setField(
+                    subscription, "state", WorkspaceSubscription.State.ACTIVE);
+            org.springframework.test.util.ReflectionTestUtils.setField(
+                    subscription, "currentPeriodEnd", end);
+            org.springframework.test.util.ReflectionTestUtils.setField(
+                    subscription, "cancelAtPeriodEnd", true);
+
+            assertThat(subscription.effectiveState(end.minusNanos(1)))
+                    .isEqualTo(WorkspaceSubscription.State.ACTIVE);
+            assertThat(subscription.effectivePlan(end.minusNanos(1))).isEqualTo(plan);
+            assertThat(subscription.effectiveState(end))
+                    .isEqualTo(WorkspaceSubscription.State.FREE);
+            assertThat(subscription.effectivePlan(end)).isEqualTo(PlanKey.FREE);
+            assertThat(subscription.writable(end.plus(Duration.ofDays(365)))).isTrue();
+            assertThat(subscription.readable(end.plus(Duration.ofDays(365)))).isTrue();
+        }
+    }
+
 }

@@ -8,6 +8,8 @@ import com.ayaantrix.collector.common.error.ApiException;
 import com.ayaantrix.collector.workspace.entity.PlanKey;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -247,36 +249,79 @@ class StripeBillingProviderTests {
                 .isInstanceOf(ApiException.class);
     }
 
-    @Test @SuppressWarnings("unchecked")
-    void schedulesExactlyAtRenewalWithStableProviderKeysAndValidatedOwnership() throws Exception {
-        var requests=new ArrayList<HttpRequest>();
-        HttpClient http=mock(HttpClient.class);
-        var source=new BillingProvider.Snapshot("sub_test",workspace,UUID.randomUUID(),PlanKey.AGENCY,"active",
-                java.time.Instant.ofEpochSecond(100),java.time.Instant.ofEpochSecond(200),false,true);
-        String old="{\"start_date\":100,\"end_date\":200,\"items\":[{\"price\":\"price_agency\",\"quantity\":1}]}";
-        String next="{\"start_date\":200,\"items\":[{\"price\":\"price_solo\",\"quantity\":1}],\"metadata\":{\"collector_workspace\":\""+workspace+"\",\"collector_checkout\":\""+operation+"\"}}";
-        when(http.send(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenAnswer(invocation->{
-            HttpRequest req=invocation.getArgument(0);requests.add(req);
-            String body=req.method().equals("GET")?price("price_solo",700):
-                "{\"id\":\"sub_sched_test\",\"customer\":\"cus_test\",\"subscription\":\"sub_test\",\"livemode\":false,\"status\":\"active\",\"end_behavior\":\"release\",\"phases\":["+old+(req.uri().getPath().endsWith("sub_sched_test")?","+next:"")+"]}";
-            HttpResponse<InputStream> response=mock(HttpResponse.class);
-            when(response.statusCode()).thenReturn(200);
-            when(response.body()).thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
-            return response;
-        });
-        assertThat(provider(http).schedule(workspace,operation,"cus_test",source,PlanKey.SOLO)).isEqualTo("sub_sched_test");
+    @ParameterizedTest
+    @EnumSource(value = PlanKey.class, names = {"SOLO", "AGENCY"})
+    @SuppressWarnings("unchecked")
+    void schedulesBothUpgradeAndDowngradeAtRenewalWithoutProration(PlanKey target)
+            throws Exception {
+        var sourcePlan = target == PlanKey.SOLO ? PlanKey.AGENCY : PlanKey.SOLO;
+        String targetPrice = target == PlanKey.SOLO ? "price_solo" : "price_agency";
+        String sourcePrice = sourcePlan == PlanKey.SOLO ? "price_solo" : "price_agency";
+        var requests = new ArrayList<HttpRequest>();
+        HttpClient http = mock(HttpClient.class);
+        var source = new BillingProvider.Snapshot(
+                "sub_test", workspace, UUID.randomUUID(), sourcePlan, "active",
+                java.time.Instant.ofEpochSecond(100),
+                java.time.Instant.ofEpochSecond(200), false, true);
+        String old = "{\"start_date\":100,\"end_date\":200,\"items\":[{\"price\":\""
+                + sourcePrice + "\",\"quantity\":1}]}";
+        String next = "{\"start_date\":200,\"items\":[{\"price\":\""
+                + targetPrice + "\",\"quantity\":1}],\"metadata\":{\"collector_workspace\":\""
+                + workspace + "\",\"collector_checkout\":\"" + operation + "\"}}";
+
+        when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+                .thenAnswer(invocation -> {
+                    HttpRequest request = invocation.getArgument(0);
+                    requests.add(request);
+                    String responseBody = request.method().equals("GET")
+                            ? price(targetPrice, target == PlanKey.SOLO ? 700 : 1900)
+                            : "{\"id\":\"sub_sched_test\",\"customer\":\"cus_test\",\"subscription\":\"sub_test\",\"livemode\":false,\"status\":\"active\",\"end_behavior\":\"release\",\"phases\":["
+                                + old
+                                + (request.uri().getPath().endsWith("sub_sched_test")
+                                        ? "," + next : "")
+                                + "]}";
+                    HttpResponse<InputStream> response = mock(HttpResponse.class);
+                    when(response.statusCode()).thenReturn(200);
+                    when(response.body()).thenReturn(new ByteArrayInputStream(
+                            responseBody.getBytes(StandardCharsets.UTF_8)));
+                    return response;
+                });
+
+        assertThat(provider(http).schedule(workspace, operation, "cus_test", source, target))
+                .isEqualTo("sub_sched_test");
         assertThat(requests).hasSize(3);
-        assertThat(requests.get(1).headers().firstValue("Idempotency-Key")).contains("collector-plan-create-"+operation);
-        assertThat(requests.get(2).headers().firstValue("Idempotency-Key")).contains("collector-plan-update-"+operation);
-        var bytes=HttpResponse.BodySubscribers.ofByteArray();
-        requests.get(2).bodyPublisher().orElseThrow().subscribe(new java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer>() {
-            public void onSubscribe(java.util.concurrent.Flow.Subscription s){bytes.onSubscribe(s);}
-            public void onNext(java.nio.ByteBuffer b){bytes.onNext(List.of(b));}
-            public void onError(Throwable e){bytes.onError(e);}
-            public void onComplete(){bytes.onComplete();}
-        });
-        String sent=java.net.URLDecoder.decode(new String(bytes.getBody().toCompletableFuture().join(),StandardCharsets.UTF_8),StandardCharsets.UTF_8);
-        assertThat(sent).contains("phases[0][items][0][price]=price_agency","phases[1][items][0][price]=price_solo","phases[1][start_date]=200","proration_behavior=none");
-        assertThatThrownBy(()->provider(http).schedule(UUID.randomUUID(),operation,"cus_test",source,PlanKey.SOLO)).isInstanceOf(ApiException.class);
+        assertThat(requests.get(1).headers().firstValue("Idempotency-Key"))
+                .contains("collector-plan-create-" + operation);
+        assertThat(requests.get(2).headers().firstValue("Idempotency-Key"))
+                .contains("collector-plan-update-" + operation);
+
+        var bytes = HttpResponse.BodySubscribers.ofByteArray();
+        requests.get(2).bodyPublisher().orElseThrow()
+                .subscribe(new java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer>() {
+                    public void onSubscribe(java.util.concurrent.Flow.Subscription subscription) {
+                        bytes.onSubscribe(subscription);
+                    }
+                    public void onNext(java.nio.ByteBuffer buffer) {
+                        bytes.onNext(List.of(buffer));
+                    }
+                    public void onError(Throwable error) {
+                        bytes.onError(error);
+                    }
+                    public void onComplete() {
+                        bytes.onComplete();
+                    }
+                });
+        String sent = java.net.URLDecoder.decode(
+                new String(bytes.getBody().toCompletableFuture().join(), StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8);
+        assertThat(sent).contains(
+                "phases[0][items][0][price]=" + sourcePrice,
+                "phases[1][items][0][price]=" + targetPrice,
+                "phases[1][start_date]=200",
+                "proration_behavior=none");
+        assertThatThrownBy(() -> provider(http).schedule(
+                UUID.randomUUID(), operation, "cus_test", source, target))
+                .isInstanceOf(ApiException.class);
     }
+
 }
