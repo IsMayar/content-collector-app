@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router'
 import { BillingPage } from '@/features/billing/pages/BillingPage'
 import { WorkspaceBillingNotice } from '@/features/billing/components/WorkspaceBillingNotice'
+import { errorMessage } from '@/shared/utils/apiError'
 import {
   billingDestination,
   subscriptionResponse,
@@ -446,6 +447,18 @@ it('does not promise read or export access when Stripe sends a future-dated peri
     screen.queryByText(/Authorized reads and exports/),
   ).not.toBeInTheDocument()
   expect(screen.getAllByText(/Workspace access is paused/)).toHaveLength(2)
+})
+
+it('explains billing-related 403 errors instead of claiming the user lacks permission', () => {
+  expect(
+    errorMessage({
+      status: 403,
+      data: { code: 'WORKSPACE_ACCESS_EXPIRED' },
+    }),
+  ).toMatch(/subscription period may not have started/)
+  expect(
+    errorMessage({ status: 403, data: { code: 'ACCESS_DENIED' } }),
+  ).toBe('You do not have permission to do that.')
 })
 
 it('explains scheduled cancellation without claiming editing has already stopped', () => {
