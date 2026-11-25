@@ -3,6 +3,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { CreateProjectPage } from '@/features/projects/pages/CreateProjectPage'
 
+type CommandBody = { clientId?: string }
+
 const fake = vi.hoisted(() => ({
   clients: [] as Array<{
     id: string
@@ -68,7 +70,7 @@ vi.mock('@/features/templates/components/TemplateSymbol', () => ({
 beforeEach(() => {
   fake.clients = []
   fake.run.mockReset()
-  fake.run.mockImplementation(async (url: string, body?: { clientId?: string }) => {
+  fake.run.mockImplementation(async (url: string, body?: CommandBody) => {
     if (url === 'workspaces/w-id/clients') {
       return { client: { id: 'new-customer' } }
     }
@@ -86,12 +88,16 @@ beforeEach(() => {
 
 function wizard() {
   render(
-    <MemoryRouter
-      initialEntries={['/app/w/w-id/projects/new?template=tpl-1']}
-    >
+    <MemoryRouter initialEntries={['/app/w/w-id/projects/new?template=tpl-1']}>
       <Routes>
-        <Route path="/app/w/w-id/projects/new" element={<CreateProjectPage />} />
-        <Route path="/app/w/w-id/projects/:projectId" element={<p>Project opened</p>} />
+        <Route
+          path="/app/w/w-id/projects/new"
+          element={<CreateProjectPage />}
+        />
+        <Route
+          path="/app/w/w-id/projects/:projectId"
+          element={<p>Project opened</p>}
+        />
       </Routes>
     </MemoryRouter>,
   )
@@ -103,7 +109,7 @@ function wizard() {
   })
 }
 
-it('creates a project contact using new customer details without sending an invitation', async () => {
+it('seeds a new customer contact without sending an invitation', async () => {
   wizard()
   fireEvent.click(screen.getByRole('radio', { name: /Add a new customer/i }))
   fireEvent.change(screen.getByLabelText('Business name'), {
@@ -116,8 +122,10 @@ it('creates a project contact using new customer details without sending an invi
     target: { value: 'sam@example.test' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Continue to review' }))
-  expect(screen.getByText(/primary customer contact is saved automatically/i)).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Create project', exact: true }))
+  expect(
+    screen.getByText(/primary customer contact is saved automatically/i),
+  ).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
 
   await screen.findByText('Project opened')
   expect(fake.run.mock.calls.map((call) => call[0])).toEqual([
@@ -131,12 +139,19 @@ it('creates a project contact using new customer details without sending an invi
     email: 'sam@example.test',
     accessExpiresAt: expect.any(String),
   })
-  expect(fake.run.mock.calls.some((call) => /\/publish$|\/invite$/.test(call[0]))).toBe(false)
+  expect(
+    fake.run.mock.calls.some((call) => /\/publish$|\/invite$/.test(call[0])),
+  ).toBe(false)
 })
 
-it('reuses an existing customer contact instead of requesting their details twice', async () => {
+it('seeds an existing customer contact without duplicate entry', async () => {
   fake.clients = [
-    { id: 'existing', businessName: 'Original Dental', contactName: 'Jane', email: 'jane@example.test' },
+    {
+      id: 'existing',
+      businessName: 'Original Dental',
+      contactName: 'Jane',
+      email: 'jane@example.test',
+    },
   ]
   wizard()
   fireEvent.change(screen.getByLabelText('Customer', { exact: true }), {
@@ -158,30 +173,46 @@ it('reuses an existing customer contact instead of requesting their details twic
   })
 })
 
-it('permits a draft without customer email and does not manufacture a project contact', async () => {
+it('keeps draft creation available when the customer has no email', async () => {
   fake.clients = [
-    { id: 'existing', businessName: 'Original Dental', contactName: 'Jane', email: null },
+    {
+      id: 'existing',
+      businessName: 'Original Dental',
+      contactName: 'Jane',
+      email: null,
+    },
   ]
   wizard()
   fireEvent.change(screen.getByLabelText('Customer', { exact: true }), {
     target: { value: 'existing' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Continue to review' }))
-  expect(screen.getByText(/Add a contact with an email in Client access before publishing/)).toBeInTheDocument()
+  expect(
+    screen.getByText(
+      /Add a contact with an email in Client access before publishing/,
+    ),
+  ).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Save as draft' }))
 
   await screen.findByText('Project opened')
   expect(fake.run).toHaveBeenCalledTimes(1)
 })
 
-it('keeps project-access recovery available if the initial contact cannot be saved', async () => {
+it('preserves project-access recovery if contact creation fails', async () => {
   fake.clients = [
-    { id: 'existing', businessName: 'Original Dental', contactName: 'Jane', email: 'jane@example.test' },
+    {
+      id: 'existing',
+      businessName: 'Original Dental',
+      contactName: 'Jane',
+      email: 'jane@example.test',
+    },
   ]
-  fake.run.mockImplementation(async (url: string, body?: { clientId?: string }) => {
+  fake.run.mockImplementation(async (url: string, body?: CommandBody) => {
     if (url.endsWith('/contacts')) return undefined
     if (url.endsWith('/projects')) {
-      return { project: { id: 'project-1', clientId: body?.clientId, version: 0 } }
+      return {
+        project: { id: 'project-1', clientId: body?.clientId, version: 0 },
+      }
     }
     throw new Error(`Unexpected API call: ${url}`)
   })
@@ -190,10 +221,14 @@ it('keeps project-access recovery available if the initial contact cannot be sav
     target: { value: 'existing' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Continue to review' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Create project', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
 
-  await waitFor(() => expect(screen.getByText('Your project was created')).toBeInTheDocument())
-  expect(screen.getByRole('link', { name: 'Open project access' })).toHaveAttribute(
+  await waitFor(() =>
+    expect(screen.getByText('Your project was created')).toBeInTheDocument(),
+  )
+  expect(
+    screen.getByRole('link', { name: 'Open project access' }),
+  ).toHaveAttribute(
     'href',
     '/app/w/w-id/projects/project-1?tab=access',
   )
