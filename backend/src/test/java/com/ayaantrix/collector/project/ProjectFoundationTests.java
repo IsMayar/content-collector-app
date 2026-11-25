@@ -67,7 +67,13 @@ class ProjectFoundationTests {
         "public.ecr.aws/docker/library/postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873").asCompatibleSubstituteFor("postgres"));
     @TempDir static Path directory;
     static final Instant NOW=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
-    static class TestClock extends Clock {public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId zone){return this;}public Instant instant(){return NOW;}}
+    static class TestClock extends Clock {
+        final java.util.concurrent.atomic.AtomicReference<Instant> now =
+                new java.util.concurrent.atomic.AtomicReference<>(NOW);
+        public ZoneId getZone(){return ZoneOffset.UTC;}
+        public Clock withZone(ZoneId zone){return this;}
+        public Instant instant(){return now.get();}
+    }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
     static class Configuration { @Bean @Primary TestClock projectClock(){return new TestClock();} }
     static final String PASSWORD="synthetic template test password";
@@ -90,7 +96,10 @@ class ProjectFoundationTests {
         mvc=MockMvcBuilders.webAppContextSetup((WebApplicationContext)context).apply(springSecurity()).addFilters(context.getBean(RequestTraceFilter.class)).build();
     }
     @AfterAll void stop(){if(context!=null)context.close();}
-    @AfterEach void clear(){SecurityContextHolder.clearContext();}
+    @AfterEach void clear(){
+        SecurityContextHolder.clearContext();
+        if (context != null) context.getBean(TestClock.class).now.set(NOW);
+    }
     Actor actor(){
         String email="catalog-"+UUID.randomUUID()+"@example.test";
         var user=new UserAccount(email,"Synthetic User",hash,NOW);user.markVerified(NOW);context.getBean(UserAccountRepository.class).saveAndFlush(user);
@@ -278,6 +287,83 @@ class ProjectFoundationTests {
                 .andExpect(jsonPath("$.code").value("WORKSPACE_READ_ONLY"));
         assertThat(count(t,"projects")).isEqualTo(1);
     }
+    @Test void pastDueGraceChangesToReadOnlyAndThenExpiresForProjectsAndExports() throws Exception {
+        var t = tenant();
+        var original = create(t, ProjectType.WEBSITE);
+        var grace = NOW.plusSeconds(1);
+        var expiry = NOW.plusSeconds(3);
+        jdbc.update(
+                "update collector.subscriptions set plan_key='SOLO',state='PAST_DUE',current_period_start=?,current_period_end=?,grace_ends_at=?,read_only_ends_at=?,cancel_at_period_end=false where workspace_id=?",
+                java.sql.Timestamp.from(NOW.minus(Duration.ofDays(30))),
+                java.sql.Timestamp.from(NOW.plusSeconds(1)),
+                java.sql.Timestamp.from(grace),
+                java.sql.Timestamp.from(expiry),
+                t.workspace());
+
+        mvc.perform(get(t.root()+"/subscription").header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscription.state").value("PAST_DUE"));
+        mvc.perform(postProject(t,input(t,ProjectType.WEB_APP),"grace-create"))
+                .andExpect(status().isCreated());
+
+        // Move only the injected server clock; shorten the test window to seconds
+        // so the authenticated session remains valid in HTTP integration tests.
+        context.getBean(TestClock.class).now.set(grace);
+        mvc.perform(get(t.root()+"/subscription").header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscription.state").value("READ_ONLY"));
+        mvc.perform(get(t.root()).header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entitlements.canWrite").value(false));
+        mvc.perform(get(t.root()+"/projects/"+original.id()).header("Authorization",bearer(t)))
+                .andExpect(status().isOk());
+        mvc.perform(get(t.root()+"/projects/"+original.id()+"/exports").header("Authorization",bearer(t)))
+                .andExpect(status().isOk());
+        mvc.perform(postProject(t,input(t,ProjectType.MOBILE_APP),"after-grace"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_READ_ONLY"));
+
+        context.getBean(TestClock.class).now.set(expiry);
+        mvc.perform(get(t.root()+"/projects/"+original.id()).header("Authorization",bearer(t)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        mvc.perform(get(t.root()+"/projects/"+original.id()+"/exports").header("Authorization",bearer(t)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        assertThat(count(t,"projects")).isEqualTo(2);
+    }
+
+    @Test void paidCancellationRevertsToFreeWithoutRemovingExistingProjects() throws Exception {
+        var t = tenant();
+        var original = create(t, ProjectType.WEBSITE);
+        jdbc.update(
+                "update collector.subscriptions set plan_key='AGENCY',state='ACTIVE',current_period_start=?,current_period_end=?,cancel_at_period_end=true where workspace_id=?",
+                java.sql.Timestamp.from(NOW.minus(Duration.ofDays(30))),
+                java.sql.Timestamp.from(NOW.plusSeconds(1)),
+                t.workspace());
+        mvc.perform(get(t.root()+"/subscription").header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscription.state").value("ACTIVE"))
+                .andExpect(jsonPath("$.subscription.planKey").value("AGENCY"));
+
+        context.getBean(TestClock.class).now.set(NOW.plusSeconds(1));
+        mvc.perform(get(t.root()+"/subscription").header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscription.state").value("FREE"))
+                .andExpect(jsonPath("$.subscription.planKey").value("FREE"));
+        mvc.perform(get(t.root()).header("Authorization",bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entitlements.canWrite").value(true))
+                .andExpect(jsonPath("$.entitlements.planKey").value("FREE"));
+        mvc.perform(get(t.root()+"/projects/"+original.id()).header("Authorization",bearer(t)))
+                .andExpect(status().isOk());
+        mvc.perform(postProject(t,input(t,ProjectType.WEB_APP),"free-second"))
+                .andExpect(status().isCreated());
+        mvc.perform(postProject(t,input(t,ProjectType.MOBILE_APP),"free-over-quota"))
+                .andExpect(status().is4xxClientError());
+        assertThat(count(t,"projects")).isEqualTo(2);
+    }
+
     @Test void noArbitraryProjectCapOrProviderUsageIsCharged() {
         var t=paidTenant();String before=jdbc.queryForObject("select row_to_json(w)::text from collector.workspaces w where id=?",String.class,t.workspace());
         for(int i=0;i<7;i++)create(t,ProjectType.WEB_APP);
