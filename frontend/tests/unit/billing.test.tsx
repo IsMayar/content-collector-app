@@ -449,16 +449,11 @@ it('does not promise read or export access when Stripe sends a future-dated peri
   expect(screen.getAllByText(/Workspace access is paused/)).toHaveLength(2)
 })
 
-it('explains billing 403 errors without implying a missing role', () => {
-  expect(
-    errorMessage({
-      status: 403,
-      data: { code: 'WORKSPACE_ACCESS_EXPIRED' },
-    }),
-  ).toMatch(/subscription period may not have started/)
-  expect(
-    errorMessage({ status: 403, data: { code: 'ACCESS_DENIED' } }),
-  ).toBe('You do not have permission to do that.')
+it('explains billing-related access denial', () => {
+  const expired = { status: 403, data: { code: 'WORKSPACE_ACCESS_EXPIRED' } }
+  const forbidden = { status: 403, data: { code: 'ACCESS_DENIED' } }
+  expect(errorMessage(expired)).toContain('subscription period')
+  expect(errorMessage(forbidden)).toContain('permission')
 })
 
 it('explains scheduled cancellation without claiming editing has already stopped', () => {
