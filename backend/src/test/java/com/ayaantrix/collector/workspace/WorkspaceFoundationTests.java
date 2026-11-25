@@ -272,6 +272,45 @@ class WorkspaceFoundationTests {
                 String.class,w)).isEqualTo("FREE");
     }
 
+    @Test void failedStripeSnapshotReconciliationRetriesWithoutChangingEntitlements() {
+        var owner=actor("reconcile-retry@example.test");
+        UUID w=create(owner).id();
+        UUID checkout=UUID.randomUUID();
+        syntheticCustomer(w,owner.id(),checkout,"SOLO");
+        String customer="cus_"+w.toString().replace("-","");
+        var provider=context.getBean(BillingProvider.class);
+        var billing=context.getBean(BillingService.class);
+        var recovered=new BillingProvider.Snapshot("sub_synthetic",w,checkout,PlanKey.SOLO,
+                "active",NOW.minus(Duration.ofDays(1)),NOW.plus(Duration.ofDays(30)),false,true);
+        org.mockito.Mockito.when(provider.current(customer))
+                .thenThrow(new IllegalStateException("synthetic provider outage"))
+                .thenReturn(recovered);
+
+        assertThatThrownBy(()->billing.reconcile(w))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("synthetic provider outage");
+        var failure=jdbc.queryForMap(
+                "select failure_code,lease_id,lease_until,next_reconcile_at from collector.billing_accounts where workspace_id=?",
+                w);
+        assertThat(failure.get("failure_code")).isEqualTo("BILLING_RECONCILIATION_FAILED");
+        assertThat(failure.get("lease_id")).isNull();
+        assertThat(failure.get("lease_until")).isNull();
+        assertThat(jdbc.queryForObject(
+                "select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("FREE");
+
+        clock.now.set(NOW.plusSeconds(300));
+        billing.reconcile(w);
+        var recoveredAccount=jdbc.queryForMap(
+                "select failure_code,lease_id,lease_until from collector.billing_accounts where workspace_id=?",
+                w);
+        assertThat(recoveredAccount.get("failure_code")).isNull();
+        assertThat(recoveredAccount.get("lease_id")).isNull();
+        assertThat(jdbc.queryForObject(
+                "select state from collector.subscriptions where workspace_id=?",
+                String.class,w)).isEqualTo("ACTIVE");
+    }
+
     @ParameterizedTest @ValueSource(strings={"SOLO","AGENCY"})
     void stripeReconcilerAppliesScheduledPlanAtTheVerifiedRenewalBoundary(String targetName) {
         PlanKey target=PlanKey.valueOf(targetName);
