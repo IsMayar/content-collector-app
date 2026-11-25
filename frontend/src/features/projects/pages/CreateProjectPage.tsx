@@ -53,6 +53,7 @@ export function CreateProjectPage() {
   const [partial, setPartial] = useState('')
   const createdClient = useRef('')
   const createdProject = useRef<Project | null>(null)
+  const createdContact = useRef('')
   const clients = useData<Paged<Client>>(`workspaces/${id}/clients`)
   const templates = useData<{ data: TemplateCardData[] }>(
     `workspaces/${id}/templates`,
@@ -114,20 +115,30 @@ export function CreateProjectPage() {
         createdProject.current = result.project
       }
       const project = createdProject.current
-      if (sendInvitation) {
-        const root = `workspaces/${id}/projects/${project.id}`
+      const root = `workspaces/${id}/projects/${project.id}`
+      // A customer's primary contact is not automatically a project contact in
+      // the API. Seed it from the wizard once, without sending an invitation.
+      // This lets the owner publish without entering the same details again.
+      if (email.trim() && !createdContact.current) {
         const contact = await command.run<{ contact: { id: string } }>(
           `${root}/contacts`,
           {
             clientId: project.clientId,
             name: newClient
-              ? values.contactName || values.businessName
-              : customer?.contactName || customer?.businessName,
-            email,
-            accessExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+              ? values.contactName.trim() || values.businessName.trim()
+              : customer?.contactName?.trim() || customer?.businessName || '',
+            email: email.trim(),
+            accessExpiresAt: new Date(Date.now() + 90 * 86400000).toISOString(),
           },
         )
         if (!contact) {
+          setPartial(project.id)
+          return
+        }
+        createdContact.current = contact.contact.id
+      }
+      if (sendInvitation) {
+        if (!createdContact.current) {
           setPartial(project.id)
           return
         }
@@ -145,7 +156,7 @@ export function CreateProjectPage() {
         }
         if (
           !(await command.run(
-            `${root}/contacts/${contact.contact.id}/invite`,
+            `${root}/contacts/${createdContact.current}/invite`,
             {},
             'POST',
             { 'Idempotency-Key': crypto.randomUUID() },
@@ -210,8 +221,9 @@ export function CreateProjectPage() {
     return (
       <Panel title="Your project was created">
         <p>
-          The invitation setup could not finish. Open project access to review
-          its current state and finish inviting your client.
+          The project was created, but client access setup could not finish.
+          Open project access to review the contact and invitation status before
+          continuing.
         </p>
         <ErrorNotice error={command.error} />
         <Link
@@ -587,8 +599,10 @@ export function CreateProjectPage() {
               )}
               <p className="subtle">
                 {env.mocksEnabled
-                  ? 'Sending an invitation publishes the demo project. Client access expires after 30 days.'
-                  : 'Create the project to review its request, add a contact, and send a private invitation from Client access.'}
+                  ? 'The primary contact is saved automatically. Sending an invitation also publishes the demo project.'
+                  : email
+                    ? 'The primary customer contact is saved automatically. Publish the project when ready, then send an invitation from Client access.'
+                    : 'Create the draft now. Add a contact with an email in Client access before publishing.'}
               </p>
             </Panel>
           </div>
