@@ -209,19 +209,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
         </header>
       )}
 
-      {current?.state === 'READ_ONLY' ? (
-        <Notice>
-          This workspace is read-only. Editing, AI, reminders and new
-          invitations are paused. Authorized reads and exports are available
-          until{' '}
-          {current.readOnlyEndsAt
-            ? new Date(current.readOnlyEndsAt).toLocaleDateString()
-            : 'the end of the access period'}
-          . Manage billing to restore access.
-        </Notice>
-      ) : (
-        <SubscriptionNotice subscription={current} />
-      )}
+      <SubscriptionNotice subscription={current} />
 
       {subscription.isLoading && (
         <p role="status" className="text-sm text-slate-500">
