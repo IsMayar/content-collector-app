@@ -420,9 +420,38 @@ it('explains read-only restrictions and the access deadline', () => {
     screen.getByText(/Editing, AI, reminders and new invitations are paused/),
   ).toBeInTheDocument()
   expect(
-    screen.getByText(/Authorized reads and exports are available until/),
+    screen.getByText(/Authorized reads and exports remain available until/),
   ).toBeInTheDocument()
 })
+it('does not promise read or export access when Stripe sends a future-dated period', () => {
+  const futurePeriod = {
+    ...subscription,
+    state: 'READ_ONLY',
+    currentPeriodStart: '2099-01-01T00:00:00Z',
+    currentPeriodEnd: '2099-02-01T00:00:00Z',
+    readOnlyEndsAt: '2099-03-03T00:00:00Z',
+  }
+  fake.read.mockReturnValue({
+    data: futurePeriod,
+    refetch: vi.fn(),
+  })
+  render(
+    <MemoryRouter>
+      <BillingPage />
+      <WorkspaceBillingNotice workspace="workspace" owner />
+    </MemoryRouter>,
+  )
+  expect(screen.getAllByText(/This subscription period starts/)).toHaveLength(
+    2,
+  )
+  expect(
+    screen.queryByText(/Authorized reads and exports/),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.getAllByText(/Workspace access is paused/),
+  ).toHaveLength(2)
+})
+
 it('explains scheduled cancellation without claiming editing has already stopped', () => {
   fake.read.mockReturnValue({
     data: { ...subscription, state: 'ACTIVE', cancelAtPeriodEnd: true },
