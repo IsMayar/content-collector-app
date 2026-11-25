@@ -449,7 +449,7 @@ it('does not promise read or export access when Stripe sends a future-dated peri
   expect(screen.getAllByText(/Workspace access is paused/)).toHaveLength(2)
 })
 
-it('explains billing-related 403 errors instead of claiming the user lacks permission', () => {
+it('explains billing 403 errors without implying a missing role', () => {
   expect(
     errorMessage({
       status: 403,
