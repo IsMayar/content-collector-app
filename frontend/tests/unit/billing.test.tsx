@@ -441,15 +441,11 @@ it('does not promise read or export access when Stripe sends a future-dated peri
       <WorkspaceBillingNotice workspace="workspace" owner />
     </MemoryRouter>,
   )
-  expect(screen.getAllByText(/This subscription period starts/)).toHaveLength(
-    2,
-  )
+  expect(screen.getAllByText(/This subscription period starts/)).toHaveLength(2)
   expect(
     screen.queryByText(/Authorized reads and exports/),
   ).not.toBeInTheDocument()
-  expect(
-    screen.getAllByText(/Workspace access is paused/),
-  ).toHaveLength(2)
+  expect(screen.getAllByText(/Workspace access is paused/)).toHaveLength(2)
 })
 
 it('explains scheduled cancellation without claiming editing has already stopped', () => {
