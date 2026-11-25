@@ -87,7 +87,7 @@ class WorkspaceFoundationTests {
     @BeforeEach void reset(){
         SecurityContextHolder.clearContext();clock.now.set(NOW);
         org.mockito.Mockito.reset(context.getBean(BillingProvider.class));
-        for(String table:List.of("billing_plan_changes","billing_operations","billing_accounts","billing_events","subscriptions","workspace_members","workspaces","session_tokens","auth_sessions","outbox_jobs","access_tokens","users","account_request_limits"))jdbc.update("delete from collector."+table);
+        for(String table:List.of("audit_logs","billing_plan_changes","billing_operations","billing_accounts","billing_events","subscriptions","workspace_members","workspaces","session_tokens","auth_sessions","outbox_jobs","access_tokens","users","account_request_limits"))jdbc.update("delete from collector."+table);
     }
     private Actor actor(String email){
         var user=new UserAccount(email,"Synthetic User",passwordHash,NOW);user.markVerified(NOW);users.saveAndFlush(user);
