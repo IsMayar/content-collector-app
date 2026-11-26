@@ -112,4 +112,23 @@ class StripeWebhookTests {
         webhook.receive(body, signature(body, NOW.getEpochSecond()));
         verifyNoInteractions(repo);
     }
+    @Test void databaseOutageIsNotDisguisedAsInvalidSignature() throws Exception {
+        byte[] body = event("evt_databaseOutage", "invoice.paid", "cus_synthetic");
+        when(repo.event(anyString(), anyString(), anyString(), anyString(), any()))
+                .thenThrow(new org.springframework.dao.DataAccessResourceFailureException(
+                        "Synthetic database unavailable"));
+
+        assertThatThrownBy(() -> webhook.receive(body, signature(body, NOW.getEpochSecond())))
+                .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class)
+                .isNotInstanceOf(ApiException.class);
+    }
+
+    @Test void malformedSignedEventStillReturnsBadRequest() throws Exception {
+        byte[] body = event("evt_invalid", "invoice.paid", "not_a_customer");
+        assertThatThrownBy(() -> webhook.receive(body, signature(body, NOW.getEpochSecond())))
+                .isInstanceOf(ApiException.class)
+                .satisfies(error -> assertThat(((ApiException) error).getStatus().value()).isEqualTo(400));
+        verifyNoInteractions(repo);
+    }
+
 }
