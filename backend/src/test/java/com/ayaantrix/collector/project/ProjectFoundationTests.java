@@ -352,7 +352,9 @@ class ProjectFoundationTests {
         context.getBean(ExportRepository.class).insert(
                 exportId, t.workspace(), project.id(), member, "APPROVED_ZIP",
                 Math.max(1L, project.version()),
-                json.readTree("{\\"public\\":{\\"partial\\":false,\\"sections\\":[]},\\"sources\\":[]}"),
+                json.readTree("""
+                        {"public":{"partial":false,"sections":[]},"sources":[]}
+                        """),
                 false, NOW);
         jdbc.update(
                 "update collector.export_jobs set state='READY',object_key=?,bytes=? where id=?",
