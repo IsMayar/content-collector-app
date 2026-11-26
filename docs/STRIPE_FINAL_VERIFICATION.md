@@ -29,6 +29,15 @@ The subscription starts **after** the server clock. Its effective state is read-
 
 Local CLI signing secrets have appeared in earlier chat/screenshots. Treat exposed sandbox signing secrets as compromised and replace them as part of security hardening; never commit or paste secrets.
 
+## Agency → Solo renewal configuration verified on 26 November 2026
+
+The actual Stripe sandbox subscription and local PostgreSQL were checked **read-only**, without creating payments or advancing a test clock:
+
+- Stripe subscription `sub_1Ueu0Q8afTGwDbZqjUsO6RQU`: **active**, **cancel_at_period_end=false**, linked to schedule `sub_sched_1Ueuj88afTGwDbZqsiOJEBdA`.
+- Stripe schedule: **active**, `end_behavior=release`, two phases; phase one **2026-11-23 09:57:49 UTC → 2026-12-23 09:57:49 UTC** priced **$19/month** (Agency), phase two **2026-12-23 09:57:49 UTC → 2027-01-23 09:57:49 UTC** priced **$7/month** (Solo). Both Price objects were retrieved in the same sandbox and were active, USD, recurring monthly.
+- Local PostgreSQL `collector.billing_plan_changes` joined to subscriptions, workspaces, and billing accounts: `plan_key=AGENCY`, subscription and workspace both `ACTIVE`, target `SOLO`, change `SCHEDULED`, effective date and current period end both **2026-12-23 14:27:49+04:30**, provider schedule ID matches, failure code null.
+- **Conclusion:** pre-renewal Agency → Solo scheduling, plan price mapping, Stripe subscription linkage, and local database alignment are verified. **Actual renewal execution on December 23 has not happened and cannot be claimed verified yet.** Do not advance the clock, perform duplicate Checkout, or change local dates merely to close this item.
+
 ## Verified by the disposable regression suite
 
 The dedicated GitHub Actions job `Stripe and project-access regression` tests:
@@ -48,7 +57,7 @@ These are **automated tests with synthetic provider data**, not claims of fresh 
 
 1. **Existing test customer recovery:** inspect the Stripe sandbox customer's test clock and current subscription schedule, then verify application access with a paid period that actually includes the server date. Preserve historical test evidence. No new initial Checkout is required merely to repeat a prior test.
 2. **Access cutoff:** an actual approved private ZIP download inside an authorized period is verified. The deadline/cutoff refusal remains verified by synthetic authorization tests, not an intentionally expired real signed URL test.
-3. **Stripe sandbox end-state acceptance:** confirm the real Stripe subscription's effective plan and the app's entitlements agree after a scheduled renewal and after a final cancellation; local regression tests cover the corresponding state-machine behavior.
+3. **Stripe sandbox end-state acceptance:** pre-renewal Agency → Solo Stripe/local schedule alignment is verified (see above); confirm the real change becomes effective on December 23 and app entitlements agree afterward. Final cancellation/end-state acceptance remains unverified in a new live sandbox run; existing local regression tests cover the state machine.
 4. **Hosted webhook/retries:** one real Stripe CLI-forwarded `invoice.paid` delivery is verified (HTTP 200). A publicly hosted HTTPS webhook destination, Stripe Dashboard delivery history, and real retry/replay monitoring remain unverified; this local listener is not a production endpoint.
 5. **Production launch:** the present `StripeBillingProvider` intentionally rejects live secret keys. Live-mode payment readiness requires a separate, explicit security and deployment review, production Price IDs, approved portal settings, an HTTPS webhook endpoint, monitoring, and a controlled launch. Do not substitute live credentials into the test-only build.
 
@@ -56,4 +65,4 @@ The pre-existing CI failures in `AttachmentStorageTests` are a **separate backen
 
 ## Practical continuation
 
-Next inspect the existing Stripe **test customer** and its test-clock association, then check the scheduled Agency → Solo renewal when actually due. Do not repeat Solo/Agency Checkout, payment-failure simulation, approved ZIP download, or the now-successful local webhook delivery. Prepare hosted HTTPS delivery and rotate previously exposed sandbox signing secrets before a production launch. Keep sandbox and production credentials outside git and outside chats.
+Pre-renewal Agency → Solo schedule alignment is now verified. Check actual renewal execution on December 23, 2026; separately investigate the future-dated test-customer access case (its test-clock association remains unverified). Do not repeat Solo/Agency Checkout, payment-failure simulation, approved ZIP download, or the now-successful local webhook delivery. Prepare hosted HTTPS delivery and rotate previously exposed sandbox signing secrets before a production launch. Keep sandbox and production credentials outside git and outside chats.
