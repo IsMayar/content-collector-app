@@ -57,12 +57,21 @@ public class StripeWebhook {
                 }
                 if (pair[0].equals("v1")) signatures.add(pair[1]);
             }
-            if (timestamp == null
-                    || Math.abs(
-                                    Math.subtractExact(
-                                            clock.instant().getEpochSecond(),
-                                            Long.parseLong(timestamp)))
-                            > 300) throw invalid("timestamp-outside-tolerance");
+            if (timestamp == null) throw invalid("missing-timestamp");
+            long signedAt;
+            try {
+                signedAt = Long.parseLong(timestamp);
+            } catch (NumberFormatException malformedTimestamp) {
+                throw invalid("invalid-timestamp");
+            }
+            long secondsApart;
+            try {
+                secondsApart = Math.subtractExact(clock.instant().getEpochSecond(), signedAt);
+            } catch (ArithmeticException malformedTimestamp) {
+                throw invalid("invalid-timestamp");
+            }
+            if (secondsApart < -300 || secondsApart > 300)
+                throw invalid("timestamp-outside-tolerance");
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             mac.update((timestamp + ".").getBytes(StandardCharsets.UTF_8));
@@ -72,7 +81,12 @@ public class StripeWebhook {
                 if (candidate.matches("[a-fA-F0-9]{64}"))
                     valid |= MessageDigest.isEqual(expected, HexFormat.of().parseHex(candidate));
             if (!valid) throw invalid("signature-mismatch");
-            var event = json.readTree(body);
+            tools.jackson.databind.JsonNode event;
+            try {
+                event = json.readTree(body);
+            } catch (Exception malformedJson) {
+                throw invalid("malformed-json");
+            }
             String id = event.path("id").asText(), type = event.path("type").asText();
             if (!id.matches("evt_[A-Za-z0-9]{1,180}")
                     || type.length() > 120
