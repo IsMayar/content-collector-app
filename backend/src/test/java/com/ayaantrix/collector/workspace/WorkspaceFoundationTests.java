@@ -5,6 +5,8 @@ import com.ayaantrix.collector.workspace.repository.*;
 import com.ayaantrix.collector.workspace.service.*;
 import com.ayaantrix.collector.billing.service.BillingProvider;
 import com.ayaantrix.collector.billing.service.BillingService;
+import com.ayaantrix.collector.billing.repository.BillingRepository;
+import com.ayaantrix.collector.billing.security.StripeWebhook;
 
 import com.ayaantrix.collector.CollectorApplication;
 import com.ayaantrix.collector.auth.entity.UserAccount;
@@ -270,6 +272,107 @@ class WorkspaceFoundationTests {
         assertThat(jdbc.queryForObject(
                 "select plan_key from collector.subscriptions where workspace_id=?",
                 String.class,w)).isEqualTo("FREE");
+    }
+
+    private static String signedWebhook(byte[] body, String secret, Instant now) throws Exception {
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(
+                secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+        mac.update((now.getEpochSecond() + ".").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return "t=" + now.getEpochSecond() + ",v1="
+                + HexFormat.of().formatHex(mac.doFinal(body));
+    }
+
+    @Test void signedWebhookRetriesAndNewEventsPersistOneIdAndReconcileFromCurrentSnapshot()
+            throws Exception {
+        var owner = actor("webhook-ledger@example.test");
+        UUID w = create(owner).id();
+        UUID checkout = UUID.randomUUID();
+        syntheticCustomer(w, owner.id(), checkout, "AGENCY");
+        String customer = "cus_" + w.toString().replace("-", "");
+        String secret = "whsec_synthetic_persistent_webhook";
+        var webhook = new StripeWebhook(context.getBean(BillingRepository.class), json, clock, secret);
+
+        // The account is sleeping until the next poll; a genuine new event wakes it.
+        jdbc.update("update collector.billing_accounts set next_reconcile_at=? where workspace_id=?",
+                java.sql.Timestamp.from(NOW.plus(Duration.ofHours(2))), w);
+        byte[] first = ("""
+                {"id":"evt_persistA","type":"invoice.payment_failed","livemode":false,
+                 "data":{"object":{"customer":"%s"}}}
+                """.formatted(customer)).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String firstSignature = signedWebhook(first, secret, NOW);
+        tx.executeWithoutResult(s -> webhook.receive(first, firstSignature));
+        tx.executeWithoutResult(s -> webhook.receive(first, firstSignature));
+
+        assertThat(jdbc.queryForObject("select count(*) from collector.billing_events where event_id='evt_persistA'",
+                Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "select next_reconcile_at from collector.billing_accounts where workspace_id=?",
+                Instant.class, w)).isEqualTo(NOW);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from collector.billing_events where customer_id=? and processed_at is null",
+                Integer.class, customer)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "select state from collector.subscriptions where workspace_id=?", String.class, w))
+                .isEqualTo("FREE"); // Webhook receipt never directly changes entitlement state.
+
+        // A conflicting re-signing of the same event ID must not replace the ledger row.
+        byte[] conflict = ("""
+                {"id":"evt_persistA","type":"invoice.paid","livemode":false,
+                 "data":{"object":{"customer":"%s"}}}
+                """.formatted(customer)).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String conflictSignature = signedWebhook(conflict, secret, NOW);
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> webhook.receive(conflict, conflictSignature)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("conflicts");
+        assertThat(jdbc.queryForObject(
+                "select event_type from collector.billing_events where event_id='evt_persistA'",
+                String.class)).isEqualTo("invoice.payment_failed");
+
+        // The provider snapshot, not the failed-invoice notification order, decides the plan.
+        var snapshot = new BillingProvider.Snapshot("sub_synthetic", w, checkout, PlanKey.AGENCY,
+                "active", NOW.minus(Duration.ofDays(2)), NOW.plus(Duration.ofDays(28)), false, true);
+        org.mockito.Mockito.when(context.getBean(BillingProvider.class).current(customer))
+                .thenReturn(snapshot);
+        context.getBean(BillingService.class).reconcile(w);
+        assertThat(jdbc.queryForObject(
+                "select state from collector.subscriptions where workspace_id=?", String.class, w))
+                .isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from collector.billing_events where customer_id=? and processed_at is not null",
+                Integer.class, customer)).isEqualTo(1);
+        Instant sleepingUntil = jdbc.queryForObject(
+                "select next_reconcile_at from collector.billing_accounts where workspace_id=?",
+                Instant.class, w);
+        assertThat(sleepingUntil).isAfter(NOW);
+
+        // Stripe can retry a successfully acknowledged event; no new poll is scheduled.
+        tx.executeWithoutResult(s -> webhook.receive(first, firstSignature));
+        assertThat(jdbc.queryForObject(
+                "select next_reconcile_at from collector.billing_accounts where workspace_id=?",
+                Instant.class, w)).isEqualTo(sleepingUntil);
+
+        // A distinct delivery after reconciliation must wake the same account again.
+        clock.now.set(NOW.plusSeconds(1));
+        byte[] followUp = ("""
+                {"id":"evt_persistB","type":"invoice.paid","livemode":false,
+                 "data":{"object":{"customer":"%s"}}}
+                """.formatted(customer)).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String followUpSignature = signedWebhook(followUp, secret, clock.instant());
+        tx.executeWithoutResult(s -> webhook.receive(followUp, followUpSignature));
+        assertThat(jdbc.queryForObject(
+                "select next_reconcile_at from collector.billing_accounts where workspace_id=?",
+                Instant.class, w)).isEqualTo(clock.instant());
+        assertThat(jdbc.queryForObject(
+                "select count(*) from collector.billing_events where customer_id=? and processed_at is null",
+                Integer.class, customer)).isEqualTo(1);
+        context.getBean(BillingService.class).reconcile(w);
+        assertThat(jdbc.queryForObject(
+                "select count(*) from collector.billing_events where customer_id=? and processed_at is null",
+                Integer.class, customer)).isZero();
+        assertThat(jdbc.queryForObject(
+                "select state from collector.subscriptions where workspace_id=?", String.class, w))
+                .isEqualTo("ACTIVE");
     }
 
     @Test void failedStripeSnapshotReconciliationRetriesWithoutChangingEntitlements() {
