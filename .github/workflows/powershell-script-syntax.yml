@@ -3,11 +3,13 @@ on:
   pull_request:
     paths:
       - 'backend/scripts/Diagnose-StripeWebhook.ps1'
+      - 'backend/scripts/Start-DevBackendWithStripe.ps1'
       - '.github/workflows/powershell-script-syntax.yml'
   push:
     branches: [main]
     paths:
       - 'backend/scripts/Diagnose-StripeWebhook.ps1'
+      - 'backend/scripts/Start-DevBackendWithStripe.ps1'
       - '.github/workflows/powershell-script-syntax.yml'
 jobs:
   parse-with-windows-powershell:
@@ -19,10 +21,18 @@ jobs:
         run: |
           $tokens = $null
           $parseErrors = $null
-          $path = Join-Path $env:GITHUB_WORKSPACE 'backend/scripts/Diagnose-StripeWebhook.ps1'
-          $null = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
-          if ($parseErrors.Count -gt 0) {
-            $parseErrors | Format-List | Out-String | Write-Error
-            exit 1
+          $paths = @(
+            'backend/scripts/Diagnose-StripeWebhook.ps1'
+            'backend/scripts/Start-DevBackendWithStripe.ps1'
+          )
+          foreach ($relativePath in $paths) {
+            $tokens = $null
+            $parseErrors = $null
+            $path = Join-Path $env:GITHUB_WORKSPACE $relativePath
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              $parseErrors | Format-List | Out-String | Write-Error
+              exit 1
+            }
+            Write-Host "Windows PowerShell 5.1 syntax valid: $relativePath"
           }
-          Write-Host 'Windows PowerShell 5.1 syntax valid.'
