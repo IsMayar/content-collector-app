@@ -38,6 +38,17 @@ The actual Stripe sandbox subscription and local PostgreSQL were checked **read-
 - Local PostgreSQL `collector.billing_plan_changes` joined to subscriptions, workspaces, and billing accounts: `plan_key=AGENCY`, subscription and workspace both `ACTIVE`, target `SOLO`, change `SCHEDULED`, effective date and current period end both **2026-12-23 14:27:49+04:30**, provider schedule ID matches, failure code null.
 - **Conclusion:** pre-renewal Agency → Solo scheduling, plan price mapping, Stripe subscription linkage, and local database alignment are verified. **Actual renewal execution on December 23 has not happened and cannot be claimed verified yet.** Do not advance the clock, perform duplicate Checkout, or change local dates merely to close this item.
 
+## Separate Solo test-clock account — root cause confirmed on 26 November 2026
+
+The existing Solo test workspace `9c48f67b-beaf-4a5d-82ea-885b092333d0` is linked through its billing account to a **Stripe test-clock customer**. A read-only Stripe customer/subscription lookup confirmed:
+
+- Stripe customer: `test_clock` is non-null.
+- Subscription: **active**, with `test_clock=clock_1UeyhM8afTGwDbZq7tiBZ43L`.
+- Stripe subscription item period: **2026-12-23 13:16:36 UTC → 2027-01-23 13:16:36 UTC**, matching PostgreSQL **2026-12-23 17:46:36+04:30 → 2027-01-23 17:46:36+04:30**.
+- Local `subscriptions` table shows **SOLO / ACTIVE**, and `billing_accounts.failure_code` is null.
+
+**Conclusion:** the test clock's future period is authoritative provider data; the app's access policy correctly prevents reads/writes before `current_period_start`. This is an expected consequence of the simulated clock rather than a billing data mismatch. Do **not** backdate PostgreSQL, adjust the machine clock, or tamper with Stripe historical periods. The test clock object's `frozen_time` and status have **not yet been read**. Any separate normal-calendar acceptance test should use an independent, ordinary sandbox customer (without a test clock) if needed; do not disturb this existing test scenario.
+
 ## Verified by the disposable regression suite
 
 The dedicated GitHub Actions job `Stripe and project-access regression` tests:
@@ -55,7 +66,7 @@ These are **automated tests with synthetic provider data**, not claims of fresh 
 
 ## Outstanding real-world gates
 
-1. **Existing test customer recovery:** inspect the Stripe sandbox customer's test clock and current subscription schedule, then verify application access with a paid period that actually includes the server date. Preserve historical test evidence. No new initial Checkout is required merely to repeat a prior test.
+1. **Separate Solo test-clock access:** the test clock is confirmed as the cause of the future paid period, not a PostgreSQL data mismatch. Optionally inspect its `frozen_time` and status read-only. A normal-calendar access acceptance check must use an independently created non-test-clock sandbox customer, not rewriting or rewinding the existing scenario.
 2. **Access cutoff:** an actual approved private ZIP download inside an authorized period is verified. The deadline/cutoff refusal remains verified by synthetic authorization tests, not an intentionally expired real signed URL test.
 3. **Stripe sandbox end-state acceptance:** pre-renewal Agency → Solo Stripe/local schedule alignment is verified (see above); confirm the real change becomes effective on December 23 and app entitlements agree afterward. Final cancellation/end-state acceptance remains unverified in a new live sandbox run; existing local regression tests cover the state machine.
 4. **Hosted webhook/retries:** one real Stripe CLI-forwarded `invoice.paid` delivery is verified (HTTP 200). A publicly hosted HTTPS webhook destination, Stripe Dashboard delivery history, and real retry/replay monitoring remain unverified; this local listener is not a production endpoint.
