@@ -3,9 +3,8 @@
 .SYNOPSIS
   Diagnose the local Stripe webhook without creating a payment or invoice.
 .DESCRIPTION
-  Copy the whsec_... token from the CURRENT stripe listen terminal (or its
-  complete "Your webhook signing secret is ..." line) to your clipboard.
-  This script clears that clipboard entry after reading it.
+  Uses "stripe listen --all-snapshot --print-secret" to retrieve the local
+  Stripe CLI webhook signing secret automatically. No clipboard is required.
   It sends two signed synthetic events to the local Spring Boot backend.
   The second event adds a harmless diagnostic row for a fake customer ID.
   Never run against a production webhook endpoint.
@@ -16,19 +15,21 @@ param()
 $ErrorActionPreference = 'Stop'
 $endpoint = 'http://127.0.0.1:8080/api/v1/webhooks/stripe'
 
-# Read from clipboard rather than relying on PowerShell 5.1 hidden-input paste.
+# Stripe CLI prints its configured local signing secret and exits without
+# starting a listener. Capture it directly: no copy/paste and no console output.
 $secret = $null
 try {
-    $clipboardValue = [string](Get-Clipboard -Raw)
-    $match = [regex]::Match($clipboardValue, 'whsec_[A-Za-z0-9]+')
-    if (-not $match.Success) {
-        throw 'Clipboard has no whsec_ token. Copy the FULL current Stripe CLI signing secret (or entire Ready line) and retry.'
+    $cliOutput = @(& stripe listen --all-snapshot --print-secret 2>&1 | ForEach-Object { [string]$_ })
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Stripe CLI could not read the local signing secret. Verify stripe login and sandbox selection.'
     }
-
-    $secret = $match.Value
-    Set-Clipboard -Value ''
-    Remove-Variable clipboardValue, match -ErrorAction SilentlyContinue
-    Write-Host 'Loaded local Stripe signing secret from clipboard (value hidden).'
+    $matchesFound = [regex]::Matches(($cliOutput -join [Environment]::NewLine), 'whsec_[A-Za-z0-9]+')
+    if ($matchesFound.Count -ne 1) {
+        throw 'Stripe CLI did not return one signing secret. Verify stripe login and sandbox selection.'
+    }
+    $secret = $matchesFound[0].Value
+    Remove-Variable cliOutput, matchesFound -ErrorAction SilentlyContinue
+    Write-Host 'Loaded Stripe CLI signing secret automatically (value hidden).'
 
     function Invoke-SignedLocalWebhook {
         param([Parameter(Mandatory = $true)][string]$EventType)
@@ -100,5 +101,5 @@ try {
         Write-Host 'Skipped persistence probe because signature/transport probe did not return 200.'
     }
 } finally {
-    Remove-Variable secret, clipboardValue, match -ErrorAction SilentlyContinue
+    Remove-Variable secret, cliOutput, matchesFound -ErrorAction SilentlyContinue
 }
