@@ -1,5 +1,7 @@
 package com.ayaantrix.collector.project;
 import com.ayaantrix.collector.project.entity.*;
+import com.ayaantrix.collector.attachment.storage.PrivateObjectStorage;
+import com.ayaantrix.collector.export.repository.ExportRepository;
 import com.ayaantrix.collector.project.dto.ProjectDtos;
 import com.ayaantrix.collector.project.dto.ProjectDtos.*;
 import com.ayaantrix.collector.project.service.ProjectService;
@@ -75,7 +77,13 @@ class ProjectFoundationTests {
         public Instant instant(){return now.get();}
     }
     @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
-    static class Configuration { @Bean @Primary TestClock projectClock(){return new TestClock();} }
+    static class Configuration {
+        @Bean @Primary TestClock projectClock() { return new TestClock(); }
+        // Exercise authenticated export downloads without contacting real object storage.
+        @Bean @Primary PrivateObjectStorage exportDownloadStorage() {
+            return org.mockito.Mockito.mock(PrivateObjectStorage.class);
+        }
+    }
     static final String PASSWORD="synthetic template test password";
     static final String KEY="website.plumber";
     static final UUID VERSION=BuiltInTemplateSeeder.versionId(KEY,1);
@@ -331,6 +339,85 @@ class ProjectFoundationTests {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
         assertThat(count(t,"projects")).isEqualTo(2);
+    }
+
+    @Test void readOnlyExportDownloadIsSignedOnlyUntilTheExactAccessDeadline() throws Exception {
+        var t = paidTenant();
+        var project = create(t, ProjectType.WEBSITE);
+        var exportId = UUID.randomUUID();
+        var objectKey = "exports/synthetic/approved.zip";
+        var member = jdbc.queryForObject(
+                "select id from collector.workspace_members where workspace_id=? and role='OWNER'",
+                UUID.class, t.workspace());
+        context.getBean(ExportRepository.class).insert(
+                exportId, t.workspace(), project.id(), member, "APPROVED_ZIP",
+                Math.max(1L, project.version()),
+                json.readTree("{\\"public\\":{\\"partial\\":false,\\"sections\\":[]},\\"sources\\":[]}"),
+                false, NOW);
+        jdbc.update(
+                "update collector.export_jobs set state='READY',object_key=?,bytes=? where id=?",
+                objectKey, 128L, exportId);
+
+        // A paid payment failure has entered read-only after the grace deadline.
+        // Keep its entitlement window short using only the isolated test clock.
+        var cutoff = NOW.plusSeconds(75);
+        jdbc.update(
+                "update collector.subscriptions set plan_key='AGENCY',state='PAST_DUE',current_period_start=?,current_period_end=?,grace_ends_at=?,read_only_ends_at=?,cancel_at_period_end=false where workspace_id=?",
+                java.sql.Timestamp.from(NOW.minus(Duration.ofDays(30))),
+                java.sql.Timestamp.from(NOW.minus(Duration.ofDays(1))),
+                java.sql.Timestamp.from(NOW.minusSeconds(1)),
+                java.sql.Timestamp.from(cutoff),
+                t.workspace());
+
+        var storage = context.getBean(PrivateObjectStorage.class);
+        org.mockito.Mockito.reset(storage);
+        org.mockito.Mockito.when(storage.download(
+                org.mockito.ArgumentMatchers.eq(objectKey),
+                org.mockito.ArgumentMatchers.eq("approved-" + exportId + ".zip"),
+                org.mockito.ArgumentMatchers.eq("application/octet-stream"),
+                org.mockito.ArgumentMatchers.any(Duration.class)))
+                .thenAnswer(call -> "https://storage.example.test/download?ttl="
+                        + ((Duration) call.getArgument(3)).toSeconds());
+
+        var url = t.root() + "/projects/" + project.id() + "/exports/" + exportId;
+        mvc.perform(get(t.root() + "/subscription").header("Authorization", bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subscription.state").value("READ_ONLY"));
+        mvc.perform(get(t.root() + "/projects/" + project.id() + "/exports")
+                        .header("Authorization", bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+        mvc.perform(post(url + "/download").with(csrf().asHeader())
+                        .header("Authorization", bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value(
+                        "https://storage.example.test/download?ttl=60"));
+        org.mockito.Mockito.verify(storage).download(
+                objectKey, "approved-" + exportId + ".zip", "application/octet-stream",
+                Duration.ofSeconds(60));
+
+        // Do not issue a URL that remains valid past the account's final second.
+        context.getBean(TestClock.class).now.set(cutoff.minusSeconds(1));
+        mvc.perform(post(url + "/download").with(csrf().asHeader())
+                        .header("Authorization", bearer(t)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value(
+                        "https://storage.example.test/download?ttl=1"));
+        org.mockito.Mockito.verify(storage).download(
+                objectKey, "approved-" + exportId + ".zip", "application/octet-stream",
+                Duration.ofSeconds(1));
+
+        // At the exact cutoff no new private URL is signed or disclosed.
+        org.mockito.Mockito.clearInvocations(storage);
+        context.getBean(TestClock.class).now.set(cutoff);
+        mvc.perform(post(url + "/download").with(csrf().asHeader())
+                        .header("Authorization", bearer(t)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        mvc.perform(get(url).header("Authorization", bearer(t)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("WORKSPACE_ACCESS_EXPIRED"));
+        org.mockito.Mockito.verifyNoInteractions(storage);
     }
 
     @Test void paidCancellationRevertsToFreeWithoutRemovingExistingProjects() throws Exception {
