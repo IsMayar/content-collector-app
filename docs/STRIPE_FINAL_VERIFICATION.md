@@ -1,5 +1,15 @@
 # Stripe billing — verification ledger (25 November 2026)
 
+## New production-readiness findings — 27 November 2026
+
+The approved continuation confirms the previously investigated future period belongs to an advanced sandbox test clock. Approved ZIP download, Solo/Agency Checkout, portal and CLI delivery were already exercised; they were not repeated. The existing Agency-to-Solo schedule remains untouched, with renewal December 23, 2026; post-renewal acceptance is still future work.
+
+Added centralized SANDBOX/LIVE configuration, distinct live credentials/signing secret, explicit activation and required live worker, strict mode checks on prices/subscriptions/schedules/events, and live startup validation of prices/portal/HTTPS origin. The billing status return view now polls for reconciled state. No migrations, runtime secret updates, subscription changes or live calls were made.
+
+New focused results: mode/provider/webhook suite **22 passed** using an explicit Mockito Java agent. A prior rerun encountered Windows JVM self-attachment errors, resolved by that agent. Two subsequently added live-provider tests initially rejected their `.test` origin as designed; after correcting the fixture origin, **2 passed**. Existing provider regressions also passed in that run (11 passed, 2 fixture errors before correction). These are distinct runs, not a full regression claim. Billing UI **23 passed**; TypeScript and changed-file ESLint passed. Unrelated full, responsive/PWA, provider payment and database migration suites intentionally skipped. Protected collection-file hashes unchanged.
+
+See [the single production-readiness runbook](STRIPE_PRODUCTION_READINESS.md) for deployment configuration, monitoring, rotation, rollback and external activation gates. Sandbox is preserved; production remains disabled and unhosted. The exposed local CLI signing secret still requires coordinated rotation; this was not claimed complete.
+
 This ledger prevents repeating Stripe Checkout or payment-failure work already performed in the sandbox. It distinguishes **real sandbox checks**, **disposable automated regressions**, and **release gates**.
 
 ## Previously exercised in the sandbox

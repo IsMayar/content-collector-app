@@ -6,8 +6,8 @@ import com.ayaantrix.collector.common.error.ApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +27,16 @@ public class StripeWebhook {
     private final BillingRepository repo;
     private final JsonMapper json;
     private final Clock clock;
-    private final String secret;
+    private String secret;
+    private com.ayaantrix.collector.billing.config.BillingEnvironment environment =
+            com.ayaantrix.collector.billing.config.BillingEnvironment.sandbox();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureEnvironment(
+            com.ayaantrix.collector.billing.config.BillingEnvironment environment) {
+        this.environment = environment;
+        this.secret = environment.webhookSecret(secret);
+    }
 
     public StripeWebhook(
             BillingRepository repo,
@@ -90,7 +99,8 @@ public class StripeWebhook {
             String id = event.path("id").asText(), type = event.path("type").asText();
             if (!id.matches("evt_[A-Za-z0-9]{1,180}")
                     || type.length() > 120
-                    || event.path("livemode").asBoolean()) throw invalid("invalid-event-envelope");
+                    || !environment.matches(event.path("livemode")))
+                throw invalid("invalid-event-envelope");
             if (!(type.equals("checkout.session.completed")
                     || type.startsWith("customer.subscription.")
                     || Set.of("invoice.paid", "invoice.payment_succeeded", "invoice.payment_failed")
