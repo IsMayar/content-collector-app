@@ -1,4 +1,4 @@
-import { Mail, MessageSquare } from 'lucide-react'
+import { Bell, CalendarDays, Mail, MessageSquare, Settings } from 'lucide-react'
 import type { ProjectContact } from '@/features/projects/types/project.types'
 import { DeliveryHistory } from '@/features/reminders/components/DeliveryHistory'
 import type {
@@ -8,6 +8,7 @@ import type {
   ReminderRule,
 } from '@/features/reminders/types/reminder.types'
 import { useData } from '@/services/api/resourceApi'
+import { CardHeader } from '@/shared/components/AccessUI'
 import { Notice } from '@/shared/components/Feedback'
 import {
   Badge,
@@ -42,46 +43,67 @@ export function RemindersPanel({ root }: { root: string }) {
   return (
     <QueryState query={query}>
       <div className="reminders-page">
-        <Panel title="Reminders">
-          {q.data && (
-            <p>
-              {!q.data.enabled
-                ? 'Disabled'
-                : q.data.paused
-                  ? 'Paused'
-                  : 'Enabled'}{' '}
-              ·{' '}
-              {Array.from(
-                new Set(
-                  q.data.rules.map((rule) =>
-                    rule.channel === 'EMAIL' ? 'Email' : 'SMS',
-                  ),
-                ),
-              ).join(', ') || 'No delivery methods configured'}
-            </p>
-          )}
-          <QueryState query={deliveries}>
-            <p>
-              {nextDelivery
-                ? 'Next queued reminder: ' +
-                  new Date(nextDelivery.dueAt).toLocaleString()
-                : 'No future delivery is queued.'}
-            </p>
-            {latestDelivery && (
-              <p>
-                Latest scheduled delivery: <Badge>{latestDelivery.state}</Badge>
-              </p>
-            )}
-          </QueryState>
-          <button
-            type="button"
-            className="secondary-button"
-            aria-expanded={managing}
-            onClick={() => setManaging(!managing)}
-          >
-            {managing ? 'Hide settings' : 'Manage settings'}
-          </button>
-        </Panel>
+        <section className="project-view-card project-reminder-card">
+          <CardHeader
+            icon={Bell}
+            title="Reminder settings"
+            subtitle="Automatic reminders to keep content submissions on track."
+            action={
+              q.data && (
+                <Badge>
+                  {!q.data.enabled
+                    ? 'Disabled'
+                    : q.data.paused
+                      ? 'Paused'
+                      : 'Enabled'}
+                </Badge>
+              )
+            }
+          />
+          <div className="project-view-body">
+            <dl className="project-reminder-summary">
+              <div>
+                <dt><Mail size={16} aria-hidden="true" /> Delivery channel</dt>
+                <dd>
+                  {q.data && (
+                    Array.from(
+                      new Set(
+                        q.data.rules.map((rule) =>
+                          rule.channel === 'EMAIL' ? 'Email' : 'SMS',
+                        ),
+                      ),
+                    ).join(', ') || 'Not configured'
+                  )}
+                </dd>
+              </div>
+              <QueryState query={deliveries}>
+                <div>
+                  <dt><CalendarDays size={16} aria-hidden="true" /> Next reminder</dt>
+                  <dd>
+                    {nextDelivery
+                      ? new Date(nextDelivery.dueAt).toLocaleString()
+                      : 'No future delivery is queued.'}
+                  </dd>
+                </div>
+                {latestDelivery && (
+                  <div>
+                    <dt>Latest scheduled delivery</dt>
+                    <dd><Badge>{latestDelivery.state}</Badge></dd>
+                  </div>
+                )}
+              </QueryState>
+            </dl>
+            <button
+              type="button"
+              className="au-btn au-btn--secondary"
+              aria-expanded={managing}
+              onClick={() => setManaging(!managing)}
+            >
+              <Settings size={16} aria-hidden="true" />
+              {managing ? 'Hide settings' : 'Manage settings'}
+            </button>
+          </div>
+        </section>
         {managing && (
           <>
             <nav className="reference-tabs" aria-label="Reminder views">
