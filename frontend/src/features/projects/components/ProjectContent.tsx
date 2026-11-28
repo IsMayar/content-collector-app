@@ -115,14 +115,14 @@ export function ProjectContent({
       }}
       progress={
         <div
-          className="flex items-center gap-3 text-xs text-slate-500"
+          className="project-content-meter"
           aria-label="Required content progress"
         >
           <span>
             {progress.submitted} of {progress.total} submitted
           </span>
           <progress
-            className="h-1.5 w-32"
+            className="project-content-progress"
             max={Math.max(progress.total, 1)}
             value={progress.submitted}
             aria-label="Submitted or approved required questions"
