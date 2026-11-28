@@ -71,7 +71,8 @@ public class SmsService {
     }
 
     public boolean available() {
-        return sender.available() && pepper.length >= 32 && rate > 0 && budget > 0;
+        // SMS is retired; keep legacy records and inbound reconciliation compatible.
+        return false;
     }
 
     public String scope() {
@@ -193,6 +194,7 @@ public class SmsService {
 
     public String confirm(String cookie, UUID p, Confirm input) {
         var a = clients.require(cookie, p);
+        if (!available()) throw error("SMS_UNAVAILABLE", "Text reminders are retired.");
         var g = a.grant();
         var now = clock.instant();
         var consent =
@@ -327,7 +329,7 @@ public class SmsService {
     }
 
     public Result send(UUID id, String phone, String body) {
-        return sender.send(id, phone, body);
+        return new Result("FAILED", null, "SMS_UNAVAILABLE");
     }
 
     public String numberKey(UUID w, UUID p, UUID c) {
