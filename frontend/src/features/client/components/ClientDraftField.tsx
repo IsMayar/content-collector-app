@@ -5,6 +5,7 @@ import {
   Circle,
   CircleAlert,
   Eraser,
+  MoreHorizontal,
   MessageCircle,
 } from 'lucide-react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
@@ -135,7 +136,7 @@ export function ClientDraftField({
 
   const statusLabel =
     item.state === 'NOT_STARTED'
-      ? 'Not started'
+      ? 'To do'
       : item.state === 'DRAFT'
         ? 'Draft'
         : item.state === 'SUBMITTED'
@@ -155,7 +156,7 @@ export function ClientDraftField({
 
   const saveStatus = !item.canEdit
     ? item.state === 'APPROVED'
-      ? 'Approved · read-only'
+      ? ''
       : item.state === 'SUBMITTED'
         ? 'Submitted · read-only'
         : 'Editing unavailable'
@@ -183,7 +184,7 @@ export function ClientDraftField({
       id={'item-' + item.id}
       aria-labelledby={'question-' + item.id}
       onFocusCapture={() => interaction(item.id)}
-      className="border-b border-slate-200 last:border-b-0"
+      className="client-question border-b border-slate-200 last:border-b-0"
     >
       {/* Question header */}
       <h3 className="m-0 text-sm font-semibold">
@@ -193,7 +194,7 @@ export function ClientDraftField({
           aria-expanded={expanded}
           aria-controls={'answer-body-' + item.id}
           onClick={onToggle}
-          className="flex w-full cursor-pointer items-center gap-3 rounded-md px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-5"
+          className="client-question-trigger flex w-full cursor-pointer items-center gap-3 rounded-md px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-5"
         >
           <span
             aria-hidden="true"
@@ -218,15 +219,10 @@ export function ClientDraftField({
 
           <span className="min-w-0 flex-1 text-[14px] leading-5 font-semibold text-slate-900 sm:text-[15px]">
             {item.label}
+            {item.required && <span className="client-required" aria-label="Required"> *</span>}
           </span>
 
-          {item.required && (
-            <span className="hidden shrink-0 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-medium text-rose-700 sm:inline-flex">
-              Required
-            </span>
-          )}
-
-          <span className={`shrink-0 text-xs font-medium ${statusColor}`}>
+          <span className={`client-status client-status-${item.state.toLowerCase()} shrink-0 text-xs font-medium ${statusColor}`}>
             {statusLabel}
           </span>
 
@@ -249,7 +245,7 @@ export function ClientDraftField({
       <div
         id={'answer-body-' + item.id}
         hidden={!expanded}
-        className="px-4 pt-0 pb-2 sm:px-5"
+        className="client-question-content px-4 pt-0 pb-3 sm:px-5"
       >
         {instructions && (
           <p className="mb-2 text-[13px] leading-5 text-slate-600">
@@ -388,17 +384,27 @@ export function ClientDraftField({
           - Only 4px above the buttons
           - Both buttons are 36px tall
         */}
-        <div className="mt-3 mb-3 flex flex-wrap items-center justify-between gap-2 pb-1">
+        <div className="client-question-actions mt-3 mb-2 flex flex-wrap items-center justify-between gap-2">
           {item.canEdit ? (
+            <details className="client-project-menu client-answer-menu">
+              <summary aria-label="Answer options">
+                <MoreHorizontal size={18} aria-hidden="true" />
+              </summary>
+            <div className="client-project-menu-items">
             <button
               type="button"
               disabled={submitting || aiBusy}
-              onClick={() => setClearOpen(true)}
+              onClick={(event) => {
+                event.currentTarget.closest('details')?.removeAttribute('open')
+                setClearOpen(true)
+              }}
               className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-[13px] font-medium text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Eraser size={15} aria-hidden="true" />
               Clear answer
             </button>
+            </div>
+            </details>
           ) : (
             <span />
           )}
@@ -443,7 +449,7 @@ export function ClientDraftField({
 
         {/* Comments */}
         <details
-          className="group border-t border-slate-100"
+          className="client-comment-disclosure group border-t border-slate-100"
           onToggle={(event) => {
             if (event.currentTarget.open) {
               setConversationLoaded(true)
@@ -457,7 +463,7 @@ export function ClientDraftField({
                 aria-hidden="true"
                 className="text-slate-500"
               />
-              Comments
+              Ask a question / comments
             </span>
 
             <ChevronDown
