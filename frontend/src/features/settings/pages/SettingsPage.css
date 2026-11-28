@@ -1,0 +1,139 @@
+/* Unlayered, scoped styles override the global marketing heading rules. */
+.settings-page-header .settings-page-title {
+  margin: 0;
+  font-size: clamp(24px, 2.5vw, 28px);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+  color: #0a1a2f;
+}
+
+.settings-page-header > p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.settings-page .settings-card,
+.settings-billing .settings-card {
+  border: 1px solid #dce5f1;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.settings-page .settings-card h2,
+.settings-billing .settings-card h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: #0a1a2f;
+}
+
+.settings-page .settings-card h3,
+.settings-billing .settings-card h3 {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.settings-page .settings-card button,
+.settings-page .settings-card a,
+.settings-billing .settings-card button {
+  font-size: 13px;
+}
+
+.settings-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.settings-digest-grid {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-ownership-form {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.settings-ownership-field {
+  display: grid;
+  grid-template-columns: minmax(130px, 180px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-ownership-field input,
+.settings-ownership-field select {
+  margin: 0;
+}
+
+.settings-ownership-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-ownership-note {
+  margin: 0;
+}
+
+.settings-ownership-feedback:empty {
+  display: none;
+}
+
+.settings-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 10px;
+}
+
+.settings-quota > div:first-child {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.settings-billing .settings-quota h3 {
+  font-size: 13px;
+}
+
+.settings-quota p {
+  overflow-wrap: anywhere;
+}
+
+.settings-page .settings-card :is(input, select, button, a):focus-visible,
+.settings-billing .settings-card :is(input, select, button, a):focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .settings-ownership-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .settings-ownership-actions button {
+    width: 100%;
+  }
+}

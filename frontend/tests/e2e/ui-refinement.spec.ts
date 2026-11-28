@@ -121,12 +121,19 @@ test('shared content editing, stable sidebar and compact settings', async ({
       .getByRole('navigation', { name: 'Personal and workspace settings' })
       .getByRole('link', { name: view, exact: true })
       .click()
-    await expect(
-      page.getByRole('heading', { name: view, exact: true }).first(),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('navigation', { name: 'Settings categories' }),
-    ).toBeVisible()
+    const heading = page.getByRole('heading', {
+      name: view,
+      exact: true,
+      level: 1,
+    })
+    await expect(heading).toBeVisible()
+    await expect(heading).toHaveCount(1)
+    const size = await heading.evaluate((element) =>
+      parseFloat(getComputedStyle(element).fontSize),
+    )
+    expect(size).toBeGreaterThanOrEqual(24)
+    expect(size).toBeLessThanOrEqual(28)
+    await expect(page.locator('.settings-page-header')).toHaveCount(1)
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
