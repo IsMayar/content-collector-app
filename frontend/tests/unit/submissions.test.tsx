@@ -310,7 +310,7 @@ it('shows approved content as read-only until explicit agency reopening', () => 
   mount({ item: { ...baseItem, state: 'APPROVED', canEdit: false } })
   expect(
     screen.getByText(
-      'Approved. This revision is read-only until your agency explicitly reopens it.',
+      'Approved and locked. Your agency can reopen this answer.',
     ),
   ).toBeVisible()
   expect(
