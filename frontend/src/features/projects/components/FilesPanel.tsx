@@ -24,6 +24,7 @@ import {
   Archive,
   CheckCircle2,
   FileText,
+  FolderOpen,
   Grid2X2,
   Image as ImageIcon,
   List,
@@ -40,16 +41,19 @@ export function FilesPanel({
 }) {
   if (env.mocksEnabled) return <DemoFilesPanel root={root} project={project} />
   return (
-    <Panel title="Project files">
-      <p>
-        The live service does not provide a project-wide file gallery. Clients
-        add files to individual questions. Submitted files are available to
-        authorized agency users from the exact revision.
+    <section className="project-view-card project-files-guide">
+      <span className="project-files-icon" aria-hidden="true">
+        <FolderOpen size={48} strokeWidth={1.5} />
+      </span>
+      <h2>Project files</h2>
+      <p>Files are added within individual questions.</p>
+      <p className="project-view-muted">
+        Open submitted content to view and download its files.
       </p>
-      <Link className="secondary-button" to="?tab=checklist">
+      <Link className="au-btn au-btn--primary" to="?tab=checklist">
         Open project content
       </Link>
-    </Panel>
+    </section>
   )
 }
 function DemoFilesPanel({ root, project }: { root: string; project: Project }) {

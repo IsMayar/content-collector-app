@@ -1,5 +1,7 @@
 import type { Project } from '../types/project.types'
-import { Badge, Panel } from '@/shared/components/ProductUI'
+import { CheckCircle2, Archive, RotateCcw } from 'lucide-react'
+import { CardHeader } from '@/shared/components/AccessUI'
+import { Badge } from '@/shared/components/ProductUI'
 import { Link } from 'react-router'
 export function LiveCompletionPanel({
   project,
@@ -11,9 +13,22 @@ export function LiveCompletionPanel({
   const ready =
     project.progress.approvedRequired === project.progress.requiredTotal
   return (
-    <Panel title="Project completion">
-      <Badge>{project.state}</Badge>
-
+    <section className="project-view-card project-completion-card">
+      <CardHeader
+        icon={CheckCircle2}
+        title="Project completion"
+        action={<Badge>{project.state}</Badge>}
+      />
+      <div className="project-view-body">
+      <div className="project-completion-progress">
+        <strong>Required approvals</strong>
+        <span>{project.progress.approvedRequired} of {project.progress.requiredTotal} approved</span>
+        <progress
+          aria-label="Required approvals"
+          value={project.progress.approvedRequired}
+          max={project.progress.requiredTotal || 1}
+        />
+      </div>
       <p>
         {ready
           ? 'Every visible required item is approved. Optional unapproved items do not prevent completion.'
@@ -28,6 +43,7 @@ export function LiveCompletionPanel({
               disabled={!ready}
               onClick={() => onAction('complete')}
             >
+              <CheckCircle2 size={16} aria-hidden="true" />
               Mark project completed
             </button>
           )}
@@ -48,6 +64,7 @@ export function LiveCompletionPanel({
               className="secondary-button"
               onClick={() => onAction('archive')}
             >
+              <Archive size={16} aria-hidden="true" />
               Archive project
             </button>
           )}
@@ -61,15 +78,16 @@ export function LiveCompletionPanel({
               Restore to paused
             </button>
           )}
-        <Link className="text-link" to="?tab=checklist">
+        <Link className="au-btn au-btn--secondary" to="?tab=checklist">
+          <RotateCcw size={16} aria-hidden="true" />
           Review and reopen selected items
         </Link>
       </div>
       <p>
-        Reopening a project preserves approvals. Reopen each approved item you
-        want to change from its exact revision in Review. Historical content and
-        approvals stay available.
+        Reopening preserves historical content and approvals. Reopen individual
+        approved revisions from Content.
       </p>
-    </Panel>
+      </div>
+    </section>
   )
 }

@@ -188,20 +188,15 @@ export function StructureEditor({
   ------------------------------------------------------------- */
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="project-content-view w-full min-w-0 space-y-4">
       {/* ---------------------------------------------------------
           PAGE HEADER
       --------------------------------------------------------- */}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1.5">
-          <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-            Project content
-          </h2>
-
-          <p className="text-sm leading-6 text-slate-500">
-            Organise your content and capture what you need from your client.
-          </p>
+      <div className="project-content-toolbar">
+        <div className="project-content-toolbar-title">
+          <h2>Project content</h2>
+          {progress}
         </div>
 
         {canEdit && (
@@ -229,7 +224,6 @@ export function StructureEditor({
           ERRORS
       --------------------------------------------------------- */}
 
-      {progress}
       <ErrorNotice error={command.error} />
 
       {command.error && (

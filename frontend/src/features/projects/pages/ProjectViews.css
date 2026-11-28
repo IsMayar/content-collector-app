@@ -1,0 +1,352 @@
+.project-unified-head .au-summary {
+  min-height: 76px;
+}
+
+.project-unified-head .au-summary-actions {
+  justify-content: flex-end;
+}
+
+.project-content-toolbar,
+.project-view-card {
+  background: #fff;
+  border: 1px solid #dce5f1;
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.project-content-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 18px;
+}
+
+.project-content-toolbar-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-content-toolbar h2,
+.project-view-card h2 {
+  margin: 0;
+  color: #0a1a2f;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.project-content-meter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: #475569;
+  margin-top: 6px;
+}
+
+.project-content-meter span {
+  flex-shrink: 0;
+}
+
+.project-content-meter progress,
+.project-completion-progress progress {
+  appearance: none;
+  flex: 1;
+  width: 100%;
+  min-width: 40px;
+  height: 7px;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e2e8f0;
+  accent-color: #2563eb;
+}
+
+.project-content-meter progress::-webkit-progress-bar,
+.project-completion-progress progress::-webkit-progress-bar {
+  background: #e2e8f0;
+}
+
+.project-content-meter progress::-webkit-progress-value,
+.project-completion-progress progress::-webkit-progress-value {
+  background: #2563eb;
+  border-radius: 8px;
+}
+
+.project-content-meter progress::-moz-progress-bar,
+.project-completion-progress progress::-moz-progress-bar {
+  background: #2563eb;
+  border-radius: 8px;
+}
+
+.project-content-meter strong {
+  color: #0a1a2f;
+}
+
+.project-content-view .content-question-toggle {
+  min-height: 42px;
+  font-size: 14px;
+}
+
+.project-view-card .au-card-header {
+  padding: 16px 18px;
+  border-bottom: 0;
+}
+
+.project-view-card .au-icon-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.project-view-card .au-card-subtitle {
+  font-size: 13px;
+  color: #475569;
+}
+
+.project-view-body {
+  display: grid;
+  gap: 14px;
+  padding: 0 18px 18px;
+  min-width: 0;
+}
+
+.project-files-guide {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  min-height: 280px;
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.project-files-icon {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin-bottom: 4px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 50%;
+}
+
+.project-files-guide p,
+.project-view-body p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.project-view-muted,
+.project-view-body .subtle {
+  color: #64748b;
+}
+
+.project-files-guide a {
+  margin-top: 5px;
+}
+
+.project-reminder-summary {
+  margin: 0;
+  border: 1px solid #dce5f1;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.project-reminder-summary > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  padding: 12px 14px;
+  align-items: center;
+}
+
+.project-reminder-summary > div + div {
+  border-top: 1px solid #dce5f1;
+}
+
+.project-reminder-summary dt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  color: #334155;
+  font-size: 13px;
+}
+
+.project-reminder-summary dd {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.project-reminder-card .project-view-body > button {
+  justify-self: start;
+}
+
+.project-activity-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.project-activity-timeline li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  position: relative;
+  padding: 12px 0;
+  border-top: 1px solid #edf2f7;
+}
+
+.project-activity-timeline .timeline-dot {
+  position: relative;
+  margin: 5px 0 0 2px;
+  width: 8px;
+  height: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: #2563eb;
+}
+
+.project-activity-timeline strong {
+  display: block;
+  font-size: 14px;
+  color: #0a1a2f;
+  overflow-wrap: anywhere;
+}
+
+.project-activity-timeline p,
+.project-activity-timeline time {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.project-activity-timeline time {
+  text-align: right;
+}
+
+.project-export-history {
+  border: 1px solid #dce5f1;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.project-export-table-head,
+.project-export-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.65fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.project-export-table-head {
+  background: #eef2f8;
+  color: #334155;
+}
+
+.project-export-row {
+  border-top: 1px solid #e2e8f0;
+}
+
+.project-export-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.project-export-identity svg {
+  flex-shrink: 0;
+  color: #2563eb;
+}
+
+.project-export-identity p,
+.project-export-identity small,
+.project-export-row time {
+  font-size: 12px;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
+.project-export-actions button,
+.project-completion-card .actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-completion-card .au-icon-tile {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.project-completion-progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.project-completion-progress progress {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .project-export-table-head {
+    display: none;
+  }
+
+  .project-export-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .project-export-row:first-of-type {
+    border-top: 0;
+  }
+}
+
+@media (max-width: 540px) {
+  .project-content-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .project-content-meter {
+    gap: 7px;
+    font-size: 12px;
+  }
+
+  .project-view-card .au-card-header {
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+
+  .project-view-body {
+    padding: 0 12px 12px;
+  }
+
+  .project-activity-timeline li {
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 5px 10px;
+  }
+
+  .project-activity-timeline time {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .project-export-row,
+  .project-reminder-summary > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

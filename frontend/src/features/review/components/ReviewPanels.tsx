@@ -1,6 +1,8 @@
 import type { SafeAuditEvent } from '@/features/review/types/review.types'
 import { useData } from '@/services/api/resourceApi'
-import { Panel, QueryState } from '@/shared/components/ProductUI'
+import { Activity } from 'lucide-react'
+import { CardHeader } from '@/shared/components/AccessUI'
+import { QueryState } from '@/shared/components/ProductUI'
 import { useState } from 'react'
 
 export function ActivityPanel({ root }: { root: string }) {
@@ -10,11 +12,13 @@ export function ActivityPanel({ root }: { root: string }) {
     page?: { page: number; size: number; totalElements: number }
   }>(`${root}/activity?page=${page}&size=20`)
   return (
-    <Panel title="Project activity">
-      <p className="subtle">
-        A record of meaningful actions. Answers, tokens and private file URLs
-        are excluded.
-      </p>
+    <section className="project-view-card project-activity-card">
+      <CardHeader
+        icon={Activity}
+        title="Project activity"
+        subtitle="A record of project changes and submissions."
+      />
+      <div className="project-view-body">
       <QueryState query={q}>
         {q.data?.data.length === 0 && (
           <p>
@@ -22,17 +26,19 @@ export function ActivityPanel({ root }: { root: string }) {
             here.
           </p>
         )}
-        <ol className="activity-timeline">
+        <ol className="project-activity-timeline">
           {q.data?.data.map((e) => (
             <li key={e.id}>
               <span className="timeline-dot" />
               <div>
-                <strong>{e.action}</strong>
-                <p>
-                  {e.actorDisplayName} ·{' '}
-                  <time>{new Date(e.occurredAt).toLocaleString()}</time>
-                </p>
+                <strong>
+                  {e.action.toLowerCase().replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase())}
+                </strong>
+                <p>{e.actorDisplayName}</p>
               </div>
+              <time dateTime={e.occurredAt}>
+                {new Date(e.occurredAt).toLocaleString()}
+              </time>
             </li>
           ))}
         </ol>
@@ -58,7 +64,8 @@ export function ActivityPanel({ root }: { root: string }) {
           </nav>
         )}
       </QueryState>
-    </Panel>
+      </div>
+    </section>
   )
 }
 export { ExportPanel } from '@/features/exports/components/ExportPanel'
