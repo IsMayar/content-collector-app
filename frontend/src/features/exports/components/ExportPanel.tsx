@@ -77,7 +77,7 @@ export function ExportPanel({
           title="Export history"
           subtitle="View and manage exports for this project."
           action={
-        {hasApproved && (
+            hasApproved && (
           <button
             className="primary-button"
             onClick={() => {
@@ -94,7 +94,7 @@ export function ExportPanel({
           >
             ＋ New export
           </button>
-        )}
+            )
           }
         />
         <div className="project-view-body">
