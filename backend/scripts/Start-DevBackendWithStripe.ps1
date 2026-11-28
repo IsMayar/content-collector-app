@@ -28,7 +28,13 @@ Remove-Variable cliOutput, matchesFound -ErrorAction SilentlyContinue
 $env:PRIVATE_STORAGE_ENABLED = 'true'
 $env:PRIVATE_STORAGE_WORKER_ENABLED = 'false'
 $env:EXPORT_WORKER_ENABLED = 'true'
-$env:ACCOUNT_DELIVERY_DEV_INBOX = 'true'
+# Default to the local private inbox; permit explicitly configured real email without
+# silently overriding a deliberate choice of delivery provider.
+if ($env:ACCOUNT_DELIVERY_RESEND_ENABLED -eq 'true') {
+    $env:ACCOUNT_DELIVERY_DEV_INBOX = 'false'
+} elseif ([string]::IsNullOrWhiteSpace($env:ACCOUNT_DELIVERY_DEV_INBOX)) {
+    $env:ACCOUNT_DELIVERY_DEV_INBOX = 'true'
+}
 $env:ACCOUNT_DELIVERY_WORKER_ENABLED = 'true'
 $env:APP_BASE_URL = 'https://127.0.0.1:5173'
 $env:MAVEN_OPTS = '-Xms64m -Xmx256m -XX:+UseSerialGC'
