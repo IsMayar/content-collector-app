@@ -5,7 +5,6 @@ import {
   Circle,
   CircleAlert,
   Eraser,
-  MoreHorizontal,
   MessageCircle,
 } from 'lucide-react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
@@ -388,25 +387,15 @@ export function ClientDraftField({
         */}
         <div className="client-question-actions mt-3 mb-2 flex flex-wrap items-center justify-between gap-2">
           {item.canEdit ? (
-            <details className="client-project-menu client-answer-menu">
-              <summary aria-label="Answer options">
-                <MoreHorizontal size={18} aria-hidden="true" />
-              </summary>
-            <div className="client-project-menu-items">
             <button
               type="button"
               disabled={submitting || aiBusy}
-              onClick={(event) => {
-                event.currentTarget.closest('details')?.removeAttribute('open')
-                setClearOpen(true)
-              }}
+              onClick={() => setClearOpen(true)}
               className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-red-200 bg-white px-3 text-[13px] font-medium text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Eraser size={15} aria-hidden="true" />
               Clear answer
             </button>
-            </div>
-            </details>
           ) : (
             <span />
           )}

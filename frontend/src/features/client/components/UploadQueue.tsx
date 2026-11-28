@@ -8,7 +8,7 @@ import { useCommand } from '@/shared/hooks/useCommand'
 import { formatBytes } from '@/shared/utils/domain'
 import { downloadFile } from '@/shared/utils/download'
 import { FileText, FolderOpen, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 export function UploadQueue({
   client = true,
   root,
@@ -24,6 +24,7 @@ export function UploadQueue({
   onRefresh,
   onReady,
   beforeDelete,
+  simplified = false,
 }: {
   client?: boolean
   root: string
@@ -39,6 +40,7 @@ export function UploadQueue({
   onRefresh?: () => void
   onReady?: (id: string) => void
   beforeDelete?: () => Promise<boolean>
+  simplified?: boolean
 }) {
   const command = useCommand(client)
   const [keep, setKeep] = useState(true)
@@ -52,8 +54,43 @@ export function UploadQueue({
     onChange,
     onReady,
     onRefresh,
+    autoRefresh: simplified,
   })
   const { queue } = uploads
+  const hasPending =
+    queue.some((t) => t.state === 'processing') ||
+    assets.some((a) => ['UPLOADED', 'PROCESSING'].includes(a.state))
+  const refreshPending = useEffectEvent(async () => {
+    if (uploads.accessError || !uploads.online) return
+    const needsRefresh =
+      queue.some((t) => t.state === 'processing' && !uploads.isRunning(t.id)) ||
+      assets.some((a) =>
+        ['UPLOADED', 'PROCESSING'].includes(a.state) &&
+        !queue.some((t) => t.assetId === a.id && uploads.isRunning(t.id)),
+      )
+    if (needsRefresh) await uploads.refreshProcessing(true)
+  })
+  useEffect(() => {
+    if (
+      !simplified ||
+      !live ||
+      disabled ||
+      !hasPending ||
+      !uploads.online ||
+      uploads.accessError
+    ) return
+    let busy = false
+    const timer = window.setInterval(async () => {
+      if (busy) return
+      busy = true
+      try {
+        await refreshPending()
+      } finally {
+        busy = false
+      }
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [simplified, live, disabled, hasPending, uploads.online, uploads.accessError])
   function add(files: FileList | null) {
     if (!files || disabled) return
     setError('')
@@ -113,7 +150,7 @@ export function UploadQueue({
       valid.push({
         id: crypto.randomUUID(),
         file,
-        keepOriginal: raster(file) ? keep : true,
+        keepOriginal: simplified || !raster(file) || keep,
         progress: 0,
         state: 'queued',
       })
@@ -121,7 +158,7 @@ export function UploadQueue({
     uploads.add(valid)
   }
   return (
-    <div className="upload-area">
+    <div className={`upload-area${simplified ? ' client-upload-simple' : ''}`}>
       <label
         className="upload-drop"
         onDragOver={(e) => e.preventDefault()}
@@ -169,7 +206,7 @@ export function UploadQueue({
           }}
         />
       </label>
-      {(image ||
+      {!simplified && (image ||
         allowedExtensions?.some((x) => ['jpg', 'jpeg', 'png'].includes(x))) && (
         <Field label="Take a photo">
           <input
@@ -185,7 +222,8 @@ export function UploadQueue({
           />
         </Field>
       )}
-      <div className="client-upload-options">
+      {!simplified && (
+        <div className="client-upload-options">
       <label className="check-row">
         <input
           type="checkbox"
@@ -202,8 +240,9 @@ export function UploadQueue({
         This choice applies to images selected next; documents always retain
         their originals. Only verified ready files can be saved in your draft.
       </small>
-      </div>
-      {live && (
+        </div>
+      )}
+      {live && !simplified && (
         <button
           type="button"
           className="secondary-button client-upload-refresh"
@@ -220,15 +259,17 @@ export function UploadQueue({
           page.
         </Notice>
       )}
-      <p aria-live="polite" aria-atomic="true" className="upload-summary">
-        {queue.filter((t) => t.state === 'ready').length} ready ·{' '}
-        {
-          queue.filter((t) =>
-            ['queued', 'uploading', 'processing'].includes(t.state),
-          ).length
-        }{' '}
-        pending · Up to 3 transfers at a time
-      </p>
+      {(!simplified || queue.length > 0) && (
+        <p aria-live="polite" aria-atomic="true" className="upload-summary">
+          {queue.filter((t) => t.state === 'ready').length} ready ·{' '}
+          {
+            queue.filter((t) =>
+              ['queued', 'uploading', 'processing'].includes(t.state),
+            ).length
+          } pending
+          {!simplified && ' · Up to 3 transfers at a time'}
+        </p>
+      )}
       <ErrorNotice error={uploads.accessError || error || command.error} />
       {queue.some((t) =>
         ['ready', 'failed', 'cancelled'].includes(t.state),
@@ -255,7 +296,7 @@ export function UploadQueue({
             <strong>{t.file.name}</strong>
             <small>
               {formatBytes(t.file.size)} · {t.state}
-              {raster(t.file)
+              {!simplified && raster(t.file)
                 ? t.keepOriginal
                   ? ' · Original retained'
                   : ' · Working copy only'
@@ -334,8 +375,8 @@ export function UploadQueue({
               <span>
                 <strong>{a.originalName}</strong>
                 <small>
-                  {formatBytes(a.retainedBytes)} ·{' '}
-                  {a.keepOriginal ? 'Original retained' : 'Working copy only'}
+                  {formatBytes(a.retainedBytes)}
+                  {!simplified && (a.keepOriginal ? ' · Original retained' : ' · Working copy only')}
                 </small>
               </span>
             </label>
