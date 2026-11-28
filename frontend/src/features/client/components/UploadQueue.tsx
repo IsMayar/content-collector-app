@@ -57,6 +57,9 @@ export function UploadQueue({
     autoRefresh: simplified,
   })
   const { queue } = uploads
+  const hasPending =
+    queue.some((t) => t.state === 'processing') ||
+    assets.some((a) => ['UPLOADED', 'PROCESSING'].includes(a.state))
   const refreshPending = useEffectEvent(async () => {
     if (uploads.accessError || !uploads.online) return
     const needsRefresh =
@@ -65,10 +68,17 @@ export function UploadQueue({
         ['UPLOADED', 'PROCESSING'].includes(a.state) &&
         !queue.some((t) => t.assetId === a.id && uploads.isRunning(t.id)),
       )
-    if (needsRefresh) await uploads.refreshProcessing()
+    if (needsRefresh) await uploads.refreshProcessing(true)
   })
   useEffect(() => {
-    if (!simplified || !live || disabled || !uploads.online || uploads.accessError) return
+    if (
+      !simplified ||
+      !live ||
+      disabled ||
+      !hasPending ||
+      !uploads.online ||
+      uploads.accessError
+    ) return
     let busy = false
     const timer = window.setInterval(async () => {
       if (busy) return
@@ -80,7 +90,7 @@ export function UploadQueue({
       }
     }, 5000)
     return () => window.clearInterval(timer)
-  }, [simplified, live, disabled, uploads.online, uploads.accessError])
+  }, [simplified, live, disabled, hasPending, uploads.online, uploads.accessError])
   function add(files: FileList | null) {
     if (!files || disabled) return
     setError('')
