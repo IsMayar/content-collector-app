@@ -87,7 +87,6 @@ const planOptions = [
       '1 seat',
       '5 GB storage',
       '50 AI drafts per month',
-      'No SMS',
       '10 active projects · 50 client contacts',
     ],
   },
@@ -99,7 +98,6 @@ const planOptions = [
       '5 seats',
       '25 GB storage',
       '200 AI drafts per month',
-      '50 SMS segments per month',
       'Unlimited active projects within resource limits',
     ],
   },
@@ -267,9 +265,6 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
               <span>{usage.data.seatsLimit} team seats</span>
               <span>{formatBytes(usage.data.storageLimitBytes)} storage</span>
               <span>{usage.data.aiDraftAllowance} AI drafts / period</span>
-              <span>
-                {usage.data.smsSegmentAllowance} SMS segments / period
-              </span>
             </div>
           )}
         </section>
@@ -434,15 +429,6 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
               limitLabel={String(usage.data.aiDraftAllowance)}
             />
 
-            <QuotaMeter
-              label="SMS segments"
-              count={
-                usage.data.smsSegmentsUsed + usage.data.smsSegmentsReserved
-              }
-              limit={usage.data.smsSegmentAllowance}
-              description={`${usage.data.smsSegmentsUsed} used + ${usage.data.smsSegmentsReserved} reserved`}
-              limitLabel={String(usage.data.smsSegmentAllowance)}
-            />
           </div>
         )}
 
@@ -461,14 +447,14 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
             <p className="mt-1 text-xs leading-5 text-slate-600">
               Storage includes active reservations. Team invitations reserve
               seats; clients do not use seats. AI resets on the UTC calendar
-              month; SMS uses the subscription period. Provider availability and
+              month. Provider availability and
               separate spending caps still apply. Reaching a quota does not
               block manual text collection or permitted reads and exports.
             </p>
 
             {usage.data && (
               <p className="mt-2 text-xs leading-5 text-slate-600">
-                Subscription/SMS period:{' '}
+                Subscription period:{' '}
                 {new Date(usage.data.periodStart).toLocaleDateString()}–
                 {new Date(usage.data.periodEnd).toLocaleDateString()}.
                 {usage.data.aiPeriodStart && usage.data.aiPeriodEnd && (
