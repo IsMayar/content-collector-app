@@ -322,12 +322,11 @@ public class ReminderRepository {
         var list =
                 jdbc.query(
                         "select * from collector.reminder_deliveries where state='QUEUED' and"
-                            + " available_at<=? and ((channel='EMAIL' and ?) or (channel='SMS' and"
-                            + " ?)) order by due_at for update skip locked limit 1",
+                            + " available_at<=? and channel='EMAIL' and ?"
+                            + " order by due_at for update skip locked limit 1",
                         this::row,
                         Timestamp.from(now),
-                        email,
-                        sms);
+                        email);
         if (list.isEmpty()) return Optional.empty();
         var d = list.getFirst();
         jdbc.update(
@@ -408,7 +407,7 @@ public class ReminderRepository {
     public List<Map<String, Object>> history(UUID w, UUID p, int page, int size) {
         return jdbc.query(
                 "select * from collector.reminder_deliveries where workspace_id=? and project_id=?"
-                        + " order by created_at desc,id limit ? offset ?",
+                        + " and channel='EMAIL' order by created_at desc,id limit ? offset ?",
                 (rs, n) -> {
                     var m = new LinkedHashMap<String, Object>();
                     m.put("id", rs.getObject("id", UUID.class));
@@ -515,7 +514,7 @@ public class ReminderRepository {
     public long historyCount(UUID w, UUID p) {
         return jdbc.queryForObject(
                 "select count(*) from collector.reminder_deliveries where workspace_id=? and"
-                        + " project_id=?",
+                        + " project_id=? and channel='EMAIL'",
                 Long.class,
                 w,
                 p);

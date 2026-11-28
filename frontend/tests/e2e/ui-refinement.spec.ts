@@ -46,6 +46,17 @@ test('shared content editing, stable sidebar and compact settings', async ({
       'Lamar Dental website',
     )
     await expect(page.locator('.project-unified-head')).toHaveCount(1)
+    if (view === 'Reminders') {
+      await expect(page.getByRole('heading', { name: 'Email reminders', exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Reminder schedule', exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Email history', exact: true })).toBeVisible()
+      await expect(page.getByRole('navigation', { name: 'Reminder views' })).toHaveCount(0)
+      await page.getByRole('button', { name: 'Preview email', exact: true }).click()
+      const email = page.getByRole('dialog', { name: 'Preview email' })
+      await expect(email.getByLabel('Client contact')).toBeVisible()
+      await expect(email.getByLabel('Channel', { exact: true })).toHaveCount(0)
+      await email.getByRole('button', { name: 'Close Preview email' }).click()
+    }
   }
   await page.getByLabel('Project actions', { exact: true }).click()
   await page.getByRole('link', { name: 'Project completion', exact: true }).click()

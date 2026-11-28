@@ -1,97 +1,55 @@
 import type { DeliverySummary } from '@/features/reminders/types/reminder.types'
 import { useData } from '@/services/api/resourceApi'
-import { Badge, Empty, Panel, QueryState } from '@/shared/components/ProductUI'
-import { useState } from 'react'
+import { CardHeader } from '@/shared/components/AccessUI'
+import { Badge, QueryState } from '@/shared/components/ProductUI'
+import { Mail, History } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 
-export function DeliveryHistory({ root }: { root: string }) {
-  const q = useData<{ data: DeliverySummary[] }>(`${root}/deliveries`)
-  const [channel, setChannel] = useState('ALL'),
-    [status, setStatus] = useState('ALL')
-  const rows = q.data?.data || []
+export function DeliveryHistory({ root, action }: { root: string; action?: ReactNode }) {
+  const [page, setPage] = useState(0)
+  const q = useData<{
+    data: DeliverySummary[]
+    page?: { totalElements: number }
+  }>(`${root}/deliveries?page=${page}&size=20`)
+  const rows = (q.data?.data ?? []).filter((d) => d.channel === 'EMAIL')
   return (
-    <Panel title="Reminder delivery activity">
-      <div className="report-metrics">
-        {[
-          ['Email', rows.filter((d) => d.channel === 'EMAIL').length],
-          ['SMS', rows.filter((d) => d.channel === 'SMS').length],
-          ['Delivered', rows.filter((d) => d.state === 'DELIVERED').length],
-          [
-            'Action needed',
-            rows.filter((d) =>
-              ['FAILED', 'BOUNCED', 'UNKNOWN'].includes(d.state),
-            ).length,
-          ],
-        ].map(([label, value]) => (
-          <article key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </article>
-        ))}
-      </div>
-      <div className="report-filters">
-        <select
-          aria-label="Delivery channel"
-          value={channel}
-          onChange={(e) => setChannel(e.target.value)}
-        >
-          <option value="ALL">All channels</option>
-          <option>EMAIL</option>
-          <option>SMS</option>
-        </select>
-        <select
-          aria-label="Delivery status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="ALL">All statuses</option>
-          {[...new Set(rows.map((d) => d.state))].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-      <QueryState query={q}>
-        {rows.length ? (
-          <div className="reference-table-wrap">
-            <table className="reference-table">
-              <thead>
-                <tr>
-                  <th>Date & time</th>
-                  <th>Channel</th>
-                  <th>Status</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows
-                  .filter(
-                    (d) =>
-                      (channel === 'ALL' || d.channel === channel) &&
-                      (status === 'ALL' || d.state === status),
-                  )
-                  .map((d) => (
+    <section className="project-view-card email-history">
+      <CardHeader icon={History} title="Email history" action={action} />
+      <div className="project-view-body">
+        <QueryState query={q}>
+          {rows.length ? (
+            <div className="reference-table-wrap">
+              <table className="reference-table">
+                <thead><tr><th>Date & time</th><th>Status</th><th>Details</th></tr></thead>
+                <tbody>
+                  {rows.map((d) => (
                     <tr key={d.id}>
-                      <td>{new Date(d.dueAt).toLocaleString()}</td>
-                      <td>{d.channel}</td>
-                      <td>
-                        <Badge>{d.state}</Badge>
-                      </td>
-                      <td>
-                        {d.state === 'UNKNOWN'
-                          ? 'Awaiting provider reconciliation. Do not retry.'
-                          : d.failureCode || 'No reported issue'}
-                      </td>
+                      <td><time dateTime={d.dueAt}>{new Date(d.dueAt).toLocaleString()}</time></td>
+                      <td><Badge>{d.state}</Badge></td>
+                      <td>{d.state === 'UNKNOWN'
+                        ? 'Awaiting provider reconciliation. Do not retry.'
+                        : d.failureCode?.replaceAll('_', ' ').toLowerCase() || 'No reported issue'}</td>
                     </tr>
                   ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <Empty
-            title="No reminders yet"
-            description="Eligible reminders and their delivery states will appear here."
-          />
-        )}
-      </QueryState>
-    </Panel>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="email-history-empty">
+              <Mail size={28} aria-hidden="true" />
+              <strong>No email reminders on this page</strong>
+              <p className="subtle">Scheduled and sent reminders will appear here.</p>
+            </div>
+          )}
+          {q.data?.page && (page > 0 || q.data.page.totalElements > 20) && (
+            <nav className="email-reminder-actions" aria-label="Email history pages">
+              <button type="button" className="au-btn au-btn--secondary" disabled={page === 0 || q.isFetching} onClick={() => setPage(page - 1)}>Previous</button>
+              <span>Page {page + 1}</span>
+              <button type="button" className="au-btn au-btn--secondary" disabled={(page + 1) * 20 >= q.data.page.totalElements || q.isFetching} onClick={() => setPage(page + 1)}>Next</button>
+            </nav>
+          )}
+        </QueryState>
+      </div>
+    </section>
   )
 }

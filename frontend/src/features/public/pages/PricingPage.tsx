@@ -10,7 +10,6 @@ const comparison = [
   { feature: 'Client contacts', free: '5', solo: '50', agency: 'Unlimited' },
   { feature: 'Private storage', free: '500 MB', solo: '5 GB', agency: '25 GB' },
   { feature: 'AI drafts / month', free: '0', solo: '50', agency: '200' },
-  { feature: 'US SMS segments / month', free: '0', solo: '0', agency: '50' },
 ]
 
 const questions = [
@@ -22,7 +21,7 @@ const questions = [
   {
     title: 'How do reminders work?',
     answer:
-      'Email reminders only chase outstanding client action. Optional US SMS requires verified client consent. Message and data rates may apply.',
+      'Email reminders are sent only when required client action remains.',
   },
   {
     title: 'What if a payment is late?',
@@ -58,7 +57,7 @@ export function PricingPage() {
           />
           <span>
             Paid Checkout remains unavailable until the payment provider is
-            configured. AI, email and SMS also require configured providers.
+            configured. AI and email also require configured providers.
           </span>
         </div>
 

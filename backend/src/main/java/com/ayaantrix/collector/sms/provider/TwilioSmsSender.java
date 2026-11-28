@@ -33,13 +33,14 @@ public class TwilioSmsSender implements SmsSender {
             @Value("${collector.sms.status-url:}") String statusUrl,
             JsonMapper json,
             @Value("${collector.sms.inbound-url:}") String inboundUrl) {
-        this.enabled = enabled && approved;
+        // Do not send new messages even when legacy provider credentials remain configured.
+        this.enabled = false;
         this.account = account;
         this.token = token;
         this.scope = scope;
         this.statusUrl = statusUrl;
         this.json = json;
-        if (enabled
+        if (this.enabled
                 && (!approved
                         || !account.matches("AC[0-9a-fA-F]{32}")
                         || token.isBlank()

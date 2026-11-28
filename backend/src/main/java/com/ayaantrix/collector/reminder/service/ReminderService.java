@@ -63,7 +63,9 @@ public class ReminderService {
     }
 
     public Policy policy(Project p) {
-        return repo.ensure(p.workspaceId(), p.id(), p.timezone(), p.dueDate(), clock.instant());
+        var stored = repo.ensure(p.workspaceId(), p.id(), p.timezone(), p.dueDate(), clock.instant());
+        return new Policy(stored.version(), stored.enabled(), stored.paused(), stored.timezone(),
+                stored.rules().stream().filter(rule -> "EMAIL".equals(rule.channel())).toList());
     }
 
     public Policy update(UUID w, UUID p, Update input) {
@@ -77,7 +79,7 @@ public class ReminderService {
         zone(input.timezone());
         var ids = new HashSet<UUID>();
         for (var r : input.rules()) {
-            if (!Set.of("EMAIL", "SMS").contains(r.channel()) || !ids.add(r.id())) throw invalid();
+            if (!"EMAIL".equals(r.channel()) || !ids.add(r.id())) throw invalid();
             try {
                 LocalTime.parse(r.localTime());
             } catch (DateTimeException e) {
@@ -109,6 +111,7 @@ public class ReminderService {
 
     public Preview preview(UUID w, UUID p, Send input) {
         var project = owner(w, p, false);
+        if (!"EMAIL".equals(input.channel())) throw invalid();
         var policy = policy(project);
         var c = repo.contact(w, p, input.contactId()).orElseThrow(ProjectAuthorization::missing);
         var reasons = reasons(project, policy, c, input.channel(), NONE);
@@ -136,6 +139,7 @@ public class ReminderService {
 
     public UUID send(UUID w, UUID p, Send input, String key) {
         var project = owner(w, p, true);
+        if (!"EMAIL".equals(input.channel())) throw invalid();
         var actor = agency.access(w, true).member().userId();
         var now = clock.instant();
         String route = "reminder-send:" + p, hash = IdempotencyRepository.hash(input.toString());
@@ -184,16 +188,7 @@ public class ReminderService {
         if(plan.reminders()==com.ayaantrix.collector.workspace.entity.PlanKey.ReminderTier.NONE
                 || (plan.reminders()==com.ayaantrix.collector.workspace.entity.PlanKey.ReminderTier.BASIC && !basicRules(policy.rules())))
             r.add("PLAN_FEATURE_UNAVAILABLE");
-        if (!Set.of("EMAIL", "SMS").contains(channel)) r.add("CHANNEL_UNAVAILABLE");
-        if (channel.equals("SMS"))
-            r.addAll(
-                    sms.reasons(
-                            w,
-                            p,
-                            c.id(),
-                            com.ayaantrix.collector.sms.service.SmsRules.segments(
-                                    sms.previewBody(project.title(), missing(w, p))),
-                            !except.equals(NONE) && sms.reserved(except)));
+        if (!"EMAIL".equals(channel)) return List.of("CHANNEL_UNAVAILABLE");
         if (!"ACTIVE".equals(project.state().name())) r.add("PROJECT_NOT_ACTIVE");
         if (!policy.enabled() || policy.paused()) r.add("POLICY_PAUSED");
         if (clients.available(w, p, c.id(), true).isEmpty()) r.add("GRANT_UNAVAILABLE");
