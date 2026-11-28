@@ -21,6 +21,39 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 class StripeBillingProviderTests {
+    @Test
+    void liveModeRejectsSandboxPricesBeforeCheckoutAndUsesSeparateKey() throws Exception {
+        var http = checkoutHttp(price("price_solo", 700), "https://checkout.stripe.com/c/fixture");
+        var value = provider(http);
+        ReflectionTestUtils.setField(value, "base", "https://billing.example.com");
+        value.configureEnvironment(
+                new com.ayaantrix.collector.billing.config.BillingEnvironment(
+                        "LIVE", true, "sk_live_fixture", "whsec_live", true, true, "whsec_test"));
+        assertThatThrownBy(() -> value.checkout(workspace, operation, "cus_fixture", PlanKey.SOLO))
+                .isInstanceOf(ApiException.class);
+        var request = ArgumentCaptor.forClass(HttpRequest.class);
+        verify(http).send(request.capture(), any(HttpResponse.BodyHandler.class));
+        assertThat(request.getValue().method()).isEqualTo("GET");
+        assertThat(request.getValue().headers().firstValue("Authorization"))
+                .contains("Bearer sk_live_fixture");
+    }
+
+    @Test
+    void liveModeAcceptsMatchingApprovedPriceWithoutRealProviderCalls() throws Exception {
+        var value =
+                provider(
+                        checkoutHttp(
+                                price("price_solo", 700).replace("false", "true"),
+                                "https://checkout.stripe.com/c/fixture"));
+        ReflectionTestUtils.setField(value, "base", "https://billing.example.com");
+        value.configureEnvironment(
+                new com.ayaantrix.collector.billing.config.BillingEnvironment(
+                        "LIVE", true, "sk_live_fixture", "whsec_live", true, true, "whsec_test"));
+        assertThat(value.checkout(workspace, operation, "cus_fixture", PlanKey.SOLO))
+                .isEqualTo("https://checkout.stripe.com/c/fixture");
+    }
+
+
     final JsonMapper json = JsonMapper.builder().build();
     final UUID workspace = UUID.randomUUID(), operation = UUID.randomUUID();
 

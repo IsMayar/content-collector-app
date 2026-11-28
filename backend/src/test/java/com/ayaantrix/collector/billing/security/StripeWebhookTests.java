@@ -23,6 +23,39 @@ import static org.mockito.Mockito.*;
  * Reconciliation reads the current Stripe snapshot regardless of event delivery order.
  */
 class StripeWebhookTests {
+    @Test
+    void liveWebhookRejectsTestEnvelopeAndAcceptsOnlySignedLiveEnvelope() throws Exception {
+        var mode =
+                new com.ayaantrix.collector.billing.config.BillingEnvironment(
+                        "LIVE", true, "sk_live_fixture", SECRET, true, true, "whsec_other");
+        var liveWebhook =
+                new StripeWebhook(
+                        repo,
+                        JsonMapper.builder().build(),
+                        Clock.fixed(NOW, ZoneOffset.UTC),
+                        "whsec_other");
+        liveWebhook.configureEnvironment(mode);
+        byte[] test = event("evt_mode", "invoice.paid", "cus_synthetic");
+        assertThatThrownBy(() -> liveWebhook.receive(test, signature(test, NOW.getEpochSecond())))
+                .isInstanceOf(ApiException.class);
+        verifyNoInteractions(repo);
+        byte[] live =
+                new String(test, StandardCharsets.UTF_8)
+                        .replace("false", "true")
+                        .getBytes(StandardCharsets.UTF_8);
+        when(repo.event(anyString(), anyString(), anyString(), anyString(), any()))
+                .thenAnswer(i -> i.getArgument(1));
+        liveWebhook.receive(live, signature(live, NOW.getEpochSecond()));
+        verify(repo)
+                .event(
+                        eq("evt_mode"),
+                        anyString(),
+                        eq("invoice.paid"),
+                        eq("cus_synthetic"),
+                        eq(NOW));
+    }
+
+
     private static final Instant NOW = Instant.parse("2026-11-25T00:00:00Z");
     private static final String SECRET = "whsec_synthetic_test_secret";
     private final BillingRepository repo = mock(BillingRepository.class);

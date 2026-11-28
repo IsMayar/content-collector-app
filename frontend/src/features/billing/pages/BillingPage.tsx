@@ -137,6 +137,8 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
 
   const subscription = useBillingSubscriptionQuery(id, {
     skip: !owner,
+    pollingInterval: params.get('view') === 'status' ? 5000 : 0,
+    refetchOnFocus: true,
   })
 
   const usage = useBillingUsageQuery(id, {

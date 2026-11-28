@@ -6754,7 +6754,7 @@ class SubmissionTests {
         assertThat(count(t, "audit_logs")).isEqualTo(audits + 1);
         // An old failure event cannot regress the provider's currently paid subscription.
         String body =
-                "{\"id\":\"evt_T32Old\",\"type\":\"invoice.payment_failed\",\"data\":{\"object\":{\"customer\":\""
+                "{\"id\":\"evt_T32Old\",\"livemode\":false,\"type\":\"invoice.payment_failed\",\"data\":{\"object\":{\"customer\":\""
                         + context.getBean(BillingFake.class).customer(t.workspace())
                         + "\"}}}";
         mvc.perform(

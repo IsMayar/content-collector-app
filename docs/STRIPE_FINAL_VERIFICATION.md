@@ -1,5 +1,23 @@
 # Stripe billing — verification ledger (updated 26 November 2026)
 
+## CI continuation — 28 November 2026
+
+- PR #19 commit `8b68338`: frontend CI and Stripe/project-access CI passed; the full backend run passed all 203 SubmissionTests, confirming the missing `livemode=false` fixture is fixed. Its only six failures were attachment cases; Stripe validation was not weakened.
+- Separate PR #20 fixes shared attachment test-queue contamination, builds the existing image sandbox on fresh runners, and refreshes exact ImageMagick pins from unavailable 7.1.2.34-r0 to available 7.1.2.35-r0. Targeted local attachment verification passed 46 tests. The first CI fix removed two failures; the remaining image cases exposed the missing build and obsolete pins.
+- PR #20 head `8a77275`: [Backend CI run 46041503135](https://github.com/IsMayar/content-collector-app/actions/runs/46041503135) passed both Java 21 Backend Tests and Stripe/project-access regression. This is evidence for #20, not a green combined #19 run. No successful Checkout/payment/export/clock exercise was repeated.
+- Both PRs remain open. Automatic approval review refused merging #20 because explicit merge authorization named #19. No indirect merge or branch-protection bypass was attempted. Merge #20 after authorization, update #19 with main, and require its combined checks before the already-authorized #19 merge.
+- Staging handoff is in STRIPE_PRODUCTION_READINESS.md. Approved HTTPS backend resources/Vercel binding, hosted webhook, secret rotation, restore evidence, monitoring and live Stripe provisioning remain external gates; December 23 renewal acceptance remains future work. Live payments remain disabled.
+
+## New production-readiness findings — 27 November 2026
+
+The approved continuation confirms the previously investigated future period belongs to an advanced sandbox test clock. Approved ZIP download, Solo/Agency Checkout, portal and CLI delivery were already exercised; they were not repeated. The existing Agency-to-Solo schedule remains untouched, with renewal December 23, 2026; post-renewal acceptance is still future work.
+
+Added centralized SANDBOX/LIVE configuration, distinct live credentials/signing secret, explicit activation and required live worker, strict mode checks on prices/subscriptions/schedules/events, and live startup validation of prices/portal/HTTPS origin. The billing status return view now polls for reconciled state. No migrations, runtime secret updates, subscription changes or live calls were made.
+
+New focused results: mode/provider/webhook suite **22 passed** using an explicit Mockito Java agent. A prior rerun encountered Windows JVM self-attachment errors, resolved by that agent. Two subsequently added live-provider tests initially rejected their `.test` origin as designed; after correcting the fixture origin, **2 passed**. Existing provider regressions also passed in that run (11 passed, 2 fixture errors before correction). These are distinct runs, not a full regression claim. Billing UI **23 passed**; TypeScript and changed-file ESLint passed. Unrelated full, responsive/PWA, provider payment and database migration suites intentionally skipped. Protected collection-file hashes unchanged.
+
+See [the single production-readiness runbook](STRIPE_PRODUCTION_READINESS.md) for deployment configuration, monitoring, rotation, rollback and external activation gates. Sandbox is preserved; production remains disabled and unhosted. The exposed local CLI signing secret still requires coordinated rotation; this was not claimed complete.
+
 This ledger prevents repeating Stripe Checkout or payment-failure work already performed in the sandbox. It distinguishes **real sandbox checks**, **disposable automated regressions**, and **release gates**.
 
 ## Previously exercised in the sandbox
