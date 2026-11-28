@@ -1,0 +1,278 @@
+.project-access-head.au-page-head {
+  margin-bottom: 0;
+  gap: 0;
+}
+
+.project-access-head .au-summary {
+  padding: 14px 20px;
+  gap: 18px;
+  border-radius: 12px;
+}
+
+.project-access-head .au-summary-title {
+  font-size: 22px;
+  font-weight: 700;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.project-access-head .au-summary-meta {
+  margin-top: 4px;
+  gap: 12px;
+}
+
+.project-access-head .au-summary-meta > span + span::before {
+  content: '·';
+  color: #64748b;
+  margin-right: 6px;
+}
+
+.project-access-head + .project-refined-tabs {
+  margin-top: 4px;
+}
+
+.project-access-layout.au-stack {
+  gap: 14px;
+}
+
+.project-access-layout .au-card {
+  border-radius: 12px;
+  overflow: visible;
+}
+
+.project-access-layout .au-card-header {
+  padding: 14px 18px;
+  border-bottom: 0;
+}
+
+.project-access-layout .au-card-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.project-access-layout .au-card-subtitle {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.project-access-layout .au-icon-tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.project-customer-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 13px 18px;
+}
+
+.project-customer-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-customer-title h2 {
+  margin: 0 0 3px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.project-customer-title p {
+  margin: 0;
+  color: #0a1a2f;
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.project-client-table {
+  margin: 0 18px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+}
+
+.project-client-table-head,
+.project-client-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.35fr);
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+}
+
+.project-client-table-head {
+  border-radius: 8px 8px 0 0;
+  background: #eef2f8;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.project-client-row {
+  border-top: 1px solid #e2e8f0;
+  min-height: 62px;
+  font-size: 13px;
+}
+
+.project-client-person,
+.project-client-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.project-client-identity,
+.project-client-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.project-client-identity strong {
+  font-size: 14px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.project-client-identity span,
+.project-client-invitation {
+  color: #475569;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.project-client-invitation {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.project-client-expiry {
+  color: #0a1a2f;
+}
+
+.project-client-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.project-client-actions .au-btn {
+  white-space: normal;
+}
+
+.project-client-actions .project-actions-menu summary {
+  width: 34px;
+  height: 34px;
+}
+
+.project-client-actions .project-actions-popover {
+  right: 0;
+  left: auto;
+}
+
+.project-team-card .au-card-body {
+  padding: 0 18px 14px;
+}
+
+.project-team-empty {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 16px;
+  text-align: center;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 9px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.project-team-empty-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0a1a2f;
+  font-size: 15px;
+}
+
+.project-team-empty p {
+  margin: 0;
+}
+
+.project-team-empty .au-btn {
+  color: #2563eb;
+  border-color: #93b4ff;
+}
+
+.board-modal.project-access-modal {
+  width: min(480px, calc(100% - 24px));
+  max-width: 480px;
+}
+
+.project-access-modal .board-modal-body {
+  padding: 20px;
+}
+
+.project-access-modal .au-form {
+  gap: 14px;
+}
+
+@media (max-width: 1000px) {
+  .project-client-table-head {
+    display: none;
+  }
+
+  .project-client-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .project-client-row:first-of-type {
+    border-top: 0;
+  }
+
+  .project-client-expiry::before {
+    content: 'Expires: ';
+    color: #64748b;
+  }
+}
+
+@media (max-width: 540px) {
+  .project-access-head .au-summary {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .project-access-head .au-summary-title {
+    font-size: 18px;
+  }
+
+  .project-access-layout .au-card-header {
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+
+  .project-customer-row {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .project-client-table {
+    margin: 0 12px 12px;
+  }
+
+  .project-client-row {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .project-team-card .au-card-body {
+    padding: 0 12px 12px;
+  }
+}
