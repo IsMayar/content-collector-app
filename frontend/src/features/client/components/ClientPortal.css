@@ -946,3 +946,12 @@ body:has(.collection-portal) .site-header .subtle {
   .collection-portal .client-status { font-size: 10px; padding: 3px 5px; white-space: normal; }
   .collection-portal .client-submit-controls > button { white-space: normal; }
 }
+
+/* Single client upload control, with no empty-state transfer counters. */
+.collection-portal .client-upload-simple .upload-drop {
+  min-height: 116px;
+  padding: 14px;
+}
+.collection-portal .client-question-actions > button {
+  flex-shrink: 0;
+}
