@@ -826,3 +826,123 @@ body:has(.collection-portal) .site-header .subtle {
 .collection-portal .client-conversation textarea {
   min-height: 42px;
 }
+
+
+/* Simplified client collection: only the current question requires attention. */
+.collection-portal {
+  --portal-blue: #2563eb;
+  width: 100%;
+  max-width: 1140px;
+  margin-inline: auto;
+  padding-bottom: 20px;
+}
+.collection-portal > .product-heading { padding: 10px 0 16px; }
+.collection-portal > .product-heading h1 { font-size: clamp(22px, 2vw, 28px); }
+.collection-portal .client-project-progress {
+  background: #fff;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.collection-portal .client-project-progress progress { height: 6px; }
+.collection-portal .client-project-progress progress::-webkit-progress-value { background: var(--portal-blue); }
+.collection-portal .client-project-progress progress::-moz-progress-bar { background: var(--portal-blue); }
+.collection-portal .client-project-progress > strong { color: var(--portal-blue); }
+.collection-portal .client-workspace {
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 16px;
+}
+.collection-portal .client-checklist {
+  padding: 8px;
+  box-shadow: none;
+}
+.collection-portal .client-checklist > button {
+  min-height: 42px;
+  padding: 9px 10px;
+  font-size: 13px;
+  font-weight: 550;
+  border: 0;
+  gap: 6px;
+}
+.collection-portal .client-checklist > button > span { min-width: 0; }
+.collection-portal .client-checklist > button.selected { background: #edf4ff; color: #2563eb; }
+.collection-portal .client-checklist small { margin: 0; white-space: nowrap; font-size: 12px; }
+.collection-portal .client-editor > section { box-shadow: none; }
+.collection-portal .client-section-heading { padding: 13px 16px; }
+.collection-portal .client-section-heading h2 { font-size: 17px; }
+.collection-portal .client-question { margin: 0; }
+.collection-portal .client-question + .client-question { border-top: 1px solid #e6edf7; }
+.collection-portal .client-question-trigger { min-height: 48px; padding: 10px 16px; border-radius: 0; }
+.collection-portal .client-question-trigger[aria-expanded='true'] { background: #f8fafc; }
+.collection-portal .client-required { font-weight: 500; color: #64748b; background: transparent; padding: 0; font-size: inherit; }
+.collection-portal .client-status { padding: 3px 8px; border-radius: 5px; background: #f1f5f9; font-size: 11px; }
+.collection-portal .client-status-approved { color: #047857; background: #ecfdf5; }
+.collection-portal .client-status-submitted { color: #1d4ed8; background: #eff6ff; }
+.collection-portal .client-status-changes_requested { color: #92400e; background: #fffbeb; }
+.collection-portal .client-question-content { padding: 12px 16px; }
+.collection-portal .client-question-content input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.collection-portal .client-question-content select,
+.collection-portal .client-question-content textarea {
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 8px;
+}
+.collection-portal .client-question-content input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.collection-portal .client-question-content select { min-height: 40px; }
+.collection-portal .client-long-answer { border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: white; }
+.collection-portal .client-long-answer:focus-within { border-color: #2563eb; box-shadow: 0 0 0 2px #dbeafe; }
+.collection-portal .client-long-answer textarea {
+  display: block; min-height: 132px; width: 100%; border: 0; border-radius: 0;
+  box-shadow: none; outline: none; padding: 12px;
+}
+.collection-portal .client-text-tools { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; color: #475569; }
+.collection-portal .client-text-tools > span { font-size: 12px; margin-right: 6px; }
+.collection-portal .client-text-tools button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #334155; }
+.collection-portal .client-text-tools button:hover { background: #e2e8f0; }
+.collection-portal .client-project-menu { position: relative; }
+.collection-portal .client-project-menu > summary { display: grid; place-items: center; width: 38px; height: 36px; border: 1px solid #dce5f2; border-radius: 8px; background: #fff; cursor: pointer; list-style: none; color: #334155; }
+.collection-portal .client-project-menu > summary::-webkit-details-marker { display: none; }
+.collection-portal .client-project-menu > summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.collection-portal .client-project-menu-items { position: absolute; top: calc(100% + 5px); right: 0; z-index: 20; min-width: 190px; background: #fff; padding: 5px; border: 1px solid #dce5f2; border-radius: 8px; box-shadow: 0 6px 20px #0a1a2f15; }
+.collection-portal .client-answer-menu .client-project-menu-items { right: auto; left: 0; min-width: 150px; }
+.collection-portal .client-project-menu-items > button { width: 100%; justify-content: flex-start; border: 0; padding: 8px 10px; background: transparent; font-size: 13px; text-align: left; }
+.collection-portal .client-project-menu-items > button:hover { background: #f1f5f9; }
+.collection-portal .client-question-actions { align-items: flex-start; }
+.collection-portal .client-submit-controls { flex: 1; }
+.collection-portal .client-submit-controls > button { font-size: 13px; min-height: 36px; }
+.collection-portal .client-submit-controls > p { max-width: none; margin: 0; text-align: left; font-size: 12px; }
+.collection-portal .client-comment-disclosure { margin-top: 2px; }
+.collection-portal .client-conversation form textarea { min-height: 44px; }
+.collection-portal .client-comment-empty { font-size: 12px; color: #64748b; margin: 6px 0 10px; }
+.collection-portal .client-conversation form > button { font-size: 13px; }
+.collection-portal .client-question-content .upload-area { gap: 10px; }
+.collection-portal .client-question-content .upload-drop {
+  min-height: 132px; padding: 16px; gap: 6px; background: #f8fafc;
+  border: 1px dashed #9db7e6; border-radius: 9px; position: relative; cursor: pointer;
+}
+.collection-portal .upload-drop:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
+.collection-portal .upload-drop input[type='file'] { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+.collection-portal .upload-drop:has(input:disabled) { cursor: default; opacity: .65; }
+.client-upload-browse { display: none; }
+.collection-portal .client-upload-browse { display: inline-flex; align-items: center; justify-content: center; background: #2563eb; color: white; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 7px; margin-top: 4px; }
+.collection-portal .client-camera-input { display: block; max-width: 100%; font-size: 12px; padding: 5px; min-height: 34px; }
+.collection-portal .client-camera-input::file-selector-button { border: 1px solid #cbd5e1; background: white; border-radius: 6px; color: #334155; padding: 5px 9px; margin-right: 8px; cursor: pointer; }
+.collection-portal .client-upload-options { padding: 9px 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+.collection-portal .client-upload-options .check-row { font-size: 13px; margin: 0; }
+.collection-portal .client-upload-options small { display: block; font-size: 11px; color: #64748b; line-height: 1.5; margin-top: 4px; }
+.collection-portal .client-upload-refresh { width: fit-content; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 9px; font-size: 12px; }
+.collection-portal .upload-summary { margin: 0; font-size: 12px; color: #64748b; }
+.collection-portal .upload-row { font-size: 13px; padding: 10px; gap: 8px; }
+.board-modal.client-reminder-modal { width: min(440px, calc(100% - 24px)); max-width: 440px; }
+.client-reminder-modal .board-modal-body { padding: 16px 20px; }
+.client-reminder-modal .email-preferences .primary-button { font-size: 13px; min-height: 36px; }
+@media (max-width: 640px) {
+  .collection-portal .client-workspace { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .collection-portal .client-checklist { display: flex; overflow-x: auto; flex-wrap: nowrap; align-items: center; gap: 4px; }
+  .collection-portal .client-sections-label { width: auto; flex-shrink: 0; padding: 4px; }
+  .collection-portal .client-checklist > button { width: auto; flex: 0 0 auto; min-height: 40px; }
+  .collection-portal > .product-heading > .actions { width: auto; }
+  .collection-portal .client-question-trigger { padding: 10px 12px; gap: 7px; }
+  .collection-portal .client-question-content { padding: 10px 12px; }
+  .collection-portal .client-status { font-size: 10px; padding: 3px 5px; white-space: normal; }
+  .collection-portal .client-submit-controls > button { white-space: normal; }
+}

@@ -23,6 +23,9 @@ export function ClientComments({
         Visible to you and your agency.
       </p>
       <QueryState query={query}>
+        {query.data?.data.length === 0 && (
+          <p className="client-comment-empty">No messages yet. Ask your agency if you need help with this answer.</p>
+        )}
         <ul>
           {query.data?.data.map((c) => (
             <li className="client-message" key={c.id}>
@@ -49,7 +52,7 @@ export function ClientComments({
           <Field label="Message to your agency">
             <textarea
               rows={1}
-              placeholder="Write a comment…"
+              placeholder="Write a message to your agency…"
               required
               maxLength={5000}
               value={body}
@@ -59,7 +62,7 @@ export function ClientComments({
           <button
             type="submit"
             className="primary-button"
-            disabled={command.pending}
+            disabled={command.pending || !body.trim()}
           >
             Send comment
           </button>

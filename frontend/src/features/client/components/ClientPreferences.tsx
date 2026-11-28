@@ -22,10 +22,10 @@ export function ClientPreferences({
   return (
     <div className="email-preferences">
       <Panel title="Reminder preferences">
-        <div className="space-y-6">
+        <div className="space-y-3">
           {/* Introduction */}
           <p className="text-sm leading-6 text-slate-500">
-            Manage how you receive reminders about this project.
+            Choose whether to receive email reminders for this project.
           </p>
 
           {/* Feedback */}
@@ -50,7 +50,7 @@ export function ClientPreferences({
           {/* Email preferences */}
           {q.data && (
             <form
-              className="space-y-5"
+              className="space-y-3"
               onSubmit={async (e) => {
                 e.preventDefault()
 
@@ -96,7 +96,7 @@ export function ClientPreferences({
               </div>
 
               {/* Timezone */}
-              <div className="max-w-lg">
+              <div className="w-full">
                 <Field label="Your timezone">
                   <input
                     name="timezone"

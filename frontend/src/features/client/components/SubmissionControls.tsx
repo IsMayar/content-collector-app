@@ -144,15 +144,14 @@ export function SubmissionControls({
   return (
     <section
       aria-label={'Submission for ' + item.label}
-      className="flex min-w-0 flex-col items-end gap-1"
+      className="client-submit-controls flex min-w-0 flex-col items-end gap-1"
     >
       {item.state === 'APPROVED' && (
         <p
           role="status"
           className="max-w-sm text-right text-xs leading-5 text-emerald-700"
         >
-          Approved. This revision is read-only until your agency explicitly
-          reopens it.
+          Approved and locked. Your agency can reopen this answer.
         </p>
       )}
 
