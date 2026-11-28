@@ -57,6 +57,7 @@ export function useUploadQueue({
   onChange,
   onReady,
   onRefresh,
+  autoRefresh = false,
 }: {
   root: string
   client: boolean
@@ -66,6 +67,7 @@ export function useUploadQueue({
   onChange: (ids: string[]) => void
   onReady?: (id: string) => void
   onRefresh?: () => void
+  autoRefresh?: boolean
 }) {
   const [queue, setQueue] = useState<Transfer[]>([])
   const [online, setOnline] = useState(() => navigator.onLine !== false)
@@ -177,8 +179,9 @@ export function useUploadQueue({
     }
     patch(id, {
       state: 'processing',
-      error:
-        'Verification is still pending. Refresh file status; do not upload this file again.',
+      error: autoRefresh
+        ? 'Verification is still pending. We will keep checking automatically.'
+        : 'Verification is still pending. Refresh file status; do not upload this file again.',
     })
   }
   async function transfer(initial: Transfer) {
