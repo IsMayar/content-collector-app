@@ -239,6 +239,12 @@ class AttachmentStorageTests {
     void clear() {
         SecurityContextHolder.clearContext();
         context.getBean(TestClock.class).time = NOW;
+        // Each test owns fresh tenants in this disposable PostgreSQL container.
+        // The worker claims globally: leftover retries from another test can otherwise
+        // consume dispatchOne(), so its return value says nothing about this test's asset.
+        // Clear attachment fixtures and their dependent reservations after assertions.
+        // Do not truncate tenants: PostgreSQL CASCADE would also clear the seeded catalog.
+        jdbc.execute("truncate collector.file_assets cascade");
     }
 
     Actor actor() {

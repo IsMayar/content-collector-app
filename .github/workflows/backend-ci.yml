@@ -46,7 +46,12 @@ jobs:
         run: docker info
 
       - name: Verify backend
-        run: mvn --batch-mode --no-transfer-progress clean verify
+        # StorageFixture invokes this exact local image; fresh hosted runners
+        # do not have the development Docker cache used by local tests.
+        # Build from the existing pinned Dockerfile rather than bypassing image processing.
+        run: |
+          docker build --tag collector-image-worker:t19 storage/image-worker
+          mvn --batch-mode --no-transfer-progress clean verify
 
   billing-access-tests:
     name: Stripe and project-access regression
