@@ -340,7 +340,6 @@ export function SettingsPage() {
                 </div>
               </div>
             </div>
-
           </section>
 
           <section
