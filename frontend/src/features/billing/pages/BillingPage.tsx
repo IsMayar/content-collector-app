@@ -13,7 +13,8 @@ import { errorMessage } from '@/shared/utils/apiError'
 import { env } from '@/config/env'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useRef, useState } from 'react'
-import { ArrowRight, CalendarDays, Check, Info } from 'lucide-react'
+import { ArrowRight, BarChart3, CalendarDays, Check, Info, Layers, Tag } from 'lucide-react'
+import '@/features/settings/pages/SettingsPage.css'
 
 type QuotaMeterProps = {
   label: string
@@ -33,7 +34,7 @@ function QuotaMeter({
   const ratio = limit !== null && limit > 0 ? percent(count, limit) : 0
 
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+    <div className="settings-quota min-w-0 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-slate-900">{label}</h3>
         <span className="text-xs font-semibold tabular-nums text-slate-500">
@@ -195,10 +196,10 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
           : null
 
   return (
-    <div className="min-w-0 space-y-5 text-[#0A1A2F]">
+    <div className="settings-billing min-w-0 space-y-3 text-[#0A1A2F]">
       {!embedded && (
-        <header>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0A1A2F]">
+        <header className="settings-page-header">
+          <h1 className="settings-page-title">
             Billing &amp; usage
           </h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -222,18 +223,18 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
         </Notice>
       )}
 
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2">
         <section
-          className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+          className="settings-card min-w-0 rounded-xl border border-slate-200 bg-white p-4"
           aria-labelledby="current-plan-heading"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2
-              id="current-plan-heading"
-              className="text-base font-semibold text-slate-900"
-            >
-              Current plan
-            </h2>
+            <div className="settings-section-heading">
+              <span className="settings-icon">
+                <Layers size={18} aria-hidden="true" />
+              </span>
+              <h2 id="current-plan-heading">Current plan</h2>
+            </div>
 
             {current && (
               <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
@@ -261,7 +262,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
           </p>
 
           {usage.data && (
-            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-xs text-slate-700 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 text-xs text-slate-700 sm:grid-cols-3">
               <span>{usage.data.seatsLimit} team seats</span>
               <span>{formatBytes(usage.data.storageLimitBytes)} storage</span>
               <span>{usage.data.aiDraftAllowance} AI drafts / period</span>
@@ -270,15 +271,15 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
         </section>
 
         <section
-          className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+          className="settings-card min-w-0 rounded-xl border border-slate-200 bg-white p-4"
           aria-labelledby="subscription-heading"
         >
-          <h2
-            id="subscription-heading"
-            className="text-base font-semibold text-slate-900"
-          >
-            Subscription
-          </h2>
+          <div className="settings-section-heading">
+            <span className="settings-icon">
+              <CalendarDays size={18} aria-hidden="true" />
+            </span>
+            <h2 id="subscription-heading">Subscription</h2>
+          </div>
 
           {current && (
             <div className="mt-4 flex items-start gap-3">
@@ -311,7 +312,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
           )}
 
           {current?.state !== 'FREE' && (
-            <p className="mt-4 max-w-lg text-sm leading-6 text-slate-600">
+            <p className="mt-3 max-w-lg text-xs leading-5 text-slate-600">
               If a renewal payment fails, editing remains available for at least
               7 days and through the paid billing period, whichever is later.
               Read-only access then lasts up to 30 days. Permitted reads and
@@ -346,19 +347,19 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       <section
-        className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        className="settings-card min-w-0 rounded-xl border border-slate-200 bg-white p-4"
         aria-labelledby="billing-usage-heading"
       >
-        <div className="mb-4">
-          <h2
-            id="billing-usage-heading"
-            className="text-base font-semibold text-slate-900"
-          >
-            Resource usage
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Your current allowances and consumption.
-          </p>
+        <div className="settings-section-heading mb-3">
+          <span className="settings-icon">
+            <BarChart3 size={18} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 id="billing-usage-heading">Resource usage</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Your current allowances and consumption.
+            </p>
+          </div>
         </div>
 
         {usage.isLoading && (
@@ -370,7 +371,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
         <ErrorNotice error={usage.error ? errorMessage(usage.error) : ''} />
 
         {usage.data && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="settings-usage-grid">
             {usage.data.activeProjects !== undefined &&
               usage.data.activeProjectLimit !== undefined && (
                 <QuotaMeter
@@ -428,7 +429,6 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
               description={`${usage.data.aiDraftsUsed} used + ${usage.data.aiDraftsReserved} reserved`}
               limitLabel={String(usage.data.aiDraftAllowance)}
             />
-
           </div>
         )}
 
@@ -472,20 +472,20 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
       </section>
 
       <section
-        className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+        className="settings-card min-w-0 rounded-xl border border-slate-200 bg-white p-4"
         aria-labelledby="compare-plans-heading"
       >
-        <div className="mb-4">
-          <h2
-            id="compare-plans-heading"
-            className="text-base font-semibold text-slate-900"
-          >
-            Compare plans
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Free is $0 forever. Upgrades from Free start at checkout; changes
-            between paid plans take effect at your next renewal.
-          </p>
+        <div className="settings-section-heading mb-3">
+          <span className="settings-icon">
+            <Tag size={18} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 id="compare-plans-heading">Compare plans</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Free is $0 forever. Upgrades from Free start at checkout; changes
+              between paid plans take effect at your next renewal.
+            </p>
+          </div>
         </div>
 
         {current?.pendingChange && (
@@ -535,7 +535,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
           {planOptions.map((plan) => (
             <article
               key={plan.key}
-              className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-slate-50/40 p-5"
+              className="flex min-w-0 flex-col rounded-lg border border-slate-200 bg-slate-50/40 p-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-base font-semibold text-slate-900">
@@ -556,7 +556,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
                 </span>
               </p>
 
-              <ul className="my-5 flex-1 space-y-2.5 border-t border-slate-200 pt-4">
+              <ul className="my-3 flex-1 space-y-2 border-t border-slate-200 pt-3">
                 {plan.features.map((feature) => (
                   <li
                     key={feature}
