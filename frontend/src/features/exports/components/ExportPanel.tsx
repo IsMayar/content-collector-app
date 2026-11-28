@@ -2,13 +2,13 @@ import type { Project, ProjectDetail } from '@/features/projects/types/project.t
 import type { ExportSummary } from '@/features/review/types/review.types'
 import { exportCreatedSchema } from '@/features/exports/schemas/exportSchema'
 import { useData } from '@/services/api/resourceApi'
+import { CardHeader } from '@/shared/components/AccessUI'
 import { Notice } from '@/shared/components/Feedback'
 import { Modal } from '@/shared/components/Modal'
 import {
   Badge,
   Empty,
   ErrorNotice,
-  Panel,
   QueryState,
 } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
@@ -71,11 +71,12 @@ export function ExportPanel({
     ) || []
   return (
     <>
-      <div className="board-toolbar">
-        <div>
-          <h2>Export history</h2>
-          <p>View and manage exports for this project.</p>
-        </div>
+      <section className="project-view-card project-export-card">
+        <CardHeader
+          icon={Download}
+          title="Export history"
+          subtitle="View and manage exports for this project."
+          action={
         {hasApproved && (
           <button
             className="primary-button"
@@ -94,7 +95,9 @@ export function ExportPanel({
             ＋ New export
           </button>
         )}
-      </div>
+          }
+        />
+        <div className="project-view-body">
       {!hasApproved && (
         <p>
           Approve a response before creating an export. Previous exports stay
@@ -257,22 +260,23 @@ export function ExportPanel({
       )}
       <ErrorNotice error={command.error} />
       {!open && message && <Notice>{message}</Notice>}
-      <Panel>
         <QueryState query={q}>
           {jobs.length ? (
-            <div className="export-history">
-              <div className="export-table-head">
+            <div className="project-export-history">
+              <div className="project-export-table-head">
                 <strong>Export / snapshot</strong>
                 <strong>Status</strong>
-                <strong>Download</strong>
+                <strong>Created</strong>
+                <strong>Actions</strong>
               </div>
               {jobs.map((j) => (
-                <div className="export-row" key={j.id}>
-                  <div className="grow">
+                <div className="project-export-row" key={j.id}>
+                  <div className="project-export-identity">
+                    <FileArchive size={24} aria-hidden="true" />
+                    <div>
                     <strong>{formats.find((entry) => entry.value === j.format)?.label ?? j.format.replaceAll('_', ' ')} export</strong>
                     <p>
                       Project v{j.projectVersion} ·{' '}
-                      {new Date(j.createdAt).toLocaleString()} ·{' '}
                       {j.partial ? 'Partial snapshot' : 'All required approved'}
                     </p>
                     {j.olderThanCurrentProject && (
@@ -281,8 +285,11 @@ export function ExportPanel({
                         recent changes.
                       </small>
                     )}
+                    </div>
                   </div>
-                  <Badge>{j.state}</Badge>
+                  <div><Badge>{j.state}</Badge></div>
+                  <time dateTime={j.createdAt}>{new Date(j.createdAt).toLocaleString()}</time>
+                  <div className="project-export-actions">
                   {j.state === 'READY' ? (
                     <button
                       className="secondary-button"
@@ -316,7 +323,7 @@ export function ExportPanel({
                         }
                       }}
                     >
-                      Download
+                      <Download size={16} aria-hidden="true" /> Download
                     </button>
                   ) : ['QUEUED', 'RUNNING'].includes(j.state) ? (
                     <button className="text-link" onClick={() => setJob(j.id)}>
@@ -325,12 +332,13 @@ export function ExportPanel({
                   ) : (
                     <span className="subtle">
                       {j.state === 'EXPIRED'
-                        ? 'This download expired. Create a new export.'
+                        ? 'Download expired'
                         : j.state === 'FAILED'
-                          ? 'Generation failed. Create a new export to retry.'
+                          ? 'Generation failed — create a new export'
                           : 'Create a new export.'}
                     </span>
                   )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -341,7 +349,8 @@ export function ExportPanel({
             />
           )}
         </QueryState>
-      </Panel>
+        </div>
+      </section>
     </>
   )
 }
