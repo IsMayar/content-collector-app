@@ -1,6 +1,6 @@
 import {
   Bell,
-  ChevronRight,
+  MoreHorizontal,
   FileText,
   LogOut,
   CheckCircle2,
@@ -14,7 +14,6 @@ import { useInteraction } from '../hooks/useInteraction'
 import { useNavigate } from 'react-router'
 import type { CollectionData } from '../schemas/collectionSchema'
 import { ClientDraftField } from './ClientDraftField'
-import { SubmissionValidationSummary } from './SubmissionValidationSummary'
 import { pendingDrafts, clearPendingDrafts } from '../hooks/draftAutosave'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { Heading, ErrorNotice } from '@/shared/components/ProductUI'
@@ -61,17 +60,26 @@ export function CollectionPortal({
     <div className="collection-portal">
       <Heading
         title={data.project.title}
-        description="Share your answers and files, then send each question for review."
+        description="Provide your content and submit each answer for review."
       >
+        <details className="client-project-menu">
+          <summary aria-label="Project options">
+            <MoreHorizontal size={20} aria-hidden="true" />
+          </summary>
+          <div className="client-project-menu-items">
         <button
           className="secondary-button"
           aria-expanded={preferences}
-          onClick={() => setPreferences(!preferences)}
+          onClick={(event) => {
+            event.currentTarget.closest('details')?.removeAttribute('open')
+            setPreferences(true)
+          }}
         >
           <Bell size={16} aria-hidden="true" /> Reminder preferences
         </button>
         <button
           className="secondary-button"
+          disabled={command.pending}
           onClick={async () => {
             if (!(await flush())) return
             const result = await command.run('client-access/logout', {}, 'POST')
@@ -83,6 +91,8 @@ export function CollectionPortal({
         >
           <LogOut size={16} aria-hidden="true" /> Leave project
         </button>
+          </div>
+        </details>
       </Heading>
       {required.length > 0 && (
         <div className="client-project-progress" aria-label="Project progress">
@@ -101,6 +111,7 @@ export function CollectionPortal({
       {preferences && (
         <Modal
           title="Reminder preferences"
+          className="client-reminder-modal"
           onClose={() => setPreferences(false)}
         >
           <div className="client-preferences-dialog">
@@ -114,17 +125,6 @@ export function CollectionPortal({
           This project is read-only. Your saved drafts remain available.
         </p>
       )}
-
-      <SubmissionValidationSummary
-        data={data}
-        onSelect={(sectionId, itemId) => {
-          setSelected(sectionId)
-          setExpanded(itemId)
-          requestAnimationFrame(() => {
-            document.getElementById('question-' + itemId)?.focus()
-          })
-        }}
-      />
 
       <div className="client-workspace">
         <nav className="client-checklist" aria-label="Requested sections">
@@ -146,18 +146,15 @@ export function CollectionPortal({
                 }
               }}
             >
-              <span>
-                {s.title}
+              <span>{s.title}</span>
                 <small>
                   {
                     s.items.filter((i) =>
                       ['SUBMITTED', 'APPROVED'].includes(i.state),
                     ).length
                   }{' '}
-                  of {s.items.length} submitted
+                  / {s.items.length}
                 </small>
-              </span>
-              <ChevronRight size={17} aria-hidden="true" />
             </button>
           ))}
         </nav>
