@@ -67,30 +67,30 @@ export function CollectionPortal({
             <MoreHorizontal size={20} aria-hidden="true" />
           </summary>
           <div className="client-project-menu-items">
-        <button
-          className="secondary-button"
-          aria-expanded={preferences}
-          onClick={(event) => {
-            event.currentTarget.closest('details')?.removeAttribute('open')
-            setPreferences(true)
-          }}
-        >
-          <Bell size={16} aria-hidden="true" /> Reminder preferences
-        </button>
-        <button
-          className="secondary-button"
-          disabled={command.pending}
-          onClick={async () => {
-            if (!(await flush())) return
-            const result = await command.run('client-access/logout', {}, 'POST')
-            if (result) {
-              clearPendingDrafts()
-              navigate('/client/access', { replace: true })
-            }
-          }}
-        >
-          <LogOut size={16} aria-hidden="true" /> Leave project
-        </button>
+            <button
+              className="secondary-button"
+              aria-expanded={preferences}
+              onClick={(event) => {
+                event.currentTarget.closest('details')?.removeAttribute('open')
+                setPreferences(true)
+              }}
+            >
+              <Bell size={16} aria-hidden="true" /> Reminder preferences
+            </button>
+            <button
+              className="secondary-button"
+              disabled={command.pending}
+              onClick={async () => {
+                if (!(await flush())) return
+                const result = await command.run('client-access/logout', {}, 'POST')
+                if (result) {
+                  clearPendingDrafts()
+                  navigate('/client/access', { replace: true })
+                }
+              }}
+            >
+              <LogOut size={16} aria-hidden="true" /> Leave project
+            </button>
           </div>
         </details>
       </Heading>
@@ -147,14 +147,14 @@ export function CollectionPortal({
               }}
             >
               <span>{s.title}</span>
-                <small>
+              <small>
                   {
                     s.items.filter((i) =>
                       ['SUBMITTED', 'APPROVED'].includes(i.state),
                     ).length
                   }{' '}
                   / {s.items.length}
-                </small>
+              </small>
             </button>
           ))}
         </nav>
