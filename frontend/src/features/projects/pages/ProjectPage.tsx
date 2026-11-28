@@ -1,15 +1,12 @@
 import {
   AppWindow,
   CalendarDays,
-  ChevronRight,
-  Eye,
-  Info,
   Layers,
   MoreHorizontal,
-  UsersRound,
 } from 'lucide-react'
 import { Modal } from '@/shared/components/Modal'
 import './ProjectPage.css'
+import './ProjectAccess.css'
 import { ProjectContent } from '../components/ProjectContent'
 import { ProjectTeamAccess } from '../../workspace/components/ProjectTeamAccess'
 import { useRef } from 'react'
@@ -38,7 +35,7 @@ import {
   Heading,
   QueryState,
 } from '@/shared/components/ProductUI'
-import { Button, Callout, IconTile } from '@/shared/components/AccessUI'
+import { Button, IconTile } from '@/shared/components/AccessUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
 import { useState } from 'react'
@@ -256,19 +253,7 @@ export function ProjectPage() {
       {p && data && (
         <>
           {tab === 'access' ? (
-            <div className="au-page-head">
-              <nav className="au-breadcrumb" aria-label="Breadcrumb">
-                <Link to={base + '/projects'} className="au-breadcrumb-link">
-                  Projects
-                </Link>
-                <ChevronRight
-                  size={14}
-                  className="au-breadcrumb-sep"
-                  aria-hidden="true"
-                />
-                <span className="au-breadcrumb-current">{p.title}</span>
-              </nav>
-
+            <div className="au-page-head project-access-head">
               <div className="au-summary">
                 <IconTile icon={AppWindow} size={22} large />
                 <div className="au-summary-main">
@@ -295,26 +280,11 @@ export function ProjectPage() {
                       <Layers size={15} aria-hidden="true" />
                       {PROJECT_TYPE_LABEL[p.projectType]}
                     </span>
-                    {contacts.data && (
-                      <span className="au-meta-item">
-                        <UsersRound size={15} aria-hidden="true" />
-                        {contacts.data.data.length}{' '}
-                        {contacts.data.data.length === 1
-                          ? 'contact'
-                          : 'contacts'}
-                      </span>
-                    )}
+
                   </div>
                 </div>
                 <div className="au-summary-actions">
                   {projectActions}
-                  <Link
-                    className="au-btn au-btn--secondary"
-                    to="?tab=checklist"
-                  >
-                    <Eye size={15} aria-hidden="true" />
-                    View project
-                  </Link>
                   {owner &&
                     p.permissions.canManageAccess &&
                     p.state === 'DRAFT' && (
@@ -487,15 +457,13 @@ export function ProjectPage() {
           {tab === 'access' && owner && (
             <section
               aria-label="Project access and permissions"
-              className="au-stack"
+              className="au-stack project-access-layout"
             >
-              <Callout icon={Info} title="Access and permissions">
-                Manage who can access this project — clients and team members.
-              </Callout>
               <CustomerPanel
                 key={p.clientId}
                 workspaceId={id}
                 clientId={p.clientId}
+                canManage={p.permissions.canManageAccess}
               />
               <ContactsPanel
                 key={root}

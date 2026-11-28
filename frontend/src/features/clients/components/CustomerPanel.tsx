@@ -1,4 +1,4 @@
-import { Building2, Mail, Pencil, UserRound } from 'lucide-react'
+import { Building2, Pencil } from 'lucide-react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { useEffect, useState } from 'react'
@@ -6,13 +6,14 @@ import { useCustomers, useClientCommands } from '../api/clientsApi'
 import { customerRenameSchema } from '../schemas/clientSchema'
 import type { Client } from '../types/client.types'
 import { ErrorNotice, QueryState } from '@/shared/components/ProductUI'
+import { Modal } from '@/shared/components/Modal'
 import { Notice } from '@/shared/components/Feedback'
 import { z } from 'zod'
 import {
   AccessCard,
   Button,
   CardBody,
-  CardHeader,
+  IconTile,
   Field,
   Skeleton,
   TextInput,
@@ -21,9 +22,11 @@ import {
 export function CustomerPanel({
   workspaceId,
   clientId,
+  canManage = true,
 }: {
   workspaceId: string
   clientId: string
+  canManage?: boolean
 }) {
   const [page, setPage] = useState(0)
   const [editing, setEditing] = useState<Client | null>(null)
@@ -50,13 +53,14 @@ export function CustomerPanel({
   }, [query.data, assigned, page, clientId])
 
   const startEdit = () => {
-    if (!assigned) return
+    if (!assigned || !canManage) return
+    command.clear()
     setEditing(assigned)
     rename.reset({ businessName: assigned.businessName })
   }
 
   const onSubmit = rename.handleSubmit(async (values) => {
-    if (!editing) return
+    if (!editing || !canManage || command.pending) return
     const ok = await command.renameCustomer(workspaceId, editing.id, {
       ...values,
       expectedVersion: editing.version,
@@ -76,97 +80,69 @@ export function CustomerPanel({
   const businessNameError = rename.formState.errors.businessName?.message
 
   return (
-    <AccessCard aria-label="Customer">
-      <CardHeader
-        icon={Building2}
-        title="Customer"
-        subtitle="The organization this project belongs to."
-        action={
-          assigned && !editing ? (
-            <Button variant="secondary" icon={Pencil} onClick={startEdit}>
-              Edit
-            </Button>
-          ) : undefined
-        }
-      />
-
-      <CardBody>
-        {assigned ? (
-          <form onSubmit={onSubmit} noValidate>
-            <div className="au-customer">
-              <span className="au-customer-emblem" aria-hidden="true">
-                <Building2 size={24} />
-              </span>
-
-              <div className="au-customer-fields">
-                <Field
-                  label="Business name"
-                  error={editing ? businessNameError : undefined}
-                >
-                  {editing ? (
-                    <TextInput
-                      aria-label="Business name"
-                      autoComplete="organization"
-                      invalid={!!businessNameError}
-                      {...rename.register('businessName')}
-                    />
-                  ) : (
-                    <p className="au-value-strong">{assigned.businessName}</p>
-                  )}
-                </Field>
-
-                <div className="au-grid au-grid--2">
-                  <Field label="Contact person">
-                    <p className="au-value">
-                      <UserRound size={15} aria-hidden="true" />
-                      {assigned.contactName || 'Not provided'}
-                    </p>
-                  </Field>
-
-                  <Field label="Email address">
-                    <p className="au-value au-value-break">
-                      <Mail size={15} aria-hidden="true" />
-                      {assigned.email || 'Not provided'}
-                    </p>
-                  </Field>
-                </div>
-              </div>
-            </div>
-
-            {editing && (
-              <div className="au-actions au-actions--end au-actions--divided">
-                <Button
-                  variant="secondary"
-                  disabled={command.pending}
-                  onClick={() => setEditing(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={command.pending}
-                >
-                  Save changes
-                </Button>
-              </div>
-            )}
-          </form>
-        ) : (
-          <QueryState query={query}>
-            <div className="au-customer au-customer--loading">
-              <Skeleton className="au-skeleton--emblem" />
-              <div className="au-customer-fields">
-                <Skeleton className="au-skeleton--line" />
-                <Skeleton className="au-skeleton--line au-skeleton--short" />
-              </div>
-            </div>
-          </QueryState>
+    <AccessCard aria-label="Customer" className="project-customer-card">
+      <div className="project-customer-row">
+        <IconTile icon={Building2} large />
+        <div className="project-customer-title">
+          <h2>Customer</h2>
+          {assigned ? (
+            <p>{assigned.businessName}</p>
+          ) : (
+            <QueryState query={query}>
+              <Skeleton className="au-skeleton--line" />
+            </QueryState>
+          )}
+        </div>
+        {assigned && canManage && (
+          <Button variant="secondary" icon={Pencil} onClick={startEdit}>
+            Rename
+          </Button>
         )}
-
-        <ErrorNotice error={command.error} />
-        {message && <Notice>{message}</Notice>}
-      </CardBody>
+      </div>
+      {editing && canManage && (
+        <Modal
+          title="Rename customer"
+          className="project-access-modal"
+          onClose={() => setEditing(null)}
+          pending={command.pending}
+        >
+          <form onSubmit={onSubmit} className="au-form" noValidate>
+            <Field label="Business name" error={businessNameError}>
+              <TextInput
+                aria-label="Business name"
+                autoComplete="organization"
+                invalid={!!businessNameError}
+                {...rename.register('businessName')}
+              />
+            </Field>
+            <p className="au-field-hint">
+              This updates the customer name across its projects.
+            </p>
+            <ErrorNotice error={command.error} />
+            <div className="au-actions au-actions--end">
+              <Button
+                variant="secondary"
+                disabled={command.pending}
+                onClick={() => setEditing(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={command.pending}
+              >
+                Save changes
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {message && (
+        <CardBody>
+          <Notice>{message}</Notice>
+        </CardBody>
+      )}
     </AccessCard>
   )
 }

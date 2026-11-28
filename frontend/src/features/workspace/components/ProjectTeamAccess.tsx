@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import {
   Check,
-  ChevronDown,
   Pencil,
   Search,
   UserPlus,
@@ -21,7 +20,7 @@ import {
   Avatar,
   Button,
   CardBody,
-  IconTile,
+  CardHeader,
   StatusBadge,
   initialsFrom,
 } from '@/shared/components/AccessUI'
@@ -30,7 +29,7 @@ import {
  * Project-scoped assignments. Client invitations are handled by ContactsPanel.
  */
 export function ProjectTeamAccess({ root }: { root: string }) {
-  const { id, owner } = useWorkspace()
+  const { id, owner, base } = useWorkspace()
   const { hash } = useLocation()
   const container = useRef<HTMLElement>(null)
 
@@ -38,7 +37,6 @@ export function ProjectTeamAccess({ root }: { root: string }) {
   const assignments = useAssignments(root)
   const command = useCommand()
 
-  const [expanded, setExpanded] = useState(true)
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Member | null>(null)
   const [removing, setRemoving] = useState<Member | null>(null)
@@ -48,7 +46,6 @@ export function ProjectTeamAccess({ root }: { root: string }) {
 
   useEffect(() => {
     if (hash !== '#team-access') return
-    setExpanded(true)
     container.current?.scrollIntoView({ block: 'start' })
   }, [hash])
 
@@ -110,39 +107,20 @@ export function ProjectTeamAccess({ root }: { root: string }) {
       id="team-access"
       ref={container}
       aria-label="Team access"
-      className="au-card scroll-mt-28"
+      className="au-card project-team-card scroll-mt-28"
     >
-      <button
-        type="button"
-        className="au-disclosure flex w-full items-center gap-4"
-        aria-expanded={expanded}
-        aria-controls="project-team-access-content"
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <IconTile icon={UsersRound} />
-
-        <span className="au-disclosure-titles flex min-w-0 flex-1 flex-col items-start gap-1 text-left">
-          <strong className="au-card-title">Team access</strong>
-
-          <span className="au-card-subtitle">
-            Assign active team members to this project and set their
-            permissions.
-          </span>
-        </span>
-
-        <span className="au-disclosure-count ml-auto shrink-0">
-          {assignments.data ? `${assignedCount} assigned` : 'Loading'}
-        </span>
-
-        <ChevronDown
-          size={18}
-          className="au-disclosure-chevron shrink-0"
-          aria-hidden="true"
-        />
-      </button>
-
-      {expanded && (
-        <CardBody id="project-team-access-content">
+      <CardHeader
+        icon={UsersRound}
+        title="Team access"
+        subtitle="Assign workspace members to review or export content."
+        action={
+          <StatusBadge>
+            {assignments.data ? `${assignedCount} assigned` : 'Loading'}
+          </StatusBadge>
+        }
+      />
+      <CardBody id="project-team-access-content">
+        {activeMembers.length > 0 && (
           <div className="au-search">
             <Search size={16} aria-hidden="true" />
             <input
@@ -155,15 +133,25 @@ export function ProjectTeamAccess({ root }: { root: string }) {
             />
           </div>
 
+        )}
           {message && <Notice>{message}</Notice>}
           <ErrorNotice error={command.error} />
 
           <QueryState query={team}>
             <QueryState query={assignments}>
               {activeMembers.length === 0 ? (
-                <div className="au-box au-box--muted">
-                  There are no active teammates yet. Invite a member from Team
-                  and have them accept the invitation before assigning access.
+                <div className="project-team-empty">
+                  <div className="project-team-empty-title">
+                    <UsersRound size={22} aria-hidden="true" />
+                    <strong>No active team members</strong>
+                  </div>
+                  <p>
+                    Invite a member to your workspace before assigning project
+                    access.
+                  </p>
+                  <Link className="au-btn au-btn--secondary" to={base + '/team'}>
+                    Go to Team
+                  </Link>
                 </div>
               ) : filteredMembers.length === 0 ? (
                 <div className="au-box">No team members match your search.</div>
@@ -228,8 +216,7 @@ export function ProjectTeamAccess({ root }: { root: string }) {
               )}
             </QueryState>
           </QueryState>
-        </CardBody>
-      )}
+      </CardBody>
 
       {editing && (
         <Modal

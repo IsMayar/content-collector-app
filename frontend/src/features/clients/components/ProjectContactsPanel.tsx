@@ -1,9 +1,9 @@
 import {
-  CalendarDays,
   Info,
   Mail,
   Send,
-  Trash2,
+  MoreHorizontal,
+  Plus,
   UserRound,
   UsersRound,
 } from 'lucide-react'
@@ -14,6 +14,7 @@ import {
 } from '@/features/clients/api/clientsApi'
 import { contactCreateSchema } from '@/features/clients/schemas/clientSchema'
 import type { ProjectContact } from '@/features/projects/types/project.types'
+import { Modal } from '@/shared/components/Modal'
 import { ConfirmDialog, Notice } from '@/shared/components/Feedback'
 import { ErrorNotice, QueryState } from '@/shared/components/ProductUI'
 import {
@@ -23,7 +24,6 @@ import {
   CardHeader,
   Callout,
   EmptyState,
-  IconButton,
   StatusBadge,
   TextInput,
   initialsFrom,
@@ -47,7 +47,7 @@ function contactStatus(c: ProjectContact): ContactStatus {
   if (!c.accessInitializedAt) {
     return { label: 'Not invited', tone: 'neutral' }
   }
-  return { label: 'Active', tone: 'success' }
+  return { label: 'Access active', tone: 'success' }
 }
 
 function formatDate(iso: string): string {
@@ -77,6 +77,8 @@ export function ContactsPanel({
   const command = useClientCommands()
   const expiryInputId = useId()
 
+  const [formOpen, setFormOpen] = useState(false)
+  const [expiryDate, setExpiryDate] = useState('')
   const [link, setLink] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -159,15 +161,33 @@ export function ContactsPanel({
       setCreated('')
       setName('')
       setEmail('')
+      setExpiryDate('')
+      setFormOpen(false)
     }
   }
 
   return (
-    <AccessCard aria-label="Project contacts">
+    <AccessCard aria-label="Project contacts" className="project-client-card">
       <CardHeader
         icon={UsersRound}
-        title="Project contacts"
-        subtitle="People from this customer who can access and submit content for this project."
+        title="Client access"
+        subtitle="Clients can submit content for this project."
+        action={
+          canManage && (canInvite || unpublished) ? (
+            <Button
+              variant="primary"
+              icon={Plus}
+              disabled={command.pending}
+              onClick={() => {
+                command.clear()
+                setMessage('')
+                setFormOpen(true)
+              }}
+            >
+              {unpublished ? 'Add contact' : 'Invite client'}
+            </Button>
+          ) : undefined
+        }
       />
 
       <QueryState query={q}>
@@ -175,10 +195,16 @@ export function ContactsPanel({
           <EmptyState
             icon={UsersRound}
             title="No project contacts yet"
-            description="Add the first client contact using the form below."
+            description="Add a client contact to give them access to this project."
           />
         ) : (
-          <ul className="au-list">
+          <div className="project-client-table" role="table" aria-label="Client access">
+            <div className="project-client-table-head" role="row">
+              <span role="columnheader">Client</span>
+              <span role="columnheader">Access status</span>
+              <span role="columnheader">Access expires</span>
+              <span role="columnheader">Actions</span>
+            </div>
             {q.data?.data.map((c) => {
               const status = contactStatus(c)
               const canSend =
@@ -192,67 +218,80 @@ export function ContactsPanel({
                 canManage && !command.pending && c.state === 'ACTIVE'
 
               return (
-                <li key={c.id} className="au-row">
-                  <Avatar initials={initialsFrom(c.name)} label={c.name} />
-
-                  <div className="au-row-main">
-                    <div className="au-row-title">
-                      <span className="au-row-name">{c.name}</span>
-                      <StatusBadge tone={status.tone}>
-                        {status.label}
-                      </StatusBadge>
-                    </div>
-
-                    <p className="au-row-sub">
-                      <Mail size={13} aria-hidden="true" />
-                      <span className="au-truncate">{c.email}</span>
-                    </p>
-
-                    <div className="au-row-meta">
-                      <span className="au-meta-item">
-                        {c.accessInitializedAt && (
-                          <Send size={12} aria-hidden="true" />
-                        )}
-                        {c.accessInitializedAt
-                          ? 'Invitation issued'
-                          : 'Not invited'}
-                      </span>
-                      <span className="au-meta-item">
-                        <CalendarDays size={12} aria-hidden="true" />
-                        Expires{' '}
-                        <time dateTime={c.accessExpiresAt}>
-                          {formatDate(c.accessExpiresAt)}
-                        </time>
-                      </span>
+                <div className="project-client-row" role="row" key={c.id}>
+                  <div className="project-client-person" role="cell">
+                    <Avatar initials={initialsFrom(c.name)} label={c.name} />
+                    <div className="project-client-identity">
+                      <strong>{c.name}</strong>
+                      <span>{c.email}</span>
                     </div>
                   </div>
-
-                  <div className="au-row-actions">
+                  <div className="project-client-status" role="cell">
+                    <StatusBadge tone={status.tone}>
+                      {status.label}
+                    </StatusBadge>
+                    {c.accessInitializedAt && (
+                      <span className="project-client-invitation">
+                        <Send size={13} aria-hidden="true" />
+                        Invitation issued
+                      </span>
+                    )}
+                  </div>
+                  <div className="project-client-expiry" role="cell">
+                    <time dateTime={c.accessExpiresAt}>
+                      {formatDate(c.accessExpiresAt)}
+                    </time>
+                  </div>
+                  <div className="project-client-actions" role="cell">
                     <Button
                       size="sm"
                       variant="secondary"
                       icon={Send}
                       disabled={!canSend}
-                      onClick={() => setInviteContact(c)}
+                      onClick={() => {
+                        command.clear()
+                        setInviteContact(c)
+                      }}
                     >
-                      {c.accessInitializedAt ? 'Resend' : 'Invite'}
+                      {c.accessInitializedAt ? 'Resend invitation' : 'Invite'}
                     </Button>
-                    <IconButton
-                      icon={Trash2}
-                      tone="danger"
-                      label={`Revoke access for ${c.name}`}
-                      disabled={!canRevoke}
-                      onClick={() => setRevoke(c)}
-                    />
+                    {canManage && (
+                      <details
+                        className="project-actions-menu"
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            event.currentTarget.open = false
+                            event.currentTarget.querySelector('summary')?.focus()
+                          }
+                        }}
+                      >
+                        <summary aria-label={`Actions for ${c.name}`}>
+                          <MoreHorizontal size={18} aria-hidden="true" />
+                        </summary>
+                        <div className="project-actions-popover">
+                          <Button
+                            variant="danger-ghost"
+                            disabled={!canRevoke}
+                            onClick={(event) => {
+                              event.currentTarget.closest('details')?.removeAttribute('open')
+                              command.clear()
+                              setRevoke(c)
+                            }}
+                          >
+                            Revoke access
+                          </Button>
+                        </div>
+                      </details>
+                    )}
                   </div>
-                </li>
+                </div>
               )
             })}
-          </ul>
+          </div>
         )}
       </QueryState>
 
-      {canManage && (
+      {unpublished && canManage && (
         <div className="au-card-section">
           {unpublished && (
             <Callout
@@ -266,13 +305,22 @@ export function ContactsPanel({
             </Callout>
           )}
 
+        </div>
+      )}
+      {formOpen && canManage && (canInvite || unpublished) && (
+        <Modal
+          title={unpublished ? 'Add client contact' : 'Invite client'}
+          className="project-access-modal"
+          pending={command.pending}
+          onClose={() => setFormOpen(false)}
+        >
           <form onSubmit={onSubmit} className="au-form" noValidate>
-            <div className="au-form-head">
-              <Send size={16} aria-hidden="true" />
-              <h3 className="au-form-title">Invite another contact</h3>
-            </div>
-
-            <div className="au-grid au-grid--2">
+            <p className="au-help">
+              {unpublished
+                ? 'Save a contact now and invite them after publishing.'
+                : 'Send a private invitation to submit content for this project.'}
+            </p>
+            <div className="au-grid">
               <label className="au-field">
                 <span className="au-label">Contact name</span>
                 <TextInput
@@ -310,6 +358,8 @@ export function ContactsPanel({
                 name="expiry"
                 type="date"
                 readOnly={!!created}
+                value={expiryDate}
+                onChange={(event) => setExpiryDate(event.target.value)}
                 className="au-input au-input--date"
                 title="Defaults to 90 days when left blank"
               />
@@ -318,7 +368,16 @@ export function ContactsPanel({
               </p>
             </div>
 
+            <ErrorNotice error={command.error} />
+            {message && <Notice>{message}</Notice>}
             <div className="au-actions au-actions--end">
+              <Button
+                variant="secondary"
+                disabled={command.pending}
+                onClick={() => setFormOpen(false)}
+              >
+                Cancel
+              </Button>
               {unpublished && (
                 <Button
                   variant="secondary"
@@ -329,25 +388,26 @@ export function ContactsPanel({
                   Save contact
                 </Button>
               )}
-              <Button
-                variant="primary"
-                type="submit"
-                icon={Send}
-                disabled={
-                  command.pending || !canManage || !canInvite || unpublished
-                }
-              >
-                Send invitation
-              </Button>
+              {!unpublished && (
+                <Button
+                  variant="primary"
+                  type="submit"
+                  icon={Send}
+                  disabled={command.pending || !canManage || !canInvite}
+                >
+                  {created ? 'Retry invitation' : 'Send invitation'}
+                </Button>
+              )}
             </div>
           </form>
 
           {created && (
             <Notice>Contact created. Retry sending the invitation.</Notice>
           )}
-        </div>
+        </Modal>
       )}
 
+      {!formOpen && (command.error || message || link) && (
       <div className="au-card-section au-card-section--muted">
         <ErrorNotice error={command.error} />
         {message && <Notice>{message}</Notice>}
@@ -358,6 +418,7 @@ export function ContactsPanel({
           </Notice>
         )}
       </div>
+      )}
 
       <ConfirmDialog
         open={!!inviteContact}
