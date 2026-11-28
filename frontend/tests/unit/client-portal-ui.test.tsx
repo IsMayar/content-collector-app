@@ -99,9 +99,9 @@ it('formats selected lines as plain text through the existing answer callback', 
       root="client/projects/example"
     />,
   )
-  const input = screen.getByRole<HTMLTextAreaElement>('textbox', {
+  const input = screen.getByRole('textbox', {
     name: 'Introduction',
-  })
+  }) as HTMLTextAreaElement
   input.setSelectionRange(0, input.value.length)
   fireEvent.click(screen.getByRole('button', { name: 'Bulleted list' }))
   expect(onChange).toHaveBeenCalledWith({ text: '• First\n• Second' })
