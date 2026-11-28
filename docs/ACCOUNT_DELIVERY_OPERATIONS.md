@@ -1,6 +1,30 @@
 # Account delivery operations - T05 Part 4
 
-This runbook covers only registration verification and password-reset jobs. It does not implement T06 authentication or later project reminders. There is no delivery administration HTTP endpoint, Actuator extension, development token endpoint or production provider adapter.
+This runbook covers verification, password reset, team invitations and client project invitations. These share the encrypted account outbox, separate from marketing/reminder messages. There is no public delivery administration endpoint, token inspection endpoint or browser-accessible development mailbox.
+
+## Why requesting a new invitation can appear to do nothing
+
+`POST /api/v1/client-access/request-link` deliberately returns HTTP 202 and the same generic message for unknown, revoked, expired and valid recipients. **202 means the request was accepted, not that email was delivered.** Only an existing active project contact with currently authorized project access can enqueue a new token. The request revokes outstanding invitations for that contact, then creates a new encrypted `CLIENT_INVITE` outbox job. The separate delivery worker must run to dispatch it.
+
+For local work started through `scripts/Start-DevBackendWithStripe.ps1`, the default sender is the **private development inbox** at `backend/.local/auth/inbox`, not Gmail or another external mailbox. To open a current local invitation without displaying its token, use `scripts/Open-LatestClientInvitation.ps1`. Real email requires an explicitly configured provider, a publicly accessible `APP_BASE_URL`, and a verified sending domain.
+
+## Real transactional delivery (opt-in)
+
+Set `ACCOUNT_DELIVERY_WORKER_ENABLED=true`, `ACCOUNT_DELIVERY_RESEND_ENABLED=true` and `ACCOUNT_DELIVERY_DEV_INBOX=false`, and provide `ACCOUNT_DELIVERY_RESEND_API_KEY` and `ACCOUNT_DELIVERY_RESEND_FROM` as **private runtime secrets/config**. The sender may also reuse the existing `EMAIL_API_KEY` and `EMAIL_FROM` environment variables if the account-specific ones are absent. Do not enable real email before verifying domain ownership and the recipient-accessible application origin. Never commit keys or expose invitation tokens in logs. Reminder email flags are independent; enabling reminders is not required for account/invitation delivery.
+
+The Resend adapter sends purpose-specific plain-text email and uses the existing outbox job UUID as the provider `Idempotency-Key`. HTTP success requires a provider receipt; definitely rejected requests are retried by the existing bounded worker, while ambiguous outcomes are held for reconciliation. Enabling both real provider and development inbox intentionally fails startup.
+
+To inspect why a recent local invitation was not sent, run this **read-only** SQL under an authorized database account; do not select token hashes, encrypted payloads, email addresses, or raw invitation links:
+
+```sql
+SELECT id, state, attempt_count, last_error_code, created_at, updated_at
+FROM collector.outbox_jobs
+WHERE job_type = 'CLIENT_INVITE'
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+If no new job exists, check the project's current contact/grant status and effective workspace access. If a job is QUEUED, verify the delivery worker is enabled; if FAILED/DEAD, follow the reconciliation process below. Do not expose user-specific eligibility in the public request response.
 
 ## Defaults and deployment prerequisites
 
