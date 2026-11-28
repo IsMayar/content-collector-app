@@ -40,6 +40,18 @@ test('shared content editing, stable sidebar and compact settings', async ({
   await invitation.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(invitation).toHaveCount(0)
   await projectNavigation.getByRole('link', { name: 'Content' }).click()
+  for (const view of ['Files', 'Reminders', 'Activity', 'Exports']) {
+    await projectNavigation.getByRole('link', { name: view, exact: true }).click()
+    await expect(page.locator('.project-unified-head h1')).toHaveText(
+      'Lamar Dental website',
+    )
+    await expect(page.locator('.project-unified-head')).toHaveCount(1)
+  }
+  await page.getByLabel('Project actions', { exact: true }).click()
+  await page.getByRole('link', { name: 'Project completion', exact: true }).click()
+  await expect(page.locator('.project-unified-head h1')).toBeVisible()
+  await projectNavigation.getByRole('link', { name: 'Content' }).click()
+  await expect(page.locator('.project-content-toolbar')).toBeVisible()
   const sections = page.getByRole('navigation', { name: 'Content sections' })
   await expect(sections).toBeVisible()
   const second = sections.getByRole('button').nth(1)
