@@ -253,6 +253,7 @@ export function TypedValue({
 
     return (
       <UploadQueue
+        simplified={compact}
         root={root}
         itemId={item.id}
         image={item.type === 'IMAGE'}
@@ -345,6 +346,7 @@ export function TypedValue({
                     </h3>
 
                     <UploadQueue
+                      simplified={compact}
                       root={root}
                       itemId={item.id}
                       image
