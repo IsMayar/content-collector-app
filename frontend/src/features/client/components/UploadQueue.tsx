@@ -7,7 +7,7 @@ import { Badge, ErrorNotice, Field } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { formatBytes } from '@/shared/utils/domain'
 import { downloadFile } from '@/shared/utils/download'
-import { FileText, FolderOpen } from 'lucide-react'
+import { FileText, FolderOpen, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 export function UploadQueue({
   client = true,
@@ -139,6 +139,7 @@ export function UploadQueue({
               : 'JPEG, PNG, WebP, HEIC/HEIF · 50 MiB each'
             : 'JPEG/PNG images · 50 MiB; PDF, DOCX, TXT, SVG · 100 MiB'}
         </span>
+        <span className="client-upload-browse">Browse files</span>
         <input
           aria-label={
             image
@@ -172,6 +173,7 @@ export function UploadQueue({
         allowedExtensions?.some((x) => ['jpg', 'jpeg', 'png'].includes(x))) && (
         <Field label="Take a photo">
           <input
+            className="client-camera-input"
             type="file"
             accept={live ? 'image/jpeg,image/png' : 'image/*'}
             capture="environment"
@@ -183,6 +185,7 @@ export function UploadQueue({
           />
         </Field>
       )}
+      <div className="client-upload-options">
       <label className="check-row">
         <input
           type="checkbox"
@@ -190,7 +193,7 @@ export function UploadQueue({
           disabled={disabled}
           onChange={(e) => setKeep(e.target.checked)}
         />
-        Keep originals for this upload
+        Keep original images
       </label>
       <small>
         {keep
@@ -199,14 +202,15 @@ export function UploadQueue({
         This choice applies to images selected next; documents always retain
         their originals. Only verified ready files can be saved in your draft.
       </small>
+      </div>
       {live && (
         <button
           type="button"
-          className="secondary-button"
+          className="secondary-button client-upload-refresh"
           onClick={() => void uploads.refreshProcessing()}
           disabled={!uploads.online}
         >
-          Refresh file status
+          <RefreshCw size={14} aria-hidden="true" /> Refresh file status
         </button>
       )}
       {!uploads.online && (
