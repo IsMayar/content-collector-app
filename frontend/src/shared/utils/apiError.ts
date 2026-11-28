@@ -30,6 +30,8 @@ export function apiProblem(error: unknown): Partial<Problem> {
 }
 export function errorMessage(error: unknown): string {
   const problem = apiProblem(error)
+  if (problem.code === 'INVITATION_DELIVERY_UNAVAILABLE')
+    return 'Invitation emails are temporarily unavailable. Contact your agency for a new link.'
   if (problem.code === 'CLIENT_ACCESS_UNAVAILABLE')
     return 'Your project link or session has expired, or access was revoked. Request a fresh link from your agency.'
   if (problem.code === 'INVALID_CREDENTIALS')
