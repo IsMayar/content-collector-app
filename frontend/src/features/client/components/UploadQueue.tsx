@@ -139,7 +139,7 @@ export function UploadQueue({
               : 'JPEG, PNG, WebP, HEIC/HEIF · 50 MiB each'
             : 'JPEG/PNG images · 50 MiB; PDF, DOCX, TXT, SVG · 100 MiB'}
         </span>
-        <span className="client-upload-browse">Browse files</span>
+        {client && <span className="client-upload-browse">Browse files</span>}
         <input
           aria-label={
             image
@@ -193,7 +193,7 @@ export function UploadQueue({
           disabled={disabled}
           onChange={(e) => setKeep(e.target.checked)}
         />
-        Keep original images
+        Keep originals for this upload
       </label>
       <small>
         {keep
