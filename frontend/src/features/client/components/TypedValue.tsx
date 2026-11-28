@@ -4,6 +4,8 @@ import type {
   ClientItem,
 } from '@/features/client/types/client.types'
 import { Field } from '@/shared/components/ProductUI'
+import { useRef } from 'react'
+import { List, ListOrdered } from 'lucide-react'
 
 type TypedValueProps = {
   item: Pick<ClientItem, 'id' | 'label' | 'type' | 'validation' | 'assets'>
@@ -37,6 +39,7 @@ export function TypedValue({
   onFilesChanged,
   beforeDelete,
 }: TypedValueProps) {
+  const textRef = useRef<HTMLTextAreaElement>(null)
   const data = value as unknown as Record<string, unknown>
   const rules = item.validation
 
@@ -53,7 +56,44 @@ export function TypedValue({
 
     const control =
       item.type === 'LONG_TEXT' ? (
+        <div className={compact ? 'client-long-answer' : undefined}>
+          {compact && !disabled && (
+            <div className="client-text-tools" role="group" aria-label="Plain text list tools">
+              <span>Text</span>
+              {([['Bulleted list', '• ', List], ['Numbered list', '1. ', ListOrdered]] as const).map(([label, prefix, Icon]) => (
+                <button
+                  key={label}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    const el = textRef.current
+                    if (!el) return
+                    const start = el.selectionStart
+                    const end = el.selectionEnd
+                    const selected = text.slice(start, end)
+                    const insert = selected
+                      ? selected.split('\n').map((line, index) =>
+                          (prefix === '1. ' ? `${index + 1}. ` : prefix) + line
+                        ).join('\n')
+                      : (start > 0 && text[start - 1] !== '\n' ? '\n' : '') + prefix
+                    const next = text.slice(0, start) + insert + text.slice(end)
+                    if (next.length > maxLength) return
+                    onChange({ text: next })
+                    requestAnimationFrame(() => {
+                      el.focus()
+                      el.setSelectionRange(start + insert.length, start + insert.length)
+                    })
+                  }}
+                >
+                  <Icon size={16} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          )}
         <textarea
+          ref={textRef}
           aria-label={compact ? item.label : undefined}
           rows={4}
           value={text}
@@ -63,6 +103,7 @@ export function TypedValue({
           onChange={(event) => onChange({ text: event.target.value })}
           className={`${inputClass} min-h-30 max-h-60 resize-y`}
         />
+        </div>
       ) : (
         <input
           aria-label={compact ? item.label : undefined}
@@ -416,7 +457,7 @@ export function TypedValue({
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3">
               <button
                 type="button"
-                disabled={!index}
+                disabled={disabled || !index}
                 onClick={() => {
                   const next = [...rows]
 
