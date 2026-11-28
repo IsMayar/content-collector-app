@@ -2,11 +2,13 @@ import {
   AppWindow,
   CalendarDays,
   Layers,
+  Globe,
   MoreHorizontal,
 } from 'lucide-react'
 import { Modal } from '@/shared/components/Modal'
 import './ProjectPage.css'
 import './ProjectAccess.css'
+import './ProjectViews.css'
 import { ProjectContent } from '../components/ProjectContent'
 import { ProjectTeamAccess } from '../../workspace/components/ProjectTeamAccess'
 import { useRef } from 'react'
@@ -32,7 +34,6 @@ import {
   Empty,
   ErrorNotice,
   Field,
-  Heading,
   QueryState,
 } from '@/shared/components/ProductUI'
 import { Button, IconTile } from '@/shared/components/AccessUI'
@@ -161,6 +162,7 @@ export function ProjectPage() {
           Save as template
         </button>
         <Link to="?tab=completion">Project completion</Link>
+        <Link to={base + '/projects'}>All projects</Link>
         {p.permissions.canManageAccess && lifecycleActions.map((a) => (
           <button key={a} type="button" disabled={command.pending} onClick={() => {
             operation.current = {
@@ -252,110 +254,86 @@ export function ProjectPage() {
     <QueryState query={{ ...query, isLoading: query.isFetching && !data }}>
       {p && data && (
         <>
-          {tab === 'access' ? (
-            <div className="au-page-head project-access-head">
-              <div className="au-summary">
-                <IconTile icon={AppWindow} size={22} large />
-                <div className="au-summary-main">
-                  <div className="au-summary-title-row">
-                    <h1 className="au-summary-title">{p.title}</h1>
-                    <Badge>{p.state}</Badge>
-                  </div>
-                  <div className="au-summary-meta">
-                    <span className="au-meta-item">
-                      <CalendarDays size={15} aria-hidden="true" />
-                      {p.dueDate
-                        ? 'Due ' +
-                          new Date(p.dueDate + 'T12:00:00').toLocaleDateString(
-                            undefined,
-                            {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            },
-                          )
-                        : 'No due date'}
-                    </span>
-                    <span className="au-meta-item">
-                      <Layers size={15} aria-hidden="true" />
-                      {PROJECT_TYPE_LABEL[p.projectType]}
-                    </span>
-
-                  </div>
+          <div className="au-page-head project-access-head project-unified-head">
+            <div className="au-summary">
+              <IconTile icon={AppWindow} size={22} large />
+              <div className="au-summary-main">
+                <div className="au-summary-title-row">
+                  <h1 className="au-summary-title">{p.title}</h1>
+                  <Badge>{p.state}</Badge>
                 </div>
-                <div className="au-summary-actions">
-                  {projectActions}
-                  {owner &&
-                    p.permissions.canManageAccess &&
-                    p.state === 'DRAFT' && (
-                      <Button
-                        variant="primary"
-                        disabled={
-                          command.pending ||
-                          !contacts.data ||
-                          publicationMissing.length > 0
-                        }
-                        onClick={() => {
-                          operation.current = null
-                          setLifecycleError('')
-                          setAction('publish')
-                        }}
-                      >
-                        Publish project
-                      </Button>
-                    )}
+                <div className="au-summary-meta">
+                  <span className="au-meta-item">
+                    <CalendarDays size={15} aria-hidden="true" />
+                    {p.dueDate
+                      ? 'Due ' +
+                        new Date(p.dueDate + 'T12:00:00').toLocaleDateString(
+                          undefined,
+                          { month: 'short', day: 'numeric', year: 'numeric' },
+                        )
+                      : 'No due date'}
+                  </span>
+                  <span className="au-meta-item">
+                    <Layers size={15} aria-hidden="true" />
+                    {PROJECT_TYPE_LABEL[p.projectType]}
+                  </span>
+                  {tab !== 'access' && (
+                    <span className="au-meta-item">
+                      <Globe size={15} aria-hidden="true" />
+                      {p.timezone}
+                    </span>
+                  )}
                 </div>
               </div>
-            </div>
-          ) : (
-            <>
-              <Link className="back-link" to={`${base}/projects`}>
-                All projects
-              </Link>
-              <Heading
-                eyebrow={`${p.clientBusinessName} / ${p.projectType.replaceAll('_', ' ')}`}
-                title={p.title}
-                description={
-                  p.dueDate
-                    ? `Due ${new Date(p.dueDate + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · ${p.timezone}`
-                    : `No due date · ${p.timezone}`
-                }
-              >
-                <Badge>{p.state}</Badge>
+              <div className="au-summary-actions">
                 {owner &&
                 p.permissions.canManageAccess &&
-                p.state === 'DRAFT' &&
-                tab !== 'access' ? (
-                  <Link className="primary-button" to="?tab=access">
-                    Send to client
-                  </Link>
-                ) : p.permissions.canReview &&
+                p.state === 'DRAFT' ? (
+                  tab === 'access' ? (
+                    <Button
+                      variant="primary"
+                      disabled={
+                        command.pending ||
+                        !contacts.data ||
+                        publicationMissing.length > 0
+                      }
+                      onClick={() => {
+                        operation.current = null
+                        setLifecycleError('')
+                        setAction('publish')
+                      }}
+                    >
+                      Publish project
+                    </Button>
+                  ) : (
+                    <Link className="au-btn au-btn--primary" to="?tab=access">
+                      Send to client
+                    </Link>
+                  )
+                ) : tab !== 'access' &&
+                  tab !== 'checklist' &&
+                  tab !== 'files' &&
+                  tab !== 'reminders' &&
+                  tab !== 'exports' &&
+                  p.permissions.canReview &&
                   data.progress.submittedRequired >
-                    data.progress.approvedRequired &&
-                  tab !== 'checklist' ? (
-                  <Link className="primary-button" to="?tab=checklist">
+                    data.progress.approvedRequired ? (
+                  <Link className="au-btn au-btn--primary" to="?tab=checklist">
                     Review submissions
                   </Link>
-                ) : p.permissions.canExport &&
+                ) : tab === 'checklist' &&
+                  p.permissions.canExport &&
                   data.progress.approvedRequired +
                     data.progress.optionalApproved >
-                    0 &&
-                  tab !== 'exports' ? (
-                  <Link className="primary-button" to="?tab=exports">
+                    0 ? (
+                  <Link className="au-btn au-btn--primary" to="?tab=exports">
                     Export approved content
-                  </Link>
-                ) : owner &&
-                  p.state === 'ACTIVE' &&
-                  data.progress.clientActionRequired > 0 &&
-                  tab !== 'access' ? (
-                  <Link className="secondary-button" to="?tab=access">
-                    Manage client request
                   </Link>
                 ) : null}
                 {projectActions}
-              </Heading>
-            </>
-          )}
+              </div>
+            </div>
+          </div>
           <nav className="tabs project-refined-tabs" aria-label="Project sections">
             {projectTabs.map(([key, label]) => (
               <Link
