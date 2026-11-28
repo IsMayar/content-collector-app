@@ -32,13 +32,13 @@ export function OwnershipPanel() {
   return (
     <section aria-label="Workspace ownership" className="min-w-0">
       <form
-        className="max-w-xl space-y-4"
+        className="settings-ownership-form"
         onSubmit={(event) => {
           event.preventDefault()
           if (member && password) setConfirm(true)
         }}
       >
-        <label className="block text-sm font-medium text-slate-800">
+        <label className="settings-ownership-field text-sm font-medium text-slate-800">
           Current owner
           <input
             readOnly
@@ -47,7 +47,7 @@ export function OwnershipPanel() {
           />
         </label>
 
-        <label className="block text-sm font-medium text-slate-800">
+        <label className="settings-ownership-field text-sm font-medium text-slate-800">
           New owner
           <select
             required
@@ -65,7 +65,7 @@ export function OwnershipPanel() {
           </select>
         </label>
 
-        <label className="block text-sm font-medium text-slate-800">
+        <label className="settings-ownership-field text-sm font-medium text-slate-800">
           Confirm your password
           <input
             type="password"
@@ -77,13 +77,16 @@ export function OwnershipPanel() {
           />
         </label>
 
-        <p className="text-xs leading-5 text-slate-500">
+        <p className="settings-ownership-note text-xs leading-5 text-slate-500">
           The new owner will manage members, client access, projects, and
           settings. You will become a workspace member after the transfer.
         </p>
 
-        <ErrorNotice error={command.error} />
+        <div className="settings-ownership-feedback">
+          <ErrorNotice error={command.error} />
+        </div>
 
+        <div className="settings-ownership-actions">
         <button
           type="submit"
           disabled={command.pending || !member || !password}
@@ -91,6 +94,7 @@ export function OwnershipPanel() {
         >
           Transfer workspace ownership
         </button>
+        </div>
       </form>
 
       <ConfirmDialog
