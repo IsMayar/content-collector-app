@@ -870,9 +870,10 @@ body:has(.collection-portal) .site-header .subtle {
 .collection-portal .client-section-heading { padding: 13px 16px; }
 .collection-portal .client-section-heading h2 { font-size: 17px; }
 .collection-portal .client-question { margin: 0; }
+.collection-portal .client-question + .client-question { border-top: 1px solid #e6edf7; }
 .collection-portal .client-question-trigger { min-height: 48px; padding: 10px 16px; border-radius: 0; }
 .collection-portal .client-question-trigger[aria-expanded='true'] { background: #f8fafc; }
-.collection-portal .client-required { font-weight: 500; color: #64748b; }
+.collection-portal .client-required { font-weight: 500; color: #64748b; background: transparent; padding: 0; font-size: inherit; }
 .collection-portal .client-status { padding: 3px 8px; border-radius: 5px; background: #f1f5f9; font-size: 11px; }
 .collection-portal .client-status-approved { color: #047857; background: #ecfdf5; }
 .collection-portal .client-status-submitted { color: #1d4ed8; background: #eff6ff; }
@@ -911,6 +912,7 @@ body:has(.collection-portal) .site-header .subtle {
 .collection-portal .client-submit-controls > p { max-width: none; margin: 0; text-align: left; font-size: 12px; }
 .collection-portal .client-comment-disclosure { margin-top: 2px; }
 .collection-portal .client-conversation form textarea { min-height: 44px; }
+.collection-portal .client-comment-empty { font-size: 12px; color: #64748b; margin: 6px 0 10px; }
 .collection-portal .client-conversation form > button { font-size: 13px; }
 .collection-portal .client-question-content .upload-area { gap: 10px; }
 .collection-portal .client-question-content .upload-drop {
@@ -920,6 +922,7 @@ body:has(.collection-portal) .site-header .subtle {
 .collection-portal .upload-drop:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
 .collection-portal .upload-drop input[type='file'] { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
 .collection-portal .upload-drop:has(input:disabled) { cursor: default; opacity: .65; }
+.client-upload-browse { display: none; }
 .collection-portal .client-upload-browse { display: inline-flex; align-items: center; justify-content: center; background: #2563eb; color: white; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 7px; margin-top: 4px; }
 .collection-portal .client-camera-input { display: block; max-width: 100%; font-size: 12px; padding: 5px; min-height: 34px; }
 .collection-portal .client-camera-input::file-selector-button { border: 1px solid #cbd5e1; background: white; border-radius: 6px; color: #334155; padding: 5px 9px; margin-right: 8px; cursor: pointer; }
