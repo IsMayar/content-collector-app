@@ -219,7 +219,9 @@ export function ClientDraftField({
 
           <span className="min-w-0 flex-1 text-[14px] leading-5 font-semibold text-slate-900 sm:text-[15px]">
             {item.label}
-            {item.required && <span className="client-required" aria-label="Required"> *</span>}
+            {item.required && (
+              <span className="client-required" aria-label="Required"> *</span>
+            )}
           </span>
 
           <span className={`client-status client-status-${item.state.toLowerCase()} shrink-0 text-xs font-medium ${statusColor}`}>
