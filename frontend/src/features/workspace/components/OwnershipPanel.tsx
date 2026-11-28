@@ -87,13 +87,13 @@ export function OwnershipPanel() {
         </div>
 
         <div className="settings-ownership-actions">
-        <button
-          type="submit"
-          disabled={command.pending || !member || !password}
-          className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Transfer workspace ownership
-        </button>
+          <button
+            type="submit"
+            disabled={command.pending || !member || !password}
+            className="inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Transfer workspace ownership
+          </button>
         </div>
       </form>
 
