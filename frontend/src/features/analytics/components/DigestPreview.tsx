@@ -31,9 +31,10 @@ export function DigestPreview({ workspaceId }: { workspaceId: string }) {
   const [message, setMessage] = useState('')
 
   return (
+    <div className="settings-digest-grid">
     <section
       aria-labelledby="daily-digest-heading"
-      className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+      className="settings-card min-w-0 rounded-xl border border-slate-200 bg-white p-4"
     >
       <header className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -58,7 +59,7 @@ export function DigestPreview({ workspaceId }: { workspaceId: string }) {
         {settings.data && (
           <form
             key={settings.data.version}
-            className="mt-5"
+            className="mt-3"
             onSubmit={async (event) => {
               event.preventDefault()
               const fields = new FormData(event.currentTarget)
@@ -78,7 +79,7 @@ export function DigestPreview({ workspaceId }: { workspaceId: string }) {
               }
             }}
           >
-            <div className="grid items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto]">
+            <div className="grid items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_auto]">
               <div className="flex min-w-0 items-center justify-between gap-4">
                 <div className="min-w-0">
                   <label
@@ -130,7 +131,13 @@ export function DigestPreview({ workspaceId }: { workspaceId: string }) {
         )}
       </QueryState>
 
-      <section aria-labelledby="digest-preview-heading" className="mt-6">
+      <ErrorNotice error={command.error} />
+      {message && <Notice>{message}</Notice>}
+    </section>
+    <section
+      aria-labelledby="digest-preview-heading"
+      className="settings-card min-w-0 rounded-xl border border-slate-200 bg-white p-4"
+    >
         <div className="mb-3 flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
             <Mail size={18} aria-hidden="true" />
@@ -199,7 +206,7 @@ export function DigestPreview({ workspaceId }: { workspaceId: string }) {
 
       <section
         aria-labelledby="digest-delivery-heading"
-        className="mt-5 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4"
+        className="settings-card flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"
       >
         <Info
           size={18}
@@ -224,13 +231,6 @@ export function DigestPreview({ workspaceId }: { workspaceId: string }) {
         </div>
       </section>
 
-      <ErrorNotice error={command.error} />
-
-      {message && (
-        <div className="mt-4">
-          <Notice>{message}</Notice>
-        </div>
-      )}
-    </section>
+    </div>
   )
 }
