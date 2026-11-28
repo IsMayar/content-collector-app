@@ -30,7 +30,8 @@ export function ClientAccessPage() {
   const projectId = new URLSearchParams(location.search).get('projectId') || ''
 
   const hasInvitation = Boolean(token)
-  const requestMode = !hasInvitation || showRequestForm
+  // Keep the confirmation screen visible until the client explicitly returns.
+  const requestMode = !hasInvitation || showRequestForm || Boolean(message)
 
   // Read incoming invitation fragments and remove them
   // from browser history without consuming the token.
