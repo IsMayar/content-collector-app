@@ -1,0 +1,59 @@
+.project-refined-tabs {
+  gap: clamp(16px, 3vw, 30px);
+  margin: 12px 0 20px;
+  scrollbar-width: thin;
+}
+.project-refined-tabs a {
+  flex: 0 0 auto;
+  padding: 12px 4px;
+  font-size: .875rem;
+}
+.project-actions-menu { position: relative; flex: 0 0 auto; }
+.project-actions-menu summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #d8e2ee;
+  border-radius: 9px;
+  background: white;
+  cursor: pointer;
+  list-style: none;
+}
+.project-actions-menu summary::-webkit-details-marker { display: none; }
+.project-actions-menu summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.project-actions-menu[open] summary { background: #eff6ff; }
+.project-actions-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 200px;
+  z-index: 30;
+  padding: 5px;
+  border: 1px solid #d8e2ee;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 8px 24px #0a1a2f20;
+  display: grid;
+  gap: 2px;
+}
+.project-actions-popover button, .project-actions-popover a {
+  display: block;
+  text-align: left;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: .875rem;
+  color: #0a1a2f;
+  background: transparent;
+}
+.project-actions-popover :is(button,a):hover { background: #eff6ff; }
+.project-actions-popover button:disabled { opacity: .5; cursor: not-allowed; }
+.board-modal.project-edit-modal { width: min(480px, calc(100% - 24px)); }
+.project-edit-modal .board-modal-body { padding: 20px 24px; }
+.project-edit-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+@media (max-width: 600px) {
+  .project-actions-popover { right: auto; left: 0; }
+  .project-edit-modal .board-modal-body { padding: 16px; }
+}
