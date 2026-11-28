@@ -401,12 +401,12 @@ export function useUploadQueue({
       })
     }
   }
-  async function refreshProcessing() {
+  async function refreshProcessing(onlyProcessing = false) {
     for (const t of rows.current) {
       if (
         !t.assetId ||
         running.current.has(t.id) ||
-        !['processing', 'failed'].includes(t.state)
+        !(onlyProcessing ? t.state === 'processing' : ['processing', 'failed'].includes(t.state))
       )
         continue
       try {
