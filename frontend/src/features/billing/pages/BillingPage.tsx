@@ -13,7 +13,15 @@ import { errorMessage } from '@/shared/utils/apiError'
 import { env } from '@/config/env'
 import { useNavigate, useSearchParams } from 'react-router'
 import { useRef, useState } from 'react'
-import { ArrowRight, BarChart3, CalendarDays, Check, Info, Layers, Tag } from 'lucide-react'
+import {
+  ArrowRight,
+  BarChart3,
+  CalendarDays,
+  Check,
+  Info,
+  Layers,
+  Tag,
+} from 'lucide-react'
 import '@/features/settings/pages/SettingsPage.css'
 
 type QuotaMeterProps = {
@@ -447,9 +455,9 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
             <p className="mt-1 text-xs leading-5 text-slate-600">
               Storage includes active reservations. Team invitations reserve
               seats; clients do not use seats. AI resets on the UTC calendar
-              month. Provider availability and
-              separate spending caps still apply. Reaching a quota does not
-              block manual text collection or permitted reads and exports.
+              month. Provider availability and separate spending caps still apply.
+              Reaching a quota does not block manual text collection or
+              permitted reads and exports.
             </p>
 
             {usage.data && (
