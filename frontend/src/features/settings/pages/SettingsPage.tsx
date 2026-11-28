@@ -15,9 +15,10 @@ import {
 } from '@/shared/components/ProductUI'
 import { useCommand } from '@/shared/hooks/useCommand'
 import { useWorkspace } from '@/shared/hooks/useWorkspace'
-import { Laptop2, ShieldCheck, UsersRound } from 'lucide-react'
+import { Laptop2, Settings2, ShieldCheck, UsersRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router'
+import './SettingsPage.css'
 
 const inputClass =
   'mt-2 block box-border h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition-colors focus:border-blue-600 focus:ring-2 focus:ring-inset focus:ring-blue-500/20'
@@ -108,11 +109,11 @@ export function SettingsPage() {
       .toUpperCase() || 'U'
 
   return (
-    <div className="w-full min-w-0 max-w-[1240px] space-y-5 pb-8">
+    <div className="settings-page w-full min-w-0 max-w-[1240px] space-y-4 pb-8">
       {/* PAGE HEADER */}
 
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-[#0A1A2F] sm:text-[28px]">
+      <header className="settings-page-header">
+        <h1 className="settings-page-title">
           {titles[tab] || 'Settings'}
         </h1>
 
@@ -132,12 +133,12 @@ export function SettingsPage() {
       {/* ACCOUNT SETTINGS */}
 
       {tab === 'account' && (
-        <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <div className="settings-account-grid grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2">
           <AccountPanel />
 
           <section
             aria-labelledby="active-sessions-heading"
-            className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+            className="settings-card settings-sessions min-w-0 rounded-xl border border-slate-200 bg-white p-4"
           >
             <header className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -159,11 +160,11 @@ export function SettingsPage() {
             </header>
 
             <QueryState query={sessions}>
-              <div className="mt-5 divide-y divide-slate-100">
+              <div className="mt-4 divide-y divide-slate-100">
                 {sessions.data?.data.map((session) => (
                   <div
                     key={session.id}
-                    className={`flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 ${
+                    className={`flex flex-wrap items-center justify-between gap-3 py-3 ${
                       session.current ? 'rounded-lg bg-blue-50/50 px-3' : ''
                     }`}
                   >
@@ -273,10 +274,13 @@ export function SettingsPage() {
       {/* PRIVACY */}
 
       {tab === 'privacy' && (
-        <section className="max-w-4xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-lg font-semibold text-[#0A1A2F]">
-            Privacy information
-          </h2>
+        <section className="settings-card settings-privacy rounded-xl border border-slate-200 bg-white p-4">
+          <div className="settings-section-heading">
+            <span className="settings-icon">
+              <ShieldCheck size={19} aria-hidden="true" />
+            </span>
+            <h2>Privacy information</h2>
+          </div>
 
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Review the draft policies for data handling and retention. Final
@@ -294,7 +298,7 @@ export function SettingsPage() {
             </Link>
           </div>
 
-          <p className="mt-4 text-xs leading-5 text-slate-500">
+          <p className="mt-4 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-500">
             The documented recovery period for workspace deletion is 30 days.
           </p>
         </section>
@@ -303,16 +307,16 @@ export function SettingsPage() {
       {/* WORKSPACE SETTINGS */}
 
       {tab === 'workspace' && owner && (
-        <div className="w-full max-w-[1060px] space-y-4">
+        <div className="settings-workspace-grid w-full space-y-3">
           {/* GENERAL WORKSPACE CARD */}
 
           <section
             aria-label="Workspace information"
-            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+            className="settings-card overflow-hidden rounded-xl border border-slate-200 bg-white"
           >
             {/* WORKSPACE OWNER AT THE TOP */}
 
-            <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4 sm:px-6">
+            <div className="flex flex-wrap items-center gap-3 px-4 py-3">
               <span
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-700"
                 aria-hidden="true"
@@ -337,13 +341,23 @@ export function SettingsPage() {
               </div>
             </div>
 
-            {/* WORKSPACE NAME & TIMEZONE BELOW OWNER */}
+          </section>
 
+          <section
+            aria-labelledby="workspace-details-heading"
+            className="settings-card rounded-xl border border-slate-200 bg-white p-4"
+          >
+            <div className="settings-section-heading">
+              <span className="settings-icon">
+                <Settings2 size={19} aria-hidden="true" />
+              </span>
+              <h2 id="workspace-details-heading">Workspace details</h2>
+            </div>
             <QueryState query={workspace}>
               {workspace.data && (
                 <form
                   key={workspace.data.workspace.version}
-                  className="px-5 py-4 sm:px-6"
+                  className="mt-3"
                   onSubmit={async (event) => {
                     event.preventDefault()
 
@@ -491,9 +505,9 @@ export function SettingsPage() {
 
           <section
             aria-labelledby="transfer-heading"
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+            className="settings-card rounded-xl border border-slate-200 bg-white p-4"
           >
-            <div className="flex items-start gap-3 border-b border-slate-200 pb-4">
+            <div className="flex items-start gap-3 pb-2">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                 <UsersRound size={19} aria-hidden="true" />
               </span>
@@ -513,7 +527,7 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-2">
               <OwnershipPanel />
             </div>
           </section>
