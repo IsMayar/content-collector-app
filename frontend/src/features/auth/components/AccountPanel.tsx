@@ -37,7 +37,7 @@ export function AccountPanel() {
   return (
     <section
       aria-labelledby="account-profile-security"
-      className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+      className="settings-card min-w-0 rounded-xl border border-slate-200 bg-white p-4"
     >
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
@@ -58,7 +58,7 @@ export function AccountPanel() {
         </div>
       </div>
 
-      <div className="mt-5 flex min-w-0 flex-wrap items-center gap-3">
+      <div className="mt-4 flex min-w-0 flex-wrap items-center gap-3">
         <span
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-base font-semibold text-blue-700"
           aria-hidden="true"
@@ -88,7 +88,7 @@ export function AccountPanel() {
 
       {env.mocksEnabled && (
         <form
-          className="mt-5 border-t border-slate-200 pt-5"
+          className="mt-4 border-t border-slate-200 pt-4"
           onSubmit={async (event) => {
             event.preventDefault()
             const fields = new FormData(event.currentTarget)
@@ -146,7 +146,7 @@ export function AccountPanel() {
         </form>
       )}
 
-      <div className="mt-5 border-t border-slate-200 pt-5">
+      <div className="mt-4 border-t border-slate-200 pt-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
@@ -159,7 +159,7 @@ export function AccountPanel() {
               <p className="mt-1 text-sm leading-5 text-slate-500">
                 {env.mocksEnabled
                   ? 'Update your password using the fields below.'
-                  : 'Set a new password through the secure reset process.'}
+                  : 'Set a new password securely.'}
               </p>
             </div>
           </div>
