@@ -16,16 +16,10 @@ import { useCommand } from '@/shared/hooks/useCommand'
 import { useRef, useState } from 'react'
 import './EmailReminders.css'
 
-function timing(days: number) {
-  return days === 0
-    ? 'On due date'
-    : `${Math.abs(days)} days ${days < 0 ? 'before' : 'after'} due date`
-}
-
 export function RemindersPanel({ root }: { root: string }) {
   const query = useData<{ policy: ReminderPolicy }>(`${root}/reminder-policy`)
   const policy = query.data?.policy
-  const deliveries = useData<{ data: DeliverySummary[] }>(`${root}/deliveries`)
+  const deliveries = useData<{ data: DeliverySummary[] }>(`${root}/deliveries?size=100`)
   const contacts = useData<{ data: ProjectContact[] }>(`${root}/contacts`)
   const command = useCommand()
   const previewCommand = useCommand()
@@ -100,7 +94,7 @@ export function RemindersPanel({ root }: { root: string }) {
                   <div className="email-next-reminder">
                     <strong>Next reminder</strong>
                     <QueryState query={deliveries}>
-                      <span>{next ? new Date(next.dueAt).toLocaleString() : 'None queued'}</span>
+                      <span>{next ? new Date(next.dueAt).toLocaleString() : 'No upcoming email in recent history'}</span>
                     </QueryState>
                   </div>
                 </div>
@@ -124,7 +118,7 @@ export function RemindersPanel({ root }: { root: string }) {
                   {rules.map((r, i) => (
                     <article key={r.id} className="email-schedule-row">
                       <div className="email-rule-title">
-                        <strong>{timing(r.daysRelativeToDueDate)}</strong>
+                        <strong>Reminder {i + 1}</strong>
                         <label className="check-row"><input type="checkbox" name={`enabled${i}`} defaultChecked /> Include reminder</label>
                       </div>
                       <Field label="Days from due date">
