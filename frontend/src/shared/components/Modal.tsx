@@ -8,12 +8,14 @@ export function Modal({
   onClose,
   drawer = false,
   pending = false,
+  className = '',
 }: {
   title: string
   children: ReactNode
   onClose: () => void
   drawer?: boolean
   pending?: boolean
+  className?: string
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -28,7 +30,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={drawer ? 'board-modal board-drawer' : 'board-modal'}
+      className={['board-modal', drawer && 'board-drawer', className].filter(Boolean).join(' ')}
       aria-label={title}
       onCancel={(e) => {
         e.preventDefault()
