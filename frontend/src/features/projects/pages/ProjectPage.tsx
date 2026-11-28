@@ -5,9 +5,11 @@ import {
   Eye,
   Info,
   Layers,
+  MoreHorizontal,
   UsersRound,
 } from 'lucide-react'
-import { StatusShareSettings } from '@/features/analytics/components/StatusShareSettings'
+import { Modal } from '@/shared/components/Modal'
+import './ProjectPage.css'
 import { ProjectContent } from '../components/ProjectContent'
 import { ProjectTeamAccess } from '../../workspace/components/ProjectTeamAccess'
 import { useRef } from 'react'
@@ -34,7 +36,6 @@ import {
   ErrorNotice,
   Field,
   Heading,
-  Panel,
   QueryState,
 } from '@/shared/components/ProductUI'
 import { Button, Callout, IconTile } from '@/shared/components/AccessUI'
@@ -63,6 +64,7 @@ export function ProjectPage() {
   const command = useCommand()
   const notify = useNotify()
   const [action, setAction] = useState('')
+  const [editDetails, setEditDetails] = useState(false)
   const [reason, setReason] = useState('')
   const operation = useRef<{
     signature: string
@@ -102,18 +104,82 @@ export function ProjectPage() {
           : p?.state === 'ARCHIVED' && env.mocksEnabled
             ? ['delete-request']
             : []
-  const secondary = [
-    ['activity', 'Activity'],
-    ...(owner ? [['reminders', 'Reminders']] : []),
+  const projectTabs = [
+    ['checklist', 'Content'],
+    ...(owner ? [['access', 'Access']] : []),
     ['files', 'Files'],
+    ...(owner ? [['reminders', 'Reminders']] : []),
+    ['activity', 'Activity'],
     ...(p?.permissions.canExport ? [['exports', 'Exports']] : []),
-    ...(owner
-      ? [
-          ['completion', 'Completion'],
-          ['details', 'Details'],
-        ]
-      : []),
   ]
+
+  async function saveTemplate() {
+    if (!p || !data || !owner || command.pending) return
+    const definition: TemplateDefinition = {
+      schemaVersion: 1,
+      key: `custom_${Date.now()}`,
+      title: `${p.title} template`,
+      projectType: p.projectType,
+      industry: 'CUSTOM',
+      sections: data.structure.map((section) => ({
+        key: section.key,
+        title: section.title,
+        items: section.items.map((item) => ({
+          key: item.key,
+          label: item.label,
+          type: item.type,
+          instructions: item.instructions,
+          example: item.example,
+          required: item.required,
+          validation: item.validation,
+          visibleWhen: item.visibleWhen,
+          enabled: item.enabled,
+          ai: item.ai,
+        })),
+      })),
+    }
+    if (await command.run(`workspaces/${id}/templates`, { definition }))
+      notify('Independent workspace template saved.')
+  }
+
+  const projectActions = p && owner && (
+    <details className="project-actions-menu" onKeyDown={(event) => {
+      if (event.key === 'Escape' && event.currentTarget.open) {
+        event.currentTarget.open = false
+        event.currentTarget.querySelector('summary')?.focus()
+      }
+    }}>
+      <summary aria-label="Project actions" title="Project actions">
+        <MoreHorizontal size={20} aria-hidden="true" />
+      </summary>
+      <div className="project-actions-popover" onClick={(event) => {
+        if ((event.target as HTMLElement).closest('button, a'))
+          event.currentTarget.closest('details')?.removeAttribute('open')
+      }}>
+        <button type="button" disabled={command.pending || !p.permissions.canManageAccess} onClick={() => {
+          command.clear()
+          setEditDetails(true)
+        }}>Edit project</button>
+        <button type="button" disabled={command.pending || !p.permissions.canManageAccess} onClick={() => void saveTemplate()}>
+          Save as template
+        </button>
+        <Link to="?tab=completion">Project completion</Link>
+        {p.permissions.canManageAccess && lifecycleActions.map((a) => (
+          <button key={a} type="button" disabled={command.pending} onClick={() => {
+            operation.current = {
+              signature: a + ':' + reason.trim(),
+              key: crypto.randomUUID(),
+              version: p.version,
+            }
+            setLifecycleError('')
+            setAction(a)
+          }}>
+            {a.charAt(0).toUpperCase() + a.slice(1).replaceAll('-', ' ')} project
+          </button>
+        ))}
+      </div>
+    </details>
+  )
 
   async function lifecycle() {
     if (!p || lifecycleBusy.current) return
@@ -180,6 +246,8 @@ export function ProjectPage() {
     }
     return <Navigate replace to={'?' + target.toString()} />
   }
+  if (tab === 'details' && owner)
+    return <Navigate replace to="?tab=checklist" />
   if (tab === 'assignments' && owner)
     return <Navigate replace to={'?tab=access#team-access'} />
 
@@ -239,6 +307,7 @@ export function ProjectPage() {
                   </div>
                 </div>
                 <div className="au-summary-actions">
+                  {projectActions}
                   <Link
                     className="au-btn au-btn--secondary"
                     to="?tab=checklist"
@@ -278,7 +347,7 @@ export function ProjectPage() {
                 title={p.title}
                 description={
                   p.dueDate
-                    ? `Due ${p.dueDate} · ${p.timezone}`
+                    ? `Due ${new Date(p.dueDate + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · ${p.timezone}`
                     : `No due date · ${p.timezone}`
                 }
               >
@@ -313,68 +382,22 @@ export function ProjectPage() {
                     Manage client request
                   </Link>
                 ) : null}
-                {owner &&
-                  p.permissions.canManageAccess &&
-                  lifecycleActions.length > 0 && (
-                    <select
-                      aria-label="Project action"
-                      value=""
-                      onChange={(e) => {
-                        operation.current = {
-                          signature: e.target.value + ':' + reason.trim(),
-                          key: crypto.randomUUID(),
-                          version: p.version,
-                        }
-                        setLifecycleError('')
-                        setAction(e.target.value)
-                      }}
-                    >
-                      <option value="">Project actions</option>
-                      {lifecycleActions.map((a) => (
-                        <option key={a} value={a}>
-                          {a.replaceAll('-', ' ')}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                {projectActions}
               </Heading>
             </>
           )}
-          <div className="project-navigation-bar simplified-project-nav">
-            <nav
-              className="tabs project-primary-tabs"
-              aria-label="Project sections"
-            >
-              {[
-                ['checklist', 'Content', tab === 'checklist'],
-                ...(owner ? [['access', 'Access', tab === 'access']] : []),
-              ].map(([key, label, active]) => (
-                <Link
-                  key={String(key)}
-                  to={'?tab=' + key}
-                  className={active ? 'active' : ''}
-                  aria-current={active ? 'page' : undefined}
-                >
-                  {label}
-                </Link>
-              ))}
-            </nav>
-            <Field label="More project views">
-              <select
-                value={secondary.some(([key]) => key === tab) ? tab : ''}
-                onChange={(e) => setSearch({ tab: e.target.value })}
+          <nav className="tabs project-refined-tabs" aria-label="Project sections">
+            {projectTabs.map(([key, label]) => (
+              <Link
+                key={key}
+                to={'?tab=' + key}
+                className={tab === key ? 'active' : ''}
+                aria-current={tab === key ? 'page' : undefined}
               >
-                <option value="" disabled>
-                  More
-                </option>
-                {secondary.map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
+                {label}
+              </Link>
+            ))}
+          </nav>
           <ErrorNotice error={command.error} />
           {(![
             'checklist',
@@ -493,90 +516,36 @@ export function ProjectPage() {
           {tab === 'exports' && p.permissions.canExport && (
             <ExportPanel root={root} project={p} />
           )}
-          {tab === 'details' && owner && (
-            <>
-              <Panel title="Project details">
-                <form
-                  className="stack-form"
-                  onSubmit={async (e) => {
-                    e.preventDefault()
-                    const values = Object.fromEntries(
-                      new FormData(e.currentTarget),
-                    )
-                    if (
-                      await command.run(
-                        root,
-                        { ...values, expectedVersion: p.version },
-                        'PATCH',
-                      )
-                    )
-                      notify('Project details saved.')
-                  }}
-                >
-                  <Field label="Project name">
-                    <input name="title" required defaultValue={p.title} />
-                  </Field>
-                  <Field label="Due date">
-                    <input
-                      name="dueDate"
-                      type="date"
-                      required
-                      defaultValue={p.dueDate}
-                    />
-                  </Field>
-                  <Field label="Timezone">
-                    <input name="timezone" required defaultValue={p.timezone} />
-                  </Field>
-                  <button className="primary-button" disabled={command.pending}>
-                    Save details
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={async () => {
-                      const definition: TemplateDefinition = {
-                        schemaVersion: 1,
-                        key: `custom_${Date.now()}`,
-                        title: `${p.title} template`,
-                        projectType: p.projectType,
-                        industry: 'CUSTOM',
-                        sections: data.structure.map((s) => ({
-                          key: s.key,
-                          title: s.title,
-                          items: s.items.map((i) => ({
-                            key: i.key,
-                            label: i.label,
-                            type: i.type,
-                            instructions: i.instructions,
-                            example: i.example,
-                            required: i.required,
-                            validation: i.validation,
-                            visibleWhen: i.visibleWhen,
-                            enabled: i.enabled,
-                            ai: i.ai,
-                          })),
-                        })),
-                      }
-                      if (
-                        await command.run(`workspaces/${id}/templates`, {
-                          definition,
-                        })
-                      )
-                        notify('Independent workspace template saved.')
-                    }}
-                  >
-                    Save checklist as workspace template
-                  </button>
-                </form>
-              </Panel>
-              {p.permissions.canManageAccess && (
-                <StatusShareSettings
-                  key={root}
-                  root={root}
-                  progress={data.progress}
-                />
-              )}
-            </>
+          {editDetails && owner && p.permissions.canManageAccess && (
+            <Modal title="Edit project" onClose={() => setEditDetails(false)} pending={command.pending} className="project-edit-modal">
+              <form
+                className="stack-form"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (command.pending) return
+                  const values = Object.fromEntries(new FormData(e.currentTarget))
+                  if (await command.run(root, { ...values, expectedVersion: p.version }, 'PATCH')) {
+                    notify('Project details saved.')
+                    setEditDetails(false)
+                  }
+                }}
+              >
+                <Field label="Project name">
+                  <input name="title" required defaultValue={p.title} />
+                </Field>
+                <Field label="Due date">
+                  <input name="dueDate" type="date" required defaultValue={p.dueDate} />
+                </Field>
+                <Field label="Timezone">
+                  <input name="timezone" required defaultValue={p.timezone} />
+                </Field>
+                <ErrorNotice error={command.error} />
+                <div className="project-edit-footer">
+                  <button type="button" className="secondary-button" disabled={command.pending} onClick={() => setEditDetails(false)}>Cancel</button>
+                  <button className="primary-button" disabled={command.pending}>{command.pending ? 'Saving…' : 'Save changes'}</button>
+                </div>
+              </form>
+            </Modal>
           )}
           <ConfirmDialog
             open={!!action}
